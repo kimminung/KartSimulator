@@ -74,3 +74,36 @@
 - **확인**: 시뮬레이터에서 빌드·실행·유닛 테스트 23개 재확인. 시뮬레이터의 포인터 기반 입력으로 `DEBUG-GESTURE LEFT`/`RIGHT`가 `phase`(active→ended)와 함께 정상적으로 구분되어 찍히는 것까지 확인 — 제스처 조준 자체는 정상 작동. 실제 손 인식 품질은 실기기에서만 확인 가능.
 - **제거 예정**: 이 섹션 관련 코드는 모두 "디버그 전용" 주석으로 표시해 뒀다. 문제 파악이 끝나면 `ImmersiveBoxView`에서 통째로 제거한다.
 - **영향받는 절**: `Docs/TechTask.md` M2 (실기기 테스트 체크리스트)
+
+## 22. 버그 수정: 실기기에서 "차가 움직이지 않는다"던 문제 — 실제로는 너무 작아서 안 보였던 것
+
+- **날짜**: 2026-10-10
+- **증상**: 결정 20번(제스처 무반응) 수정 후, 실기기에서 양손 핀치를 해도 카트가 움직이지 않는다는 리포트.
+- **진단**: 결정 21번에서 추가한 `DEBUG-GESTURE` 로그를 실기기 테스트 세션 2회(`GetConsoleOutput`)에서 직접 확인. 결과: 왼손/오른손 핀치 이벤트가 `chirality` 정상 구분되어 들어오고, 양손이 동시에 `pinching=true`로 상당 시간(여러 프레임) 겹치는 것도 확인됨 — 즉 입력 파이프라인(`HandInputResolver.resolve` → `forwardFull`)은 정상 작동 중이었다. 트랙(`track_01.json`)·카트 USDZ 로드 실패 로그도 전혀 없었다(둘 다 정상 로드). 코드를 추적한 결과, 결정 19번에서 트랙 시각화와 카트 스케일에 "같은 배율"(`trackDisplayScale`)을 쓰기로 한 선택이 문제였다: `track_01.json`은 월드 기준 20m 폭 트랙이라 `trackDisplayScale`이 0.03까지 내려가고, 카트 USDZ(실물 크기 기준)에 그대로 곱하면 카트 길이가 3cm 안팎까지 줄어든다 — 박스(0.7m) 안에서 거의 안 보이는 크기라 "움직이는지 안 움직이는지" 식별이 불가능했다. 로직 자체는 정상, 시각적으로 인지 불가능했던 문제.
+- **수정**: 카트의 "보이는 크기"와 "트랙 위 이동 배율"을 분리했다. `loadKart()`에서 `KartFitter.fit(entity, scale: trackDisplayScale)` 대신 `KartFitter.fit(entity, maxDimension: kartVisualLength)`(0.12m, 고정값)을 쓴다. 카트가 트랙 좌표를 따라 이동하는 위치 계산(`worldToDisplay`, `kartSlot.position`)은 그대로 `trackDisplayScale`을 쓰므로 트랙 대비 이동 비율은 변하지 않고, 카트 자체만 항상 보이는 크기를 유지한다.
+- **덧붙여 확인된 부가 이슈(아직 미수정)**: 핀치 중 실측된 양손 간 거리가 보통 0.6~0.7m로, `InputTuning.spreadFull`(0.40m)을 가볍게 넘는다 — 즉 양손을 벌려 핀치하면 거의 항상 즉시 `forwardFull`이 되어 "절반 속도" 단계가 체감되지 않을 수 있다. 움직임 자체과는 무관한 튜닝 문제라 이번엔 건드리지 않았고, 실기기로 움직임이 보이는지 먼저 확인한 뒤 필요하면 `spreadHalf`/`spreadFull` 값을 올린다.
+- **영향받는 절**: 결정 19번(배율 공유 방식 수정), `Docs/TechTask.md` M2/M3
+
+## 23. 실기기 디버그 도구 추가: 이동량 로그 + 주행 경로(빨간 선) (임시)
+
+- **날짜**: 2026-10-10
+- **결정**: `ImmersiveBoxView`에 두 가지를 임시로 추가했다. (1) `tickMotion`에서 매 프레임 계산되는 `drive`/`speed`/`position`/누적 이동거리를 0.25초 간격으로 `DEBUG-MOTION` 태그로 `print`한다. (2) 카트가 실제로 지나간 박스 바닥 좌표를 3mm 이상 움직일 때마다 빨간 막대 하나로 이어 붙여(`trailRoot`에 계속 추가) 경로를 눈으로 볼 수 있게 한다.
+- **이유**: 결정 22번으로 "카트가 너무 작아서 안 보였다"는 원인을 찾아 고쳤지만, 실기기에서 핀치 후 실제로 몇 m/s로, 얼마나 이동했는지 수치로도 확인하고, 이동 경로 자체가 트랙을 따라가는지 시각적으로도 확인할 수 있어야 한다. `DEBUG-GESTURE`(결정 21번)와 `DEBUG-MOTION` 로그를 같이 읽으면 "핀치가 들어온 뒤 실제로 속도가 올라갔는지"까지 한 번에 추적할 수 있다.
+- **구현 메모**: 로그는 매 프레임이 아니라 0.25초마다 찍어 콘솔 노이즈를 줄였다. 경로 선은 세그먼트 최소 길이(3mm)를 둬서 정지해 있을 때 세그먼트가 과도하게 쌓이지 않게 했다. 시간이 오래 지나면 세그먼트 엔티티 수가 계속 늘어나는 점은 디버그 전용이라 신경 쓰지 않았다(원인 파악 끝나면 통째로 제거).
+- **제거 예정**: `MARK: - 디버그 전용: 주행 경로(빨간 선) + 이동량 로그` 섹션과 `tickMotion` 안의 관련 블록, `addTrailSegment` 전부. 결정 21번 디버그 코드와 함께 한 번에 정리한다.
+- **영향받는 절**: 결정 22번, `Docs/TechTask.md` M2/M3
+
+## 24. 버그 수정: 실기기에서 핀치를 해도 `drive`가 영원히 `.stopped`였던 진짜 원인 — 시계 기준 불일치
+
+- **날짜**: 2026-10-10
+- **증상**: 결정 23번에서 추가한 `DEBUG-MOTION` 로그를 실기기 "방금 켠" 세션에서 직접 확인해 보니, `DEBUG-GESTURE`는 오른손 핀치가 계속 들어오는데도 `DEBUG-MOTION`은 처음부터 끝까지(수백 줄, 2분 이상) `drive=stopped speed=0.0 pos=(시작점 그대로)`로 전혀 변하지 않았다.
+- **원인**: `ingest()`가 `HandSample(..., timestamp: event.timestamp)`로 SwiftUI `SpatialEventCollection.Event`의 자체 시계를 저장하는데, `tickMotion()`은 `HandInputResolver.resolve(now:)`를 호출할 때 `Date().timeIntervalSinceReferenceDate`(2001년 기준 초)를 넘기고 있었다. 두 시계는 기준 시점이 전혀 다르다 — `event.timestamp`는 (Apple 공식 샘플 "Petite Asteroids"에서도 다른 `event.timestamp`끼리만 빼서 `duration`을 구하듯) 제스처 시스템 자체의 시계이고, `Date()` 기준 "2026년"은 초 단위로 7억 초가 넘는 값이다. `HandInputResolver.status(for:now:)`는 `now - hand.lastEventTime`이 `staleTimeout`(0.3초)보다 크면 그 손을 "추적 안 됨"으로 간주하는데, 두 시계를 섞어 쓰면 이 차이가 항상 수억 초가 되어 **모든 핀치가 항상 스테일로 판정되고, `determineState`는 영원히 `(false, false) → .stopped`만 반환**한다. 즉 결정 20·22번을 거치며 입력 전달과 카트 크기는 다 고쳤지만, 그 사이에도 주행 로직 자체는 실기기에서 단 한 번도 제대로 작동한 적이 없었다 — 로그 비교가 없었다면 계속 몰랐을 버그.
+- **수정**: `ingest()`에서 `HandSample`을 만들 때 `timestamp: event.timestamp` 대신 받는 즉시 `CACurrentMediaTime()`으로 다시 찍고, `tickMotion()`의 `now`도 `Date().timeIntervalSinceReferenceDate` 대신 `CACurrentMediaTime()`으로 바꿔 두 값이 항상 같은 시계를 쓰게 했다(이미 `updateHeadDebugGizmo()`에서 쓰고 있던 시계와 동일).
+- **영향받는 절**: 결정 20·21·22·23번(모두 같은 파일 수정 과정에서 나온 결정), `Docs/TechTask.md` M2
+
+## 25. HUD를 `.overlay()` 대신 RealityView 3D attachment로 전환 (박스 위에 고정)
+
+- **날짜**: 2026-10-10
+- **증상**: 속도/랩 HUD가 화면 기준 `.overlay(alignment: .top)`로 떠 있었는데, 실기기에서 보면 뷰포트 상단이 아니라 사용자 발밑 근처에 표시됐다. 이머시브 스페이스 안에서 평범한 SwiftUI `.overlay()`는 (윈도우가 있는 `WindowGroup`과 달리) 머리에 고정된 뷰포트 기준으로 그려지지 않는다는 뜻.
+- **수정**: `RealityView(make:update:attachments:)` 형태로 바꾸고, HUD(`RaceHUDOverlay`)를 `Attachment(id: "hud")`로 선언해 `attachments.entity(for: "hud")`로 꺼낸 엔티티를 박스 바로 위(`hudPosition` = 박스 위치에서 위로 0.15m)에 `content.add(...)`로 직접 배치했다. 항상 사용자를 향하도록 `BillboardComponent`도 붙였다. 결정 16번(M5)에서 "정식 해결책은 3D attachment로 바꿀 때"라고 적어 둔 것을 이번에 실제로 적용했다.
+- **영향받는 절**: `Docs/TechTask.md` M5(HUD 배치 — 2D overlay 한계 해결)

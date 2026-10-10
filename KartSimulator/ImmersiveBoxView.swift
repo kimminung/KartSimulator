@@ -46,13 +46,28 @@ struct ImmersiveBoxView: View {
     @State private var arSession = ARKitSession()
     private let gazeRayLength: Float = 3.0
 
+    // MARK: - 디버그 전용: 주행 경로(빨간 선) + 이동량 로그 (`Docs/decisions.md` 23번 참고)
+    @State private var trailRoot = Entity()
+    @State private var lastTrailDisplayPoint: SIMD2<Float>?
+    @State private var totalDistanceTraveled: Float = 0
+    @State private var motionLogAccumulator: Float = 0
+    /// 박스 바닥 기준 이 거리 이상 움직였을 때만 새 선 조각을 추가한다(매 프레임 추가하면 세그먼트가 과도하게 늘어난다).
+    private let trailMinSegmentLength: Float = 0.003
+    private let motionLogInterval: Float = 0.25
+
     private let boxSize: SIMD3<Float> = [0.7, 0.4, 0.7]
     private let boxPosition: SIMD3<Float> = [0, 1.05, -1.1]
+    /// HUD(속도/랩 표시)를 발밑이 아니라 박스 바로 위에 띄우기 위한 위치.
+    private var hudPosition: SIMD3<Float> {
+        boxPosition + SIMD3(0, boxSize.y / 2 + 0.15, 0)
+    }
     /// 박스 바닥에서 트랙 전체(바운딩 박스)가 차지할 폭. 나머지는 여백.
     private let trackFootprint: Float = 0.6
+    /// 트랙 배율과 무관하게 카트가 항상 눈에 보이는 크기를 갖도록 고정한다 (박스 0.7m 기준 장난감 카트 크기).
+    private let kartVisualLength: Float = 0.12
 
     var body: some View {
-        RealityView { content in
+        RealityView { content, attachments in
             rootEntity.position = boxPosition
 
             let frame = BoxFrameBuilder.makeFrame(size: boxSize, thickness: 0.006, color: .white)
@@ -68,6 +83,9 @@ struct ImmersiveBoxView: View {
             kartSlot.name = "kartSlot"
             kartSlot.position.y = -boxSize.y / 2 + 0.01
             rootEntity.addChild(kartSlot)
+
+            // 디버그: 카트가 실제로 지나간 경로를 빨간 선으로 남긴다. rootEntity 로컬 좌표(박스 기준)에 쌓는다.
+            rootEntity.addChild(trailRoot)
 
             // 핀치 제스처를 받으려면 InputTargetComponent + CollisionComponent가 있는 엔티티가
             // 필요하다(없으면 SpatialEventGesture가 아무것도 조준하지 못해 완전히 무반응이다).
@@ -107,11 +125,20 @@ struct ImmersiveBoxView: View {
                 print("DEBUG-GAZE 이 기기/시뮬레이터는 WorldTrackingProvider를 지원하지 않습니다.")
             }
 
+            // HUD(속도/랩)를 2D `.overlay()`가 아니라 3D attachment로 박스 바로 위에 띄운다.
+            // `.overlay()`는 이머시브 스페이스 안에서는 뷰포트 기준이 아니라 엉뚱한 위치(발밑 근처)에
+            // 떠 버리는 문제가 있었다 — attachment는 다른 엔티티처럼 월드 좌표에 직접 배치할 수 있다.
+            if let hudAttachment = attachments.entity(for: "hud") {
+                hudAttachment.position = hudPosition
+                hudAttachment.components.set(BillboardComponent())
+                content.add(hudAttachment)
+            }
+
             updateSubscription = content.subscribe(to: SceneEvents.Update.self) { event in
                 tickMotion(deltaTime: Float(event.deltaTime))
                 updateHeadDebugGizmo()
             }
-        } update: { _ in
+        } update: { _, _ in
             guard !isLoading,
                   loadedKartID != selection.selectedKartID || loadedColorID != selection.selectedColorID
             else { return }
@@ -121,12 +148,12 @@ struct ImmersiveBoxView: View {
                 await loadKart()
                 isLoading = false
             }
+        } attachments: {
+            Attachment(id: "hud") {
+                RaceHUDOverlay(hud: raceModel.hud)
+            }
         }
         .gesture(driveGesture)
-        .overlay(alignment: .top) {
-            RaceHUDOverlay(hud: raceModel.hud)
-                .padding(.top, 48)
-        }
         .task {
             await runHUDUpdateLoop()
         }
@@ -177,7 +204,11 @@ struct ImmersiveBoxView: View {
             let location = event.location3D
             let position = SIMD3<Float>(Float(location.x), Float(location.y), Float(location.z))
             print("DEBUG-GESTURE \(hand == .left ? "LEFT" : "RIGHT") phase=\(event.phase) pinching=\(pinching) pos=\(position)")
-            inputResolver.ingest(HandSample(chirality: hand, isPinching: pinching, position: position, timestamp: event.timestamp))
+            // `event.timestamp`는 SwiftUI 제스처 전용 시계라 `tickMotion`의 `now`(CACurrentMediaTime)와
+            // 기준 시점이 다르다. 두 값을 그대로 비교하면 항상 "스테일"로 판정돼 `HandInputResolver`가
+            // 영원히 .stopped만 반환한다(실기기에서 "차가 안 움직인다"의 진짜 원인, 결정 24번 참고).
+            // 받는 즉시 같은 시계(CACurrentMediaTime)로 다시 찍어서 넘긴다.
+            inputResolver.ingest(HandSample(chirality: hand, isPinching: pinching, position: position, timestamp: CACurrentMediaTime()))
         }
     }
 
@@ -250,6 +281,26 @@ struct ImmersiveBoxView: View {
         (worldXZ - trackWorldCenter) * trackDisplayScale
     }
 
+    /// 디버그 전용: 박스 바닥 표시 좌표 두 점을 빨간 막대 하나로 이어 붙인다(경로 누적용).
+    @MainActor
+    private func addTrailSegment(from a: SIMD2<Float>, to b: SIMD2<Float>) {
+        let floorY = -boxSize.y / 2 + 0.013
+        let start = SIMD3<Float>(a.x, floorY, a.y)
+        let end = SIMD3<Float>(b.x, floorY, b.y)
+        let delta = end - start
+        let length = simd_length(delta)
+        guard length > 0.0001 else { return }
+
+        let material = UnlitMaterial(color: .red)
+        let segment = ModelEntity(
+            mesh: .generateBox(size: SIMD3(0.003, 0.003, length)),
+            materials: [material]
+        )
+        segment.position = (start + end) / 2
+        segment.orientation = simd_quatf(from: SIMD3<Float>(0, 0, 1), to: simd_normalize(delta))
+        trailRoot.addChild(segment)
+    }
+
     /// 디버그 전용: 헤드 앵커 위치에 구슬을, 기기 정면 방향으로 막대를 띄운다.
     @MainActor
     private func updateHeadDebugGizmo() {
@@ -269,7 +320,9 @@ struct ImmersiveBoxView: View {
     private func tickMotion(deltaTime: Float) {
         guard deltaTime > 0, let track, let trackPath, let lapTracker else { return }
 
-        let now = Date().timeIntervalSinceReferenceDate
+        // `ingest()`에서 찍는 시계(CACurrentMediaTime)와 반드시 같은 기준이어야 한다. 섞어 쓰면
+        // HandInputResolver의 스테일 판정이 항상 틀어진다(결정 24번).
+        let now = CACurrentMediaTime()
         let (drive, leftStatus, rightStatus) = inputResolver.resolve(now: now)
         let tuning = MotionTuning().applying(track.tuning)
         motion = motion.advancing(drive: drive, tuning: tuning, deltaTime: deltaTime)
@@ -304,6 +357,23 @@ struct ImmersiveBoxView: View {
         kartSlot.position.x = display.x
         kartSlot.position.z = display.y
         kartSlot.orientation = simd_quatf(angle: motion.heading, axis: [0, 1, 0])
+
+        // 디버그: 실제로 이동한 거리를 빨간 선으로 쌓고, 콘솔에도 주기적으로 남긴다.
+        if let last = lastTrailDisplayPoint {
+            if simd_distance(last, display) >= trailMinSegmentLength {
+                addTrailSegment(from: last, to: display)
+                lastTrailDisplayPoint = display
+            }
+        } else {
+            lastTrailDisplayPoint = display
+        }
+
+        totalDistanceTraveled += motion.speed * deltaTime
+        motionLogAccumulator += deltaTime
+        if motionLogAccumulator >= motionLogInterval {
+            motionLogAccumulator = 0
+            print("DEBUG-MOTION drive=\(drive) speed=\(motion.speed)m/s pos=\(motion.position) totalDistance=\(totalDistanceTraveled)m")
+        }
     }
 
     @MainActor
@@ -319,7 +389,10 @@ struct ImmersiveBoxView: View {
         do {
             let entity = try await Entity(contentsOf: url)
             await KartMaterialPainter.applyColor(colorID, kart: kart, to: entity)
-            KartFitter.fit(entity, scale: trackDisplayScale)
+            // 트랙 전체를 박스에 맞추는 배율(trackDisplayScale)을 카트에도 그대로 쓰면 트랙이 넓을수록
+            // 카트가 같이 작아진다 (예: track_01은 20m 폭 트랙이라 카트가 3cm도 안 됨 — 거의 안 보여서
+            // "차가 안 움직인다"로 보인 원인). 카트는 트랙 크기와 무관하게 눈에 보이는 고정 크기로 둔다.
+            KartFitter.fit(entity, maxDimension: kartVisualLength)
 
             kartSlot.children.removeAll()
             kartSlot.addChild(entity)
