@@ -1,6 +1,7 @@
 #if os(visionOS)
 import SwiftUI
 import RealityKit
+import simd
 
 struct ImmersiveBoxView: View {
     @Environment(KartSelectionModel.self) private var selection
@@ -11,8 +12,24 @@ struct ImmersiveBoxView: View {
     @State private var loadedColorID: String?
     @State private var isLoading = false
 
+    @State private var motion = KartMotionState()
+    @State private var inputResolver = HandInputResolver()
+    @State private var updateSubscription: Any?
+
     private let boxSize: SIMD3<Float> = [0.7, 0.4, 0.7]
     private let boxPosition: SIMD3<Float> = [0, 1.05, -1.1]
+
+    /// Scaled down from the tech PRD's full-size MotionTuning so the kart stays visible
+    /// driving laps inside this small box prototype, ahead of real track tiles (M3).
+    private let motionTuning = MotionTuning(
+        maxSpeed: 0.3,
+        accel: 0.25,
+        coastDecel: 0.2,
+        brakeDecel: 0.4,
+        turnRateLow: 140,
+        turnRateHigh: 90,
+        minTurnSpeed: 0.02
+    )
 
     var body: some View {
         RealityView { content in
@@ -33,6 +50,10 @@ struct ImmersiveBoxView: View {
             rootEntity.addChild(kartSlot)
 
             content.add(rootEntity)
+
+            updateSubscription = content.subscribe(to: SceneEvents.Update.self) { event in
+                tickMotion(deltaTime: Float(event.deltaTime))
+            }
         } update: { _ in
             guard !isLoading,
                   loadedKartID != selection.selectedKartID || loadedColorID != selection.selectedColorID
@@ -44,6 +65,50 @@ struct ImmersiveBoxView: View {
                 isLoading = false
             }
         }
+        .gesture(driveGesture)
+    }
+
+    /// M2 입력 프로토타입: SpatialEventGesture로 받은 핀치를 HandInputResolver에 넘기고,
+    /// 매 프레임 KartMotionState로 박스 안에서 카트를 실제로 움직여 본다 (트랙 타일 없이).
+    private var driveGesture: some Gesture {
+        SpatialEventGesture()
+            .onChanged { events in ingest(events, isEnding: false) }
+            .onEnded { events in ingest(events, isEnding: true) }
+    }
+
+    private func ingest(_ events: SpatialEventCollection, isEnding: Bool) {
+        for event in events {
+            guard let chirality = event.chirality else { continue }
+            let hand: HandChirality = chirality == .left ? .left : .right
+            let pinching = !isEnding && event.phase == .active
+            let location = event.location3D
+            let position = SIMD3<Float>(Float(location.x), Float(location.y), Float(location.z))
+            inputResolver.ingest(HandSample(chirality: hand, isPinching: pinching, position: position, timestamp: event.timestamp))
+        }
+    }
+
+    @MainActor
+    private func tickMotion(deltaTime: Float) {
+        guard deltaTime > 0 else { return }
+        let now = Date().timeIntervalSinceReferenceDate
+        let (drive, _, _) = inputResolver.resolve(now: now)
+        motion = motion.advancing(drive: drive, tuning: motionTuning, deltaTime: deltaTime)
+
+        // No track tiles yet (M3) — bounce off the box floor's edges so the kart stays inside.
+        let halfExtentX = boxSize.x * 0.96 / 2 - 0.03
+        let halfExtentZ = boxSize.z * 0.96 / 2 - 0.03
+        if motion.position.x > halfExtentX || motion.position.x < -halfExtentX {
+            motion.heading = -motion.heading
+            motion.position.x = min(max(motion.position.x, -halfExtentX), halfExtentX)
+        }
+        if motion.position.z > halfExtentZ || motion.position.z < -halfExtentZ {
+            motion.heading = .pi - motion.heading
+            motion.position.z = min(max(motion.position.z, -halfExtentZ), halfExtentZ)
+        }
+
+        kartSlot.position.x = motion.position.x
+        kartSlot.position.z = motion.position.z
+        kartSlot.orientation = simd_quatf(angle: motion.heading, axis: [0, 1, 0])
     }
 
     @MainActor
