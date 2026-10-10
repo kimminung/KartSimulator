@@ -39,7 +39,6 @@ public final class HandInputResolver {
     private var left = HandState()
     private var right = HandState()
     private var smoothedDistance: Float?
-    private var lastDriveState: DriveState = .stopped
 
     public init(tuning: InputTuning = InputTuning()) {
         self.tuning = tuning
@@ -81,7 +80,6 @@ public final class HandInputResolver {
         }
 
         let state = determineState(leftStatus: leftStatus, rightStatus: rightStatus, distance: distance)
-        lastDriveState = state
         return (state, leftStatus, rightStatus)
     }
 
@@ -111,26 +109,30 @@ public final class HandInputResolver {
             return .turnRight
         case (true, true):
             guard let distance else { return .waiting }
-            return forwardState(for: distance)
+            return .pedal(pedalValue(for: distance))
         }
     }
 
-    private func forwardState(for distance: Float) -> DriveState {
-        let lowerHalf = tuning.spreadHalf - tuning.spreadHysteresis
-        let lowerFull = tuning.spreadFull - tuning.spreadHysteresis
+    /// 양손 사이 거리를 하나의 연속 "페달" 값(-1 최대 후진 ~ 0 중립 ~ +1 최대 전진)으로 바꾼다.
+    /// 핀치인(좁힐수록, 거리↓)하면 전진이 세지고 핀치아웃(벌릴수록, 거리↑)하면 후진이 세진다 —
+    /// 손을 완전히 모으면(거리 0) 최대 전진, `pivotDistance + reverseSpan`만큼 벌리면 최대 후진.
+    /// `pivotDistance`(기본 40cm) 근처 ±`pivotDeadband`는 중립으로 둬서 경계를 넘나들 때 전진/후진이
+    /// 순간적으로 뒤집히지 않게 한다.
+    private func pedalValue(for distance: Float) -> Float {
+        let pivot = tuning.pivotDistance
+        let deadband = tuning.pivotDeadband
 
-        switch lastDriveState {
-        case .forwardFull:
-            if distance >= lowerFull { return .forwardFull }
-            return distance >= lowerHalf ? .forwardHalf : .waiting
-        case .forwardHalf:
-            if distance >= tuning.spreadFull { return .forwardFull }
-            return distance >= lowerHalf ? .forwardHalf : .waiting
-        default:
-            if distance >= tuning.spreadFull { return .forwardFull }
-            if distance >= tuning.spreadHalf { return .forwardHalf }
-            return .waiting
+        if distance <= pivot - deadband {
+            let span = max(pivot - deadband, 0.0001)
+            let fraction = min(max((span - distance) / span, 0), 1)
+            return fraction
         }
+        if distance >= pivot + deadband {
+            let span = max(tuning.reverseSpan, 0.0001)
+            let fraction = min(max((distance - (pivot + deadband)) / span, 0), 1)
+            return -fraction
+        }
+        return 0
     }
 
     private func simdDistance(_ a: SIMD3<Float>, _ b: SIMD3<Float>) -> Float {

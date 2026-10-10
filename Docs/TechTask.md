@@ -7,7 +7,7 @@ Oct 10, 2026 · @Coulson 기준, `Docs/tech-prd.md`에서 파생. 마일스톤 �
 테크 PRD 1장의 "기본 제안"에서 아래 3가지가 바뀌었다. 상세 이유는 `Docs/decisions.md` 참고.
 
 1. **공간 구성**: Volumetric `WindowGroup` 대신 `ImmersiveSpace` + `.immersionStyle(selection:in: .progressive)`를 쓴다. 콘텐츠는 박스 모양 프레임(와이어프레임 엣지 + 바닥판)으로 경계를 표시한 디오라마이며, 사용자는 Digital Crown을 돌려 몰입도(이머시브 공간 ↔ 바깥 패스스루)를 조절한다.
-2. **카트 에셋**: Blockbench 단일 모델(`kart_01`) 파이프라인 대신, 완성형 USDZ 6종(`arcrix`, `bogubkart`, `gospel`, `mms`, `razr`, `sirius`)을 1차 로스터로 쓴다. `mms`를 제외한 5종은 색상 16종(`black`/`blue`/`brown`/`cyan`/`gray`/`green`/`light_blue`/`lime`/`magenta`/`orange`/`pink`/`purple`/`red`/`silver`/`undyed`/`white`/`yellow`) 텍스처 변형을 갖고 있다.
+2. **카트 에셋**: Blockbench 단일 모델(`kart_01`) 파이프라인 대신, 완성형 USDZ 5종(`arcrix`, `bogubkart`, `gospel`, `razr`, `sirius`)을 최종 로스터로 쓴다(`mms`는 카트가 아닌 일반 자동차 모델이라 제외, 결정 34번). 5종 모두 색상 17종(`red`/`orange`/`yellow`/`lime`/`green`/`cyan`/`light_blue`/`blue`/`purple`/`magenta`/`pink`/`brown`/`black`/`gray`/`silver`/`white`/`undyed`, 색상환 순) 텍스처 변형을 갖고 있다.
 3. **`KartCore` 위치**: 별도 Swift 패키지(SPM) 대신, `KartSimulator` 앱 타깃 안의 `KartCore/` 폴더에 플랫폼 독립 로직(RealityKit·SwiftUI 미의존)으로 둔다. 단위 테스트는 호스트형 `KartCoreTests` 타깃(Swift Testing)에서 `@testable import KartSimulator`로 검증한다.
 
 ## M0 — 프로젝트 셋업
@@ -24,7 +24,7 @@ Oct 10, 2026 · @Coulson 기준, `Docs/tech-prd.md`에서 파생. 마일스톤 �
 - [x] 선택한 카트를 박스 안에 로드, 바운딩 박스 기준 자동 스케일·중앙 정렬
 - [x] 색상 선택 시 베이스컬러/이미시브 텍스처 교체
 - [ ] 실기기에서 Digital Crown으로 몰입도 조절 확인 (시뮬레이터는 크라운 입력 제한적 — 체크리스트에 남김)
-- [ ] 카트 회전/관찰용 간단한 제스처(드래그로 회전) 추가 여부 결정 → 열린 질문에 기록
+- [x] 카트 회전/관찰용 간단한 제스처(드래그로 회전) 추가 — 메뉴 `KartCard`에 구현 (결정 34번)
 
 ## M2 — 입력 프로토타입 (2026-10-10 1차 구현 완료)
 
@@ -82,9 +82,10 @@ Oct 10, 2026 · @Coulson 기준, `Docs/tech-prd.md`에서 파생. 마일스톤 �
 
 ## 열린 질문 (결정되면 `Docs/decisions.md`에 기록)
 
-- [ ] 박스 다이오라마의 실제 치수(현재 0.7×0.4×0.7m 임시값, PRD 원안은 1.4×0.6×1.1m)를 그대로 쓸지
-- [ ] 카트 6종을 모두 최종 로스터로 쓸지, 일부만 추릴지
-- [ ] `mms`(색상 변형 없음, 텍스처 30MB로 용량 큼)를 1차 로스터에 포함할지
-- [ ] 메뉴에서 카트를 360도 회전해 볼 수 있게 드래그 제스처를 넣을지
+- [x] 박스 다이오라마의 실제 치수 — `0.7×0.4×0.7m`로 확정 (결정 34번, 디자인 결정 20-10 답변)
+- [x] 카트 로스터 — `arcrix`/`bogubkart`/`gospel`/`razr`/`sirius` 5종 확정, `mms` 제외 (결정 34번, 디자인 결정 20-7·20-8)
+- [x] `mms` 포함 여부 — 제외, 리소스 파일도 삭제 (위와 동일)
+- [x] 메뉴 카트 360도 회전 — `Model3D` + 드래그 제스처로 구현 (결정 34번, 디자인 결정 20-9)
 - [ ] Digital Crown 몰입도 범위(현재 0.0~1.0 임시값)를 얼마로 둘지, 레이싱 중에도 조절 허용할지
 - [ ] M2 모션 튜닝 임시값(박스 스케일)을 M3에서 트랙 스케일로 복원할 때 느낌이 달라지는지 재검증 필요
+- [ ] Galmuri 폰트 파일, 엔진음 루프 사운드, RetireX 색 팔레트(`Design/style-guide.md`), 타일 대체 텍스처 — 디자인 자산 전달 대기 (디자인 결정 20-3·20-5·20-6·20-11~13·21)

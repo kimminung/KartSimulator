@@ -56,7 +56,135 @@
 - **타협점**: 트랙 타일 3D 에셋이 아직 없어서, 타일을 깔지 않고 `path`를 작은 점(큐브) 점열로만 시각화한다. 벽도 아직 없어 `CollisionResolveSystem`에 해당하는 벽 충돌 로직은 구현하지 않았다(테크 PRD 12장 "벽에 정면으로 박았을 때 미끄러진다" 체크리스트는 타일 에셋 확보 후).
 - **영향받는 절**: 테크 PRD 7장(트랙 데이터), 9장(배율 — 기존 0.04 고정값 대신 트랙마다 자동 계산), `Docs/TechTask.md` M3
 
-## 20. 디자인 결정 묶음 (메뉴 피드백·디자인 PRD 열린 질문 답변)
+## 20. 버그 수정: 박스 연 뒤 핀치 제스처가 완전히 무반응이던 문제
+
+- **날짜**: 2026-10-10
+- **증상**: 실기기에서 "박스 열기" 후 양손 핀치를 해도 카트가 전혀 반응하지 않았다(완전 무반응).
+- **원인**: `ImmersiveBoxView`의 `driveGesture`가 `SpatialEventGesture()`를 어떤 엔티티도 조준하지 않은 채(`.targetedToEntity`/`.targetedToAnyEntity` 없이) 붙이고 있었다. RealityKit 공식 가이드("Responding to gestures on an entity")에 따르면 `RealityView` 안에서 제스처가 발생하려면 대상 엔티티에 `InputTargetComponent` + `CollisionComponent`가 반드시 있어야 하는데, 이 프로젝트에는 그런 엔티티가 아예 없었다. 테크 PRD 5장에 적어 둔 "InputCatcher" 엔티티를 실제로는 만들지 않고 넘어간 것이 원인 — PRD에 쓰기만 하고 구현을 빠뜨렸다.
+- **진단 방법**: Apple 문서에서 `targetedToAnyEntity`/`InputTargetComponent` 관련 공식 가이드("Responding to gestures on an entity")를 확인해 "InputTargetComponent + CollisionComponent가 있는 엔티티만 이벤트를 받는다"는 조건을 재확인.
+- **수정**: `inputCatcher`라는 보이지 않는 엔티티를 박스 위치에 두고 박스보다 넉넉한 크기(`boxSize * 3`)의 `CollisionComponent` + `InputTargetComponent`를 부여, `driveGesture`를 `SpatialEventGesture().targetedToEntity(inputCatcher)`로 바꿨다. 시뮬레이터에서 빌드·실행·유닛 테스트 23개 재확인 완료 — 다만 실제 손 핀치 인식 자체는 시뮬레이터로 검증 불가하므로 실기기 확인이 필요하다.
+- **영향받는 절**: 테크 PRD 5장("InputCatcher" 설계를 실제로 구현), `Docs/TechTask.md` M2
+
+## 21. 실기기 제스처 디버그 도구 추가 (임시)
+
+- **날짜**: 2026-10-10
+- **결정**: `ImmersiveBoxView`에 실기기 전용 디버그 시각화를 임시로 추가했다. `ARKitSession` + `WorldTrackingProvider`로 헤드 앵커를 매 프레임 조회해, 머리 위치에 노란 구슬을, 기기 정면(로컬 -Z) 방향으로 초록 막대(3m)를 띄운다. 또한 `ingest()`에 `DEBUG-GESTURE` 태그를 붙인 `print`를 추가해, 들어오는 모든 핀치 이벤트의 `chirality`(LEFT/RIGHT)·`phase`·`pinching`·위치를 로그로 남긴다.
+- **이유**: 결정 20번에서 "제스처 무반응" 버그를 코드 추론만으로 고쳤는데, 실기기에서 진짜로 손을 구분해서 받는지는 아직 직접 확인하지 못했다. 사용자가 실기기를 착용한 채로는 Xcode 콘솔을 볼 수 없으므로, (1) 눈으로 볼 수 있는 시선 레이로 "박스 쪽을 보고 있는지" 스스로 확인하고, (2) 터치 시 남는 로그를 테크(Claude)가 나중에 읽어 왼손/오른손이 각각 어떻게 인식됐는지 판단한다.
+- **필요 설정**: `INFOPLIST_KEY_NSWorldSensingUsageDescription`을 추가했다(헤드 트래킹에 월드 센싱 권한이 필요). 첫 실행 시 권한 팝업이 뜰 수 있다 — 허용해야 디버그 레이가 보인다.
+- **확인**: 시뮬레이터에서 빌드·실행·유닛 테스트 23개 재확인. 시뮬레이터의 포인터 기반 입력으로 `DEBUG-GESTURE LEFT`/`RIGHT`가 `phase`(active→ended)와 함께 정상적으로 구분되어 찍히는 것까지 확인 — 제스처 조준 자체는 정상 작동. 실제 손 인식 품질은 실기기에서만 확인 가능.
+- **제거 예정**: 이 섹션 관련 코드는 모두 "디버그 전용" 주석으로 표시해 뒀다. 문제 파악이 끝나면 `ImmersiveBoxView`에서 통째로 제거한다.
+- **영향받는 절**: `Docs/TechTask.md` M2 (실기기 테스트 체크리스트)
+
+## 22. 버그 수정: 실기기에서 "차가 움직이지 않는다"던 문제 — 실제로는 너무 작아서 안 보였던 것
+
+- **날짜**: 2026-10-10
+- **증상**: 결정 20번(제스처 무반응) 수정 후, 실기기에서 양손 핀치를 해도 카트가 움직이지 않는다는 리포트.
+- **진단**: 결정 21번에서 추가한 `DEBUG-GESTURE` 로그를 실기기 테스트 세션 2회(`GetConsoleOutput`)에서 직접 확인. 결과: 왼손/오른손 핀치 이벤트가 `chirality` 정상 구분되어 들어오고, 양손이 동시에 `pinching=true`로 상당 시간(여러 프레임) 겹치는 것도 확인됨 — 즉 입력 파이프라인(`HandInputResolver.resolve` → `forwardFull`)은 정상 작동 중이었다. 트랙(`track_01.json`)·카트 USDZ 로드 실패 로그도 전혀 없었다(둘 다 정상 로드). 코드를 추적한 결과, 결정 19번에서 트랙 시각화와 카트 스케일에 "같은 배율"(`trackDisplayScale`)을 쓰기로 한 선택이 문제였다: `track_01.json`은 월드 기준 20m 폭 트랙이라 `trackDisplayScale`이 0.03까지 내려가고, 카트 USDZ(실물 크기 기준)에 그대로 곱하면 카트 길이가 3cm 안팎까지 줄어든다 — 박스(0.7m) 안에서 거의 안 보이는 크기라 "움직이는지 안 움직이는지" 식별이 불가능했다. 로직 자체는 정상, 시각적으로 인지 불가능했던 문제.
+- **수정**: 카트의 "보이는 크기"와 "트랙 위 이동 배율"을 분리했다. `loadKart()`에서 `KartFitter.fit(entity, scale: trackDisplayScale)` 대신 `KartFitter.fit(entity, maxDimension: kartVisualLength)`(0.12m, 고정값)을 쓴다. 카트가 트랙 좌표를 따라 이동하는 위치 계산(`worldToDisplay`, `kartSlot.position`)은 그대로 `trackDisplayScale`을 쓰므로 트랙 대비 이동 비율은 변하지 않고, 카트 자체만 항상 보이는 크기를 유지한다.
+- **덧붙여 확인된 부가 이슈(아직 미수정)**: 핀치 중 실측된 양손 간 거리가 보통 0.6~0.7m로, `InputTuning.spreadFull`(0.40m)을 가볍게 넘는다 — 즉 양손을 벌려 핀치하면 거의 항상 즉시 `forwardFull`이 되어 "절반 속도" 단계가 체감되지 않을 수 있다. 움직임 자체과는 무관한 튜닝 문제라 이번엔 건드리지 않았고, 실기기로 움직임이 보이는지 먼저 확인한 뒤 필요하면 `spreadHalf`/`spreadFull` 값을 올린다.
+- **영향받는 절**: 결정 19번(배율 공유 방식 수정), `Docs/TechTask.md` M2/M3
+
+## 23. 실기기 디버그 도구 추가: 이동량 로그 + 주행 경로(빨간 선) (임시)
+
+- **날짜**: 2026-10-10
+- **결정**: `ImmersiveBoxView`에 두 가지를 임시로 추가했다. (1) `tickMotion`에서 매 프레임 계산되는 `drive`/`speed`/`position`/누적 이동거리를 0.25초 간격으로 `DEBUG-MOTION` 태그로 `print`한다. (2) 카트가 실제로 지나간 박스 바닥 좌표를 3mm 이상 움직일 때마다 빨간 막대 하나로 이어 붙여(`trailRoot`에 계속 추가) 경로를 눈으로 볼 수 있게 한다.
+- **이유**: 결정 22번으로 "카트가 너무 작아서 안 보였다"는 원인을 찾아 고쳤지만, 실기기에서 핀치 후 실제로 몇 m/s로, 얼마나 이동했는지 수치로도 확인하고, 이동 경로 자체가 트랙을 따라가는지 시각적으로도 확인할 수 있어야 한다. `DEBUG-GESTURE`(결정 21번)와 `DEBUG-MOTION` 로그를 같이 읽으면 "핀치가 들어온 뒤 실제로 속도가 올라갔는지"까지 한 번에 추적할 수 있다.
+- **구현 메모**: 로그는 매 프레임이 아니라 0.25초마다 찍어 콘솔 노이즈를 줄였다. 경로 선은 세그먼트 최소 길이(3mm)를 둬서 정지해 있을 때 세그먼트가 과도하게 쌓이지 않게 했다. 시간이 오래 지나면 세그먼트 엔티티 수가 계속 늘어나는 점은 디버그 전용이라 신경 쓰지 않았다(원인 파악 끝나면 통째로 제거).
+- **제거 예정**: `MARK: - 디버그 전용: 주행 경로(빨간 선) + 이동량 로그` 섹션과 `tickMotion` 안의 관련 블록, `addTrailSegment` 전부. 결정 21번 디버그 코드와 함께 한 번에 정리한다.
+- **영향받는 절**: 결정 22번, `Docs/TechTask.md` M2/M3
+
+## 24. 버그 수정: 실기기에서 핀치를 해도 `drive`가 영원히 `.stopped`였던 진짜 원인 — 시계 기준 불일치
+
+- **날짜**: 2026-10-10
+- **증상**: 결정 23번에서 추가한 `DEBUG-MOTION` 로그를 실기기 "방금 켠" 세션에서 직접 확인해 보니, `DEBUG-GESTURE`는 오른손 핀치가 계속 들어오는데도 `DEBUG-MOTION`은 처음부터 끝까지(수백 줄, 2분 이상) `drive=stopped speed=0.0 pos=(시작점 그대로)`로 전혀 변하지 않았다.
+- **원인**: `ingest()`가 `HandSample(..., timestamp: event.timestamp)`로 SwiftUI `SpatialEventCollection.Event`의 자체 시계를 저장하는데, `tickMotion()`은 `HandInputResolver.resolve(now:)`를 호출할 때 `Date().timeIntervalSinceReferenceDate`(2001년 기준 초)를 넘기고 있었다. 두 시계는 기준 시점이 전혀 다르다 — `event.timestamp`는 (Apple 공식 샘플 "Petite Asteroids"에서도 다른 `event.timestamp`끼리만 빼서 `duration`을 구하듯) 제스처 시스템 자체의 시계이고, `Date()` 기준 "2026년"은 초 단위로 7억 초가 넘는 값이다. `HandInputResolver.status(for:now:)`는 `now - hand.lastEventTime`이 `staleTimeout`(0.3초)보다 크면 그 손을 "추적 안 됨"으로 간주하는데, 두 시계를 섞어 쓰면 이 차이가 항상 수억 초가 되어 **모든 핀치가 항상 스테일로 판정되고, `determineState`는 영원히 `(false, false) → .stopped`만 반환**한다. 즉 결정 20·22번을 거치며 입력 전달과 카트 크기는 다 고쳤지만, 그 사이에도 주행 로직 자체는 실기기에서 단 한 번도 제대로 작동한 적이 없었다 — 로그 비교가 없었다면 계속 몰랐을 버그.
+- **수정**: `ingest()`에서 `HandSample`을 만들 때 `timestamp: event.timestamp` 대신 받는 즉시 `CACurrentMediaTime()`으로 다시 찍고, `tickMotion()`의 `now`도 `Date().timeIntervalSinceReferenceDate` 대신 `CACurrentMediaTime()`으로 바꿔 두 값이 항상 같은 시계를 쓰게 했다(이미 `updateHeadDebugGizmo()`에서 쓰고 있던 시계와 동일).
+- **영향받는 절**: 결정 20·21·22·23번(모두 같은 파일 수정 과정에서 나온 결정), `Docs/TechTask.md` M2
+
+## 25. HUD를 `.overlay()` 대신 RealityView 3D attachment로 전환 (박스 위에 고정)
+
+- **날짜**: 2026-10-10
+- **증상**: 속도/랩 HUD가 화면 기준 `.overlay(alignment: .top)`로 떠 있었는데, 실기기에서 보면 뷰포트 상단이 아니라 사용자 발밑 근처에 표시됐다. 이머시브 스페이스 안에서 평범한 SwiftUI `.overlay()`는 (윈도우가 있는 `WindowGroup`과 달리) 머리에 고정된 뷰포트 기준으로 그려지지 않는다는 뜻.
+- **수정**: `RealityView(make:update:attachments:)` 형태로 바꾸고, HUD(`RaceHUDOverlay`)를 `Attachment(id: "hud")`로 선언해 `attachments.entity(for: "hud")`로 꺼낸 엔티티를 박스 바로 위(`hudPosition` = 박스 위치에서 위로 0.15m)에 `content.add(...)`로 직접 배치했다. 항상 사용자를 향하도록 `BillboardComponent`도 붙였다. 결정 16번(M5)에서 "정식 해결책은 3D attachment로 바꿀 때"라고 적어 둔 것을 이번에 실제로 적용했다.
+- **영향받는 절**: `Docs/TechTask.md` M5(HUD 배치 — 2D overlay 한계 해결)
+
+## 26. 창의 "박스 닫기" 호버 불안정 수정: InputCatcher 축소 + HUD에도 닫기 버튼 추가
+
+- **날짜**: 2026-10-10
+- **증상**: 박스를 연 뒤 처음 창(`ContentView`)의 "박스 닫기" 버튼을 바라봐도 호버가 잘 안 잡히고, 고개를 바짝 들이대야 겨우 눌렸다.
+- **원인**: `inputCatcher`의 충돌 범위가 `boxSize * 3`(약 2.1×1.2×2.1m, 결정 20번)으로 박스 주변을 거의 방 하나만큼 덮고 있었다. 이 보이지 않는 콜라이더가 사용자 정면(박스는 1.1m 앞)에 떠 있는 창의 히트테스트 영역과 깊이상 겹쳐서, 시선 레이가 창 유리보다 먼저 `inputCatcher`를 맞히는 바람에 창 버튼 호버가 가로채였다.
+- **수정**: 두 가지를 같이 했다. (1) `inputCatcher` 충돌 크기를 `boxSize * 3` → `boxSize * 1.4`로 줄여 겹치는 범위를 크게 줄였다. (2) 창 버튼에만 의존하지 않도록, 박스 위에 떠 있는 HUD 패널(결정 25번) 안에도 "박스 닫기" 버튼을 넣었다 — 이 패널은 다른 콜라이더와 안 겹치는 공간에 있어 바라보고 누르기 안정적이다. 창과 이머시브 공간 양쪽에서 같은 "열림" 상태를 보려면 상태를 공유해야 해서, `isImmersiveOpen`을 `ContentView`의 로컬 `@State`에서 새 공유 모델 `ImmersiveSessionModel`(환경 객체)로 옮겼다 — 이머시브 공간 안에서 HUD 버튼으로 닫아도 창의 버튼 라벨이 "박스 열기"로 바로 맞게 바뀐다.
+- **영향받는 절**: 결정 20번(InputCatcher 최초 도입), 결정 25번(HUD attachment), `Docs/TechTask.md` M2/M5
+
+## 27. 전진/후진 방향 반전 수정 + 후진 제스처 추가
+
+- **날짜**: 2026-10-10
+- **증상**: 전진 입력을 줘도 카트가 반대 방향(후진)으로 달렸다. 사용자가 "에셋의 축이 다른 것 아니냐"고 직접 의심.
+- **진단**: `kartSlot.orientation = simd_quatf(angle: heading, axis: Y)`와 `forward = (-sin(heading), 0, -cos(heading))`를 직접 전개해 보면 두 식이 정확히 일치한다 — 즉 "모델의 정면이 로컬 -Z"라는 전제 하에서는 주행 수학 자체가 자기 일관적이다(카트가 바라보는 방향 = 실제로 나아가는 방향). 따라서 반전의 원인은 모션 로직이 아니라, 이 USDZ 로스터가 정면을 로컬 +Z로 export해서 생긴 것으로 판단 — 사용자의 추측이 맞았다.
+- **수정**: `KartModel`에 `modelForwardCorrectionDegrees`(기본 180도)를 추가하고, `loadKart()`에서 `KartFitter.fit(...)` 뒤에 로드된 엔티티 자체에 이 보정 회전을 한 번 더 준다. `kartSlot`의 회전(주행 방향 계산)은 그대로 둬서, 주행 수학과 "모델 생김새 보정"을 분리했다 — 나중에 카트별로 export 방향이 다르면 각 `KartModel`마다 값만 다르게 주면 된다.
+- **후진 제스처 추가**: 양손을 핀치한 채 거리가 `InputTuning.reverseThreshold`(0.12m) 이하로 가까워지면 `.reverse`로 판정한다(`HandInputResolver.twoHandState`). 손 사이 거리를 "페달"로 쓰는 기존 설계(가깝게 → 후진, 적당히 → 대기, 멀리 → 절반/전체 전진)를 그대로 확장한 것이라 새 제스처 인식 코드가 거의 필요 없었다. `KartMotionState`는 `.reverse`일 때 목표 속도를 `-maxSpeed * reverseSpeedFactor`(기본 0.5, 즉 전진 최고속의 절반)로 두고 `brakeDecel` 비율로 접근한다. 속도계(HUD)에는 방향 없이 크기만 보여준다(`abs`) — 방향은 HUD의 `drive` 상태로 구분.
+- **영향받는 절**: `DriveState`(`.reverse` 추가), `InputTuning`(`reverseThreshold`), `MotionTuning`(`reverseSpeedFactor`), `KartCatalog`(`modelForwardCorrectionDegrees`), `KartCoreTests`(관련 테스트 2개 추가), `Docs/TechTask.md` M2/M3
+
+## 28. 후진 제스처 방향을 반대로 뒤집음: 좁힐수록 전진, 벌릴수록 후진
+
+- **날짜**: 2026-10-10
+- **결정**: 결정 27번에서 만든 "가깝게 모으면 후진, 멀리 벌리면 전진" 매핑이 사용자 체감과 반대였다. `HandInputResolver.twoHandState`를 거울상으로 뒤집었다: `distance >= spreadFull`(멀리 벌림) → `.reverse`, 그 안쪽은 가까울수록 `.forwardFull`(≤ `reverseThreshold`) → `.forwardHalf`(≤ `spreadHalf`) → `.waiting` 순서. 히스테리시스도 방향에 맞춰 거울상으로 다시 짰다(낮은 쪽 경계+마진으로 "전진 단계에서 빠져나가기 어렵게").
+- **영향**: 손 사이 거리와 드라이브 상태의 관계가 정확히 반대가 됐다. `KartCoreTests`의 관련 테스트 이름과 기대값을 전부 새 방향에 맞게 다시 썼다(`bothHandsVeryCloseIsForwardFull`, `bothHandsSlightlySpreadIsForwardHalf`, `bothHandsModerateSpreadIsWaiting`, `bothHandsWideSpreadIsReverse`, `hysteresisKeepsForwardFullUntilGrowingAboveMargin`).
+- **영향받는 절**: 결정 27번, `KartCoreTests`
+
+## 29. 카트 정면 보정을 고정 180도 대신 "front" 이름 자식 엔티티로 자동 계산
+
+- **날짜**: 2026-10-10
+- **배경**: 결정 27번에서는 모든 카트가 정면을 로컬 +Z로 export했다고 가정하고 고정 180도 보정을 썼다. 사용자가 Reality Composer Pro 기준 계층을 직접 확인해 보니, 각 카트 USDZ 안에 차량 앞을 가리키는 **"front"라는 이름의 자식 엔티티**가 실제로 들어 있다고 알려줬다 — 이걸 읽으면 추측(180도) 대신 정확한 보정을 모델마다 자동으로 계산할 수 있다.
+- **수정**: `ImmersiveBoxView`에 `findDescendant(in:nameContains:)`(이름에 "front"가 들어간 자식을 재귀 탐색)와 `frontCorrectionAngle(for:fallbackDegrees:)`를 추가했다. "front" 자식을 찾으면 그 위치(`position(relativeTo: entity)`)가 가리키는 방향을 로컬 -Z(우리 쪽 "전진" 기준)로 맞추는 Y축 회전을 계산해서 쓴다(공식: `φ = π/2 + atan2(nose.z, nose.x)`, `R(φ)` 적용 시 `(nose.x,0,nose.z) → (0,0,-1)`이 되도록 유도). "front" 자식이 없거나 위치가 원점과 거의 같으면 `KartModel.modelForwardCorrectionDegrees`(기본 180도)로 돌아간다. 어느 경로를 탔는지, 계산된 각도가 몇 도인지 `DEBUG-FRONT` 로그로 남긴다.
+- **영향받는 절**: 결정 27번(고정 180도 보정을 대체), `ImmersiveBoxView.loadKart()`
+
+## 30. 전진/후진 페달을 "거리 → 연속 가속" 모델로 전면 재설계 + 후진 중 회전 수정
+
+- **날짜**: 2026-10-10
+- **요구사항**: "양손 핀치 거리가 40cm 이하면 벌릴수록 가속하며 후진, 40cm 초과면 좁힐수록 가속하며 전진"으로 바꾸고, 움직이는 중(전진·후진 모두)에도 좌/우 회전이 가능해야 한다.
+- **결정**: 결정 28번까지 썼던 "단계별 상태(정지/대기/절반전진/전체전진/후진) + 히스테리시스" 방식을 버리고, 손 사이 거리를 하나의 연속 값으로 바로 매핑하는 방식으로 바꿨다. `DriveState`의 `forwardHalf`/`forwardFull`/`reverse`를 전부 지우고 `case pedal(Float)`(-1 최대 후진 ~ 0 중립 ~ +1 최대 전진) 하나로 합쳤다. `HandInputResolver.pedalValue(for:)`가 거리를 이 값으로 바꾼다: `pivotDistance`(40cm) 이하(좁음)면 음수, 초과(넓음)면 양수이고, **각 구간에서 기준점에 가까워질수록 그 방향으로 더 세진다**(좁은 쪽은 벌릴수록, 넓은 쪽은 좁힐수록 → 최댓값은 둘 다 40cm 바로 옆에서 나온다). 정확히 40cm에서 전진/후진이 순간적으로 뒤집히지 않도록 `pivotDeadband`(±2cm)는 중립으로 둔다. 상태가 더 이상 이력(hysteresis)에 의존하지 않아 `HandInputResolver`의 `lastDriveState`도 함께 지웠다.
+- **후진 중 회전 버그 수정**: `KartMotionState.advancing()`의 회전 조건이 `next.speed >= tuning.minTurnSpeed || next.speed == 0`였는데, 후진 중(속도가 음수)이면 이 조건이 항상 거짓이 되어 회전이 전혀 안 먹혔다. `abs(next.speed) >= tuning.minTurnSpeed`로 바꿔 전진/후진 어느 쪽이든 충분한 속력이 있으면 회전이 걸리게 했다.
+- **덧붙여 단순화**: 결정 27번에서 넣었던 "`.reverse`는 항상 `brakeDecel` 비율로 접근" 특례도 같이 지웠다 — 연속 페달 값에서는 원래의 일반 규칙(목표보다 빠르면 감속, 느리면 가속)이 전진/후진 모두에 그대로 들어맞는다.
+- **영향받는 파일**: `DriveState`, `InputTuning`(`spreadHalf`/`spreadFull`/`spreadHysteresis`/`reverseThreshold` → `pivotDistance`/`forwardSpan`/`pivotDeadband`), `KartMotionState`, `HandInputResolver`, `KartCoreTests`(관련 테스트 전부 새로 작성)
+
+## 31. 방향 정정: "40cm 이하=후진/초과=전진"이 아니라 "핀치인=전진/핀치아웃=후진"
+
+- **날짜**: 2026-10-10
+- **배경**: 결정 30번은 "40센치 이하인 경우 벌릴수록 후진, 초과인 경우 좁힐수록 전진"이라는 문장을 "각 구간 안에서 기준점에 가까워질수록 세진다(최댓값이 40cm 양옆에 붙어 있고, 양쪽 끝(거리 0, 혹은 멀리)에선 중립으로 돌아간다)"는 구조로 읽고 구현했다. 사용자가 "핀치in할수록 전진, 핀치out할수록 후진"이라고 더 명확하게 정정해 줘서, 실제로는 훨씬 단순한 — 그리고 더 직관적인 — "한쪽 끝(손을 완전히 모음)에서 최대 전진, 반대쪽 끝(최대로 벌림)에서 최대 후진, 가운데(40cm)가 중립"인 단조 증가 모델이 맞다는 걸 확인했다.
+- **수정**: `HandInputResolver.pedalValue(for:)`를 다시 썼다. `distance <= pivotDistance - deadband`(핀치인 쪽)는 거리가 **작을수록**(0에 가까울수록) 페달이 `+1`에 가까워지고(거리 0에서 정확히 +1), `distance >= pivotDistance + deadband`(핀치아웃 쪽)는 거리가 **클수록** `-1`에 가까워진다(`pivotDistance + reverseSpan`에서 정확히 -1, 그 뒤로는 클램프). `InputTuning.forwardSpan`은 더 이상 쓰지 않아 `reverseSpan`으로 이름을 바꿨다(이제 전진 쪽은 자연스러운 하한인 거리 0을 그대로 쓰고, 후진 쪽만 별도 폭이 필요하다).
+- **영향받는 절**: 결정 30번(모델 구조는 유지, 거리↔값 매핑 공식만 교체), `KartCoreTests`(관련 테스트 전부 새 방향에 맞게 재작성 — 특히 "멀리 벌어지면 중립으로 클램프"였던 테스트가 "멀리 벌어지면 최대 후진으로 클램프"로 바뀜)
+
+## 32. 카트 모델이 항상 뒤로 달리는 것처럼 보이던 문제 — "front" 마커 보정 방향이 반대였음
+
+- **날짜**: 2026-10-10
+- **증상**: "좁히든 벌리든 계속 한쪽으로만 이동 중"이라는 리포트. 실기기에서 방금 켠 세션의 `DEBUG-MOTION` 로그를 직접 확인한 결과, `drive=pedal(0.49)`일 때는 `speed`가 양수, `drive=pedal(-1.0)`일 때는 음수로 정확히 갈렸고 `pos`의 변화 방향도 그에 맞게 반대로 움직였다 — 즉 핀치인/아웃 → 전진/후진 페달 로직(결정 31번)과 실제 위치 이동은 이미 정상이었다. 진짜 원인은 사용자가 바로 짚어준 대로 **카트 3D 모델 자체의 앞/뒤 보정 방향**이었다: 위치는 정상적으로 전진·후진하는데, 모델이 그 방향에 대해 항상 뒤집힌 채로 보여서 "차가 계속 뒤로만 달리는 것처럼" 보인 것.
+- **원인**: 결정 29번에서 만든 `frontCorrectionAngle`은 "front" 마커의 위치가 로컬 **-Z**를 향하도록 보정값을 계산했다. 실기기 로그(`DEBUG-FRONT`)를 보면 이 로스터의 `front_aero` 마커는 로컬 **+Z**(위치 `(0, 0.24, 1.41)`)에 있어서 180도 보정이 적용됐는데, 사용자가 실기기로 눈으로 확인한 결과 이게 오히려 반대였다 — 즉 이 모델은 애초에 **+Z가 정방향**이라, 180도를 돌리면 오히려 뒤집히는 것이었다(아마 이 로스터를 만든 툴이 RealityKit/ARKit과 전후 축 관례가 반대인 듯).
+- **수정**: `frontCorrectionAngle`의 목표를 `(0,0,-1)`에서 `(0,0,+1)`로 뒤집었다 — 공식을 `φ = π/2 + atan2(nose.z, nose.x)`에서 `φ = atan2(nose.z, nose.x) - π/2`로 바꿨다(모든 입력에 대해 이전 값 + 180도와 동일). `KartModel.modelForwardCorrectionDegrees`(마커를 못 찾았을 때만 쓰는 fallback)도 같은 이유로 180 → 0으로 바꿨다.
+- **영향받는 절**: 결정 29번(목표 축을 대체), `KartCatalog`, `ImmersiveBoxView.frontCorrectionAngle`
+
+## 33. 진짜 원인: 핀치 손 좌표가 미터가 아니었다 — `location3D`를 scene 좌표로 변환 안 함
+
+- **날짜**: 2026-10-10
+- **증상**: "핀치 벌리고 좁히는 것에 반응이 안 보이고, 양손 핀치 시 항상 전진(실제로는 한쪽 극단) 중"이라는 리포트. 방금 켠 실기기 세션의 `DEBUG-MOTION` 로그를 보니 `drive=pedal(...)` 값이 100줄 넘게 거의 전부 `pedal(-1.0)`으로 고정돼 있었고(`pedal(1.0)`은 단 1번), 손을 벌리거나 좁혀도 값이 거의 안 바뀌었다 — 즉 손 사이 거리가 거의 항상 클램프 범위(`pivotDistance + reverseSpan` = 0.82m) 밖에 있다는 뜻이었다.
+- **원인**: `ingest()`가 `event.location3D`를 **변환 없이** 그대로 썼다. `SpatialEventGesture().targetedToEntity(inputCatcher)`로 받는 이벤트의 `location3D`는 `inputCatcher`의 로컬 좌표계 기준이라 미터 단위가 아니다(실측 로그에서 좌표 값이 수백 단위로 나온 이유). `InputTuning`의 모든 거리 임계값(`pivotDistance` 40cm 등)은 미터 기준으로 잡아 둔 거라, 손 사이 거리가 늘 기준값보다 압도적으로 커서 항상 한쪽 극단(클램프된 -1.0 혹은 +1.0)으로 튀었다 — "벌리고 좁히는 데 반응이 없다"는 바로 이 클램프 상태에서 미세하게 움직이는 걸 가리킨 것이었다. Apple 공식 샘플("Petite Asteroids")도 `event.convert(value.location3D, from: .local, to: .scene)`로 반드시 변환해서 쓰는데, 우리는 이 변환을 빠뜨렸다.
+- **수정**: `driveGesture`의 `onChanged`/`onEnded` 클로저가 `EntityTargetValue<SpatialEventGesture.Value>` 전체(`value`)를 `ingest()`에 넘기도록 바꾸고(기존엔 `value.gestureValue`만 넘겨서 변환에 필요한 `value`를 잃어버렸다), `ingest()` 안에서 `value.convert(event.location3D, from: .local, to: .scene)`로 scene(월드, 미터) 좌표로 변환한 뒤 거리 계산에 쓴다.
+- **참고**: 좌표 단위가 이제 정상적인 미터로 바뀌었으니, `pivotDistance`(40cm)·`reverseSpan`(40cm) 같은 수치가 실제 손 동작 범위에 맞는지는 다시 실기기로 확인이 필요하다 — 느낌이 이상하면(예: 너무 쉽게 꽉 차거나 거의 안 움직이거나) 바로 알려주면 값을 조정한다.
+- **영향받는 절**: `ImmersiveBoxView.ingest()`/`driveGesture`, 결정 20·21·24번(전부 이 변환 누락 위에서 작업했던 것들), `InputTuning`(수치 재검토 필요)
+
+## 34. 디자인 결정 20·21번에 대한 테크 반영 + 박스 치수 확정(20-10 답변)
+
+- **날짜**: 2026-10-10
+- **배경**: `main` 브랜치에 디자이너가 결정 20·21번(메뉴 피드백 답변, 바닐라 텍스처 금지)을 올리고, "merge 후 클로드에게 갱신된 문서로 수정시켜보도록 하겠습니다"라는 메모를 남겼다. 아래는 그걸 보고 바로 반영 가능한 항목들.
+- **반영**:
+  - **20-2(색상 스와치)**: `ColorSwatch` 크기 28→40pt, 간격 10→14pt로 확대. `KartCatalog.standardColors` 정렬을 알파벳 순 → 색상환 순(빨강→주황→...→마젠타→핑크, 그 다음 갈색·무채색)으로 재배열.
+  - **20-7·20-8(카트 로스터)**: `KartCatalog.karts`에서 `mms` 제거(5종 확정). 더 이상 코드에서 참조하지 않는 `Resources/Karts/mms.usdz`(29MB)도 같이 삭제해 실제로 용량 문제를 해소했다 — `KartCatalog`에서만 빼고 파일을 남겨두면 `PBXFileSystemSynchronizedRootGroup`이 폴더 전체를 그대로 번들에 넣어서 용량이 안 줄어든다.
+  - **20-9(360도 회전)**: 메뉴 `KartCard`를 SF Symbols placeholder 대신 `Model3D(named:)`로 실제 USDZ를 띄우고, `DragGesture` + `.rotation3DEffect(axis: (0,1,0))`로 드래그 회전을 추가했다(Apple 공식 튜토리얼 "Create 3D models in the Shared Space" 패턴). 이 작업이 20-1(카트 아이콘을 실제 모델/썸네일로)도 같이 해결한다 — 정적 썸네일 대신 실제로 돌려볼 수 있는 라이브 3D 프리뷰.
+  - **20-10(박스 치수)**: 디자이너가 실기기가 없어 테크에 위임한 항목. 지금까지 여러 차례 실기기 테스트로 확인한 `boxSize = [0.7, 0.4, 0.7]`m을 그대로 확정한다. PRD 원안(1.4×0.6×1.1m)보다 작지만, 책상 위 디오라마로 보면서 손이 핀치 제스처로 편하게 닿는 범위를 실기기 기준으로 맞춘 값이라 이쪽을 유지한다.
+- **보류(자산 전달 대기)**: 20-1 일부(HUD/미니맵용 픽셀 실루엣), 20-3·20-5(Galmuri 폰트 파일), 20-6(엔진음 루프 사운드 파일), 20-11~13(RetireX 팔레트/`Design/style-guide.md`, 리소스 파일명 규칙), 21(바닐라 텍스처 교체) — 전부 디자이너가 전달할 파일/문서가 필요해서 리포지토리에 자료가 도착하면 바로 연결한다.
+- **영향받는 절**: `KartCatalog.swift`, `ContentView.swift`, `README.md`(디자인 피드백 반영 결과 추가), `Docs/TechTask.md`(열린 질문 정리), 디자인 결정 20·21번
+
+## 34. 디자인 결정 묶음 (메뉴 피드백·디자인 PRD 열린 질문 답변)
 
 - **날짜**: 2026-10-10
 - **결정자**: 디자인

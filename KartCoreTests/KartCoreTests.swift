@@ -27,25 +27,88 @@ struct HandInputResolverTests {
         #expect(result.drive == .turnRight)
     }
 
-    @Test func bothHandsCloseIsWaiting() {
+    // 핀치인(좁힐수록)하면 전진, 핀치아웃(벌릴수록)하면 후진. 기준점(40cm, `pivotDistance`)이 중립이고,
+    // 손을 완전히 모으면(거리 0) 최대 전진, `pivotDistance + reverseSpan`만큼 벌리면 최대 후진이다.
+
+    @Test func handsFullyTogetherIsFullForward() {
         let resolver = HandInputResolver()
-        feedBothHands(resolver, distance: 0.10)
+        feedBothHands(resolver, distance: 0.0)
         let result = resolver.resolve(now: 0.1)
-        #expect(result.drive == .waiting)
+        #expect(abs((pedalValue(result.drive) ?? 0) - 1.0) < 0.001)
     }
 
-    @Test func bothHandsHalfSpreadIsForwardHalf() {
+    @Test func narrowerThanPivotIsForward() {
         let resolver = HandInputResolver()
-        feedBothHands(resolver, distance: 0.30)
+        feedBothHands(resolver, distance: 0.19) // pivotDistance(0.40)의 절반 근처
         let result = resolver.resolve(now: 0.1)
-        #expect(result.drive == .forwardHalf)
+        #expect((pedalValue(result.drive) ?? 0) > 0, "40cm보다 좁히면(핀치인) 전진(양수)이어야 한다")
     }
 
-    @Test func bothHandsFullSpreadIsForwardFull() {
+    @Test func pinchingInFurtherAcceleratesForwardMore() {
+        let narrower = resolverPedal(distance: 0.10)
+        let wider = resolverPedal(distance: 0.30)
+        #expect(narrower > 0 && wider > 0)
+        #expect(narrower > wider, "더 좁힐수록(핀치인) 전진이 더 강해져야 한다")
+    }
+
+    @Test func atPivotLowerEdgeIsNeutral() {
         let resolver = HandInputResolver()
-        feedBothHands(resolver, distance: 0.50)
+        feedBothHands(resolver, distance: 0.38) // pivotDistance - pivotDeadband
         let result = resolver.resolve(now: 0.1)
-        #expect(result.drive == .forwardFull)
+        #expect(pedalValue(result.drive) == 0)
+    }
+
+    @Test func widerThanPivotIsReverse() {
+        let resolver = HandInputResolver()
+        feedBothHands(resolver, distance: 0.60)
+        let result = resolver.resolve(now: 0.1)
+        #expect((pedalValue(result.drive) ?? 0) < 0, "40cm보다 벌리면(핀치아웃) 후진(음수)이어야 한다")
+    }
+
+    @Test func pinchingOutFurtherAcceleratesReverseMore() {
+        let narrower = resolverPedal(distance: 0.50)
+        let wider = resolverPedal(distance: 0.70)
+        #expect(narrower < 0 && wider < 0)
+        #expect(wider < narrower, "더 벌릴수록(핀치아웃) 후진이 더 강해져야 한다")
+    }
+
+    @Test func atPivotUpperEdgeIsNeutral() {
+        let resolver = HandInputResolver()
+        feedBothHands(resolver, distance: 0.42) // pivotDistance + pivotDeadband
+        let result = resolver.resolve(now: 0.1)
+        #expect(pedalValue(result.drive) == 0)
+    }
+
+    @Test func exactlyAtPivotIsNeutral() {
+        let resolver = HandInputResolver()
+        feedBothHands(resolver, distance: 0.40)
+        let result = resolver.resolve(now: 0.1)
+        #expect(pedalValue(result.drive) == 0, "기준점 바로 근처는 데드밴드라 중립이어야 한다")
+    }
+
+    @Test func atMaxReverseSpanIsFullReverse() {
+        let resolver = HandInputResolver()
+        feedBothHands(resolver, distance: 0.82) // pivotDistance + pivotDeadband + reverseSpan
+        let result = resolver.resolve(now: 0.1)
+        #expect(abs((pedalValue(result.drive) ?? 0) - (-1.0)) < 0.001)
+    }
+
+    @Test func beyondMaxReverseSpanClampsInsteadOfOvershooting() {
+        let resolver = HandInputResolver()
+        feedBothHands(resolver, distance: 1.20) // reverseSpan 범위를 한참 넘김
+        let result = resolver.resolve(now: 0.1)
+        #expect(abs((pedalValue(result.drive) ?? 0) - (-1.0)) < 0.001, "-1보다 더 내려가지(overshoot) 않아야 한다")
+    }
+
+    private func resolverPedal(distance: Float) -> Float {
+        let resolver = HandInputResolver()
+        feedBothHands(resolver, distance: distance)
+        return pedalValue(resolver.resolve(now: 0.1).drive) ?? 0
+    }
+
+    private func pedalValue(_ drive: DriveState) -> Float? {
+        if case .pedal(let value) = drive { return value }
+        return nil
     }
 
     @Test func pinchBelowDebounceDoesNotCountYet() {
@@ -77,24 +140,23 @@ struct HandInputResolverTests {
         #expect(result.right.tracked == false)
     }
 
-    @Test func hysteresisKeepsForwardFullUntilDroppingBelowMargin() {
+    @Test func distanceSmoothingEasesSuddenJumps() {
         let resolver = HandInputResolver()
-        feedBothHands(resolver, distance: 0.50, timestamp: 0)
-        #expect(resolver.resolve(now: 0.05).drive == .forwardFull)
+        feedBothHands(resolver, distance: 0.0, timestamp: 0) // 최대 전진 지점(손을 완전히 모음)
+        #expect(abs((pedalValue(resolver.resolve(now: 0.05).drive) ?? 0) - 1.0) < 0.001)
 
-        // Distance dips just under spreadFull but still above the hysteresis margin (0.40 - 0.03).
-        feedBothHands(resolver, distance: 0.38, timestamp: 0.1)
-        #expect(resolver.resolve(now: 0.15).drive == .forwardFull)
+        // 거리가 순간적으로 0.82(최대 후진 지점)로 뛰어도, EMA(alpha 0.25)가 바로 따라가지 않고 서서히 수렴한다.
+        feedBothHands(resolver, distance: 0.82, timestamp: 0.1)
+        let justAfterJump = pedalValue(resolver.resolve(now: 0.15).drive) ?? 0
+        #expect(justAfterJump > -1.0, "EMA 스무딩 때문에 한 프레임만에 최대 후진까지 가지는 않아야 한다")
 
-        // Distance drops below the hysteresis margin. The smoothed distance (EMA, alpha 0.25)
-        // takes a few frames to catch up to the new raw reading, so feed several frames before asserting.
-        var lastState = DriveState.forwardFull
-        for frame in 1...10 {
+        var lastValue = justAfterJump
+        for frame in 1...20 {
             let t = 0.1 + Double(frame) * (1.0 / 60.0)
-            feedBothHands(resolver, distance: 0.30, timestamp: t)
-            lastState = resolver.resolve(now: t + 0.001).drive
+            feedBothHands(resolver, distance: 0.82, timestamp: t)
+            lastValue = pedalValue(resolver.resolve(now: t + 0.001).drive) ?? 0
         }
-        #expect(lastState == .forwardHalf)
+        #expect(lastValue < -0.9, "충분히 시간이 지나면 거리(0.82)에 맞는 값으로 수렴해야 한다")
     }
 
     private func feedPinch(_ resolver: HandInputResolver, _ chirality: HandChirality, at timestamp: TimeInterval, debounced: Bool) {
@@ -119,7 +181,7 @@ struct KartMotionStateTests {
         let tuning = MotionTuning()
         var state = KartMotionState()
         for _ in 0..<60 {
-            state = state.advancing(drive: .forwardFull, tuning: tuning, deltaTime: 1.0 / 60.0)
+            state = state.advancing(drive: .pedal(1.0), tuning: tuning, deltaTime: 1.0 / 60.0)
         }
         // accel = 3.0 m/s^2 over 1s starting from rest -> ~3.0 m/s (below maxSpeed 4.0).
         #expect(abs(state.speed - 3.0) < 0.05)
@@ -145,6 +207,27 @@ struct KartMotionStateTests {
         }
         #expect(abs(state.speed - 2.0) < 0.001, "turning should neither accelerate nor decelerate the kart")
         #expect(state.heading > 0, "turnLeft should increase heading")
+    }
+
+    @Test func turningWhileReversingStillTurns() {
+        // 전진 중이든 후진 중이든 회전은 가능해야 한다(음수 속도에서도 회전 조건이 걸려야 함).
+        let tuning = MotionTuning()
+        var state = KartMotionState(speed: -2.0, heading: 0, position: .zero)
+        for _ in 0..<30 {
+            state = state.advancing(drive: .turnLeft, tuning: tuning, deltaTime: 1.0 / 60.0)
+        }
+        #expect(abs(state.speed - (-2.0)) < 0.001, "reversing while turning should keep the (negative) speed unchanged")
+        #expect(state.heading > 0, "turnLeft should increase heading even while reversing")
+    }
+
+    @Test func reverseMovesBackwardAlongHeading() {
+        let tuning = MotionTuning()
+        var state = KartMotionState()
+        for _ in 0..<60 {
+            state = state.advancing(drive: .pedal(-1.0), tuning: tuning, deltaTime: 1.0 / 60.0)
+        }
+        #expect(state.speed < 0, "reverse should produce negative speed")
+        #expect(state.position.z > 0, "forward is -Z, so reversing should move toward +Z")
     }
 }
 
