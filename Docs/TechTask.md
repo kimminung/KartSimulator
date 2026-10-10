@@ -47,10 +47,17 @@ Oct 10, 2026 · @Coulson 기준, `Docs/tech-prd.md`에서 파생. 마일스톤 �
   - easy/normal/hard × seed 1~8, 8×6 그리드로 24개 생성·검증 전부 통과
   - `Tracks/track_01.json`(seed 20261010, easy, 타일 16/64점), `Tracks/track_02.json`(seed 20261011, normal, 타일 18/72점) 커밋 — 아직 타일 3D 에셋이 없어 데이터만 존재, 렌더링은 타일 에셋 확보 후
   - **알게 된 점**: 노치 1개는 새 코너 2개뿐 아니라 노치 양옆의 기존 직선 타일 2개도 커브로 바꿔 커브 +4가 된다(+2 아님). 그래서 난이도는 "목표 커브 수"가 아니라 "노치 개수"로 조절한다(easy=0/4커브, normal=1/8커브, hard=2/12커브) — PRD의 "normal 6개"는 이 구조에서 나올 수 없어 8로 대체했다(`Docs/decisions.md` 17번)
-- [ ] 박스 임시 주행장(M2) → 실제 트랙 좌표계·타일 배치로 교체
-- [ ] 모션 튜닝을 실제 트랙 스케일 기본값으로 복원하고 트랙 JSON `tuning` 오버라이드 지원
-- [ ] ECS 컴포넌트 6종 + 시스템 5종 구현 (테크 PRD 4장)
-- [ ] 벽 충돌·트랙 이탈 복귀 로직
+- [x] 박스 임시 주행장(M2) → 실제 트랙 좌표계·타일 배치로 교체
+  - `KartCore/TrackDefinition.swift`: `Tracks/track_XX.json` 스키마 그대로 Codable로 디코딩, `MotionTuning.applying(_:)`로 JSON `tuning` 일부 덮어쓰기 지원
+  - `KartCore/TrackPath.swift`: 중심선(`path`)에 대한 최근접 구간/수직 거리 계산 (이탈 판정·path 인덱스 추적에 사용)
+  - `KartCore/LapTracker.swift`: 체크포인트를 순서대로 "전진 방향"으로 지났는지, 출발선을 다시 지났는지 판정. 역주행·리스폰 점프는 크로스로 안 침 (테크 PRD 12장 체크리스트 항목)
+  - `KartCore/OffTrackMonitor.swift`: 트랙 밖 체류 시간 누적 → `offTrackRespawn` 초과 시 리스폰 신호
+  - 단위 테스트 10개 추가(`KartCoreTests`), 총 23개 전부 통과
+  - `ImmersiveBoxView`: `track_01.json`(앱 번들에 복사된 사본, `KartSimulator/Resources/Tracks/`)을 읽어 트랙 전체 바운딩 박스를 박스 바닥에 자동으로 맞추는 배율(`trackDisplayScale`)을 계산 → 같은 배율로 카트도 스케일(`KartFitter.fit(_:scale:)` 추가)해 비례를 맞춤 → path를 작은 점열로 시각화(타일 3D 에셋 없음, 임시) → 실제 PRD 모션 수치로 주행, 센터라인 이탈 2초 후 출발선 리스폰, 체크포인트·랩 판정
+  - 시뮬레이터에서 2초 뒤 자동으로 박스를 여는 임시 진단 코드로 런타임 크래시·에러 없음을 확인(확인 후 제거)
+- [x] 모션 튜닝을 실제 트랙 스케일 기본값으로 복원하고 트랙 JSON `tuning` 오버라이드 지원 (위 항목에서 `MotionTuning().applying(track.tuning)`으로 구현)
+- [ ] ECS 컴포넌트 6종 + 시스템 5종 구현 (테크 PRD 4장) — 지금은 RealityKit 컴포넌트/시스템이 아니라 `ImmersiveBoxView`의 `SceneEvents.Update` 콜백 하나에서 입력·모션·이탈·랩 판정을 순서대로 호출하는 방식. 실제 트랙 타일 엔티티/콜리전이 생기는 시점에 본격적인 ECS 분리가 필요
+- [ ] 벽 충돌 로직 (현재는 벽 콜리전 자체가 없음 — 트랙 타일 3D 에셋 확보 후)
 
 ## M4 — 미니맵
 

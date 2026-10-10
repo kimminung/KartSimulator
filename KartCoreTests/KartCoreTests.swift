@@ -147,3 +147,121 @@ struct KartMotionStateTests {
         #expect(state.heading > 0, "turnLeft should increase heading")
     }
 }
+
+private func makeTestTrack(laps: Int = 2, checkpoints: [Int] = [2, 4, 6], pathCount: Int = 8) -> TrackDefinition {
+    let path = (0..<pathCount).map { i -> TrackPathPoint in
+        let angle = Float(i) / Float(pathCount) * 2 * Float.pi
+        return TrackPathPoint(x: cos(angle) * 10, z: sin(angle) * 10)
+    }
+    return TrackDefinition(
+        schemaVersion: 1,
+        id: "test_track",
+        name: "테스트",
+        difficulty: "easy",
+        seed: 1,
+        laps: laps,
+        tileSize: 4.0,
+        width: 3.0,
+        grid: TrackGrid(cols: 4, rows: 4),
+        tiles: [],
+        path: path,
+        start: TrackStart(pathIndex: 0, heading: 0),
+        checkpoints: checkpoints,
+        walls: true,
+        tuning: nil
+    )
+}
+
+struct LapTrackerTests {
+    @Test func passingAllCheckpointsThenStartIncrementsLap() {
+        let tracker = LapTracker(track: makeTestTrack())
+        for index in [1, 2, 3, 4, 5, 6, 7, 0] {
+            tracker.update(pathIndex: index)
+        }
+        #expect(tracker.progress.currentLap == 2)
+        #expect(tracker.progress.checkpointsPassedThisLap == 0)
+    }
+
+    @Test func crossingStartBeforeAllCheckpointsDoesNotCountLap() {
+        let tracker = LapTracker(track: makeTestTrack())
+        // 체크포인트를 하나도 못 지난 채로 출발선(인덱스 0)을 다시 지나간다.
+        for index in [1, 7, 0] {
+            tracker.update(pathIndex: index)
+        }
+        #expect(tracker.progress.currentLap == 1)
+    }
+
+    @Test func jumpingAheadStillCreditsCheckpointsPassedAlongTheWay() {
+        // path 인덱스 모델에서는 0 -> 4로 바로 가도 중간의 체크포인트(인덱스 2)를 실제로 지나간 것이다.
+        let tracker = LapTracker(track: makeTestTrack())
+        tracker.update(pathIndex: 4)
+        #expect(tracker.progress.checkpointsPassedThisLap == 1)
+    }
+
+    @Test func reverseMotionDoesNotCountAsForwardCross() {
+        let tracker = LapTracker(track: makeTestTrack())
+        tracker.update(pathIndex: 1)
+        tracker.update(pathIndex: 2) // 체크포인트 0 통과
+        #expect(tracker.progress.checkpointsPassedThisLap == 1)
+        tracker.update(pathIndex: 1) // 살짝 후진
+        #expect(tracker.progress.checkpointsPassedThisLap == 1, "후진은 크로스로 치지 않는다")
+    }
+
+    @Test func finishesAfterConfiguredLapCount() {
+        let tracker = LapTracker(track: makeTestTrack(laps: 2))
+        let oneLap = [1, 2, 3, 4, 5, 6, 7, 0]
+        for index in oneLap { tracker.update(pathIndex: index) }
+        #expect(tracker.progress.isFinished == false)
+        #expect(tracker.progress.currentLap == 2)
+        for index in oneLap { tracker.update(pathIndex: index) }
+        #expect(tracker.progress.isFinished == true)
+    }
+
+    @Test func resetPositionAvoidsSpuriousCrossOnRespawn() {
+        let tracker = LapTracker(track: makeTestTrack())
+        tracker.update(pathIndex: 1)
+        tracker.resetPosition(pathIndex: 6) // 리스폰으로 순간 이동
+        tracker.update(pathIndex: 7)
+        #expect(tracker.progress.checkpointsPassedThisLap == 0, "리스폰 점프는 체크포인트 크로스로 치지 않는다")
+    }
+}
+
+struct TrackPathTests {
+    @Test func closestSegmentFindsNearestProjection() {
+        let square = TrackPath(points: [
+            SIMD2(0, 0), SIMD2(10, 0), SIMD2(10, 10), SIMD2(0, 10),
+        ])
+        let result = square.closestSegment(to: SIMD2(5, 0.5))
+        #expect(result.index == 0)
+        #expect(abs(result.distance - 0.5) < 0.001)
+    }
+
+    @Test func closestSegmentHandlesCornerProximity() {
+        let square = TrackPath(points: [
+            SIMD2(0, 0), SIMD2(10, 0), SIMD2(10, 10), SIMD2(0, 10),
+        ])
+        let result = square.closestSegment(to: SIMD2(10, 10))
+        #expect(result.distance < 0.001)
+    }
+}
+
+struct OffTrackMonitorTests {
+    @Test func accumulatesOnlyWhileOffTrack() {
+        let monitor = OffTrackMonitor()
+        monitor.update(isOffTrack: true, deltaTime: 1.0, threshold: 2.0)
+        #expect(monitor.shouldRespawn == false)
+        monitor.update(isOffTrack: false, deltaTime: 1.0, threshold: 2.0)
+        monitor.update(isOffTrack: true, deltaTime: 1.5, threshold: 2.0)
+        #expect(monitor.shouldRespawn == false, "트랙에 복귀하면 타이머가 리셋되어야 한다")
+        monitor.update(isOffTrack: true, deltaTime: 0.6, threshold: 2.0)
+        #expect(monitor.shouldRespawn == true)
+    }
+
+    @Test func acknowledgeRespawnResetsTimer() {
+        let monitor = OffTrackMonitor()
+        monitor.update(isOffTrack: true, deltaTime: 3.0, threshold: 2.0)
+        #expect(monitor.shouldRespawn == true)
+        monitor.acknowledgeRespawn()
+        #expect(monitor.shouldRespawn == false)
+    }
+}
