@@ -1,6 +1,6 @@
 # 디자인 산출물 인계 — RetireX Online 세션이 준비한 것
 
-2026-10-10 · RetireX Online 개발 세션이 운영자(디자이너)의 요청으로 만들었다. **아직 커밋하지 않았다.** 디자이너가 확인한 뒤 `design` 브랜치에 올린다.
+2026-10-10 · RetireX Online 개발 세션이 운영자(디자이너)의 요청으로 만들었다. 디자이너 세션이 검사한 뒤 `design` 브랜치에 커밋했다(PR #4).
 
 결정 20·21(같은 날 커밋 `75ec00f`)을 반영했다. 팔레트는 RetireX 색 체계를 쓰고, 마인크래프트 텍스처는 쓰지 않는다. 카트는 5종이다.
 
@@ -47,6 +47,8 @@
 | `node Design/tools/icons.mjs` | 아이콘·온보딩 SVG와 미리보기 | sharp(미리보기만) |
 | `node Design/tools/mockups.mjs` | 목업 8장(타일·아이콘 먼저 만들 것) | sharp |
 | `node Design/tools/sfx.mjs` | 효과음 7개 | 없음 |
+| `node Design/tools/engine.mjs [XK ENGINE sounds 폴더]` | 엔진음 5개 → `Assets/sfx/` | 운영자 PC의 XK ENGINE 원본 WAV |
+| `node Design/tools/engine.mjs --synth` | 엔진음 합성 대체본 5개 → `Design/audio/engine_synth/` | 없음 |
 | `node Design/tools/textures.mjs` | 대체 텍스처 15장과 미리보기 | sharp(미리보기만) |
 | `node Design/tools/karts.mjs [RetireX 리소스팩 경로]` | 카트 썸네일·실루엣 | RetireX 리소스팩(운영자 PC) |
 
@@ -56,7 +58,7 @@
 ## 4. 남은 일과 알려 둘 점
 
 1. **Galmuri 폰트 파일**: 공식 저장소에서 받아 `Design/fonts/`에 넣는다(`Design/fonts/README.md`). 받은 뒤 목업 제목도 바꿀 수 있다.
-2. **엔진음 루프**(결정 20-6): RetireX Online 세션이 RetireX 엔진음(`sounds/kart/lemon_engine_*`)을 바탕으로 준비한다. 출처·라이선스 확인 후 `Assets/sfx/`에 넣는다.
+2. **엔진음**(결정 20-6): `Assets/sfx/engine{Ignition,Accel,Loop,Decel,Idle}.wav`와 사용 설명 `Assets/sfx/ENGINE.md`를 넣었다. 원본은 RetireX가 쓰는 XK ENGINE(CYBOX) 엔진음 WAV다. 운영자가 CC0 기반 소리라 라이선스 제약이 없다고 확인했다(2026-10-11, `Assets/sfx/LICENSES.md` 2장). 예비로 합성 대체본(`Design/audio/engine_synth/`)을 같은 이름으로 쓴다.
 3. **앱 이름**: 결정 7번은 보류 상태다. 후보만 `Design/proposals/app-name.md`에 두었다.
 4. **카트 실루엣**은 자동으로 뽑은 초안이다. 24 px에서 차종 구분이 약하니 필요하면 손으로 다듬는다. `gospel` 썸네일은 원본 렌더부터 앞코가 잘려 있다.
 5. **곡선 타일 안쪽 모서리에는 벽이 없다**(바깥 L자 벽만 있음). 트랙 안쪽 잔디로 나갈 수 있다. 막아야 하면 테크와 상의한다.
