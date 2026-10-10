@@ -65,9 +65,12 @@ Oct 10, 2026 · @Coulson 기준, `Docs/tech-prd.md`에서 파생. 마일스톤 �
 - [ ] `MinimapSyncSystem` 구현
 - [ ] 박스 다이오라마 안에서의 미니맵 배치 좌표 재계산 (볼륨 좌표계 → 이머시브 박스 좌표계로 변환 필요, 신규 항목)
 
-## M5 — HUD·화면 흐름·효과음
+## M5 — HUD·화면 흐름·효과음 (2026-10-10 RaceModel 1차 데이터 플러밍)
 
-- [ ] `RaceHUDState`/`RaceModel` 전체 필드 구현 (테크 PRD 10장) — `DriveState`/`HandStatus`는 M2에서 이미 KartCore에 구현됨, RaceModel은 이를 감싸기만 하면 됨
+- [x] `RaceHUDState`/`RaceModel` 필드 구현 (테크 PRD 10장) — `KartCore/RaceHUDState.swift`, `RaceModel.swift`. `kartMapPosition`/`kartHeading`(미니맵용)와 `RaceEvent`(효과음용)는 M4·효과음 연결 시점에 추가
+- [x] `ImmersiveBoxView`에 임시 HUD(`RaceHUDOverlay`, 2D `.overlay`)로 랩/타임/속도 표시, 센터라인 이탈 시 "트랙 이탈" 뱃지
+- [ ] **알려진 문제**: 이머시브 스페이스가 열려 있는 동안 RealityView가 계속 렌더링 중이라, `raceModel`(Observable)을 어떤 스케줄(프레임 콜백/GCD/Task)로 갱신해도 SwiftUI가 "Modifying state during view update"를 로그에 남긴다(크래시는 아니고 HUD 값은 정상 갱신됨). 갱신 주기를 250ms로 늦춰 로그 노이즈만 줄여둔 상태 — 정식 해결은 아래 항목과 함께
+- [ ] HUD를 2D `.overlay`에서 `RealityView`의 3D attachment(entity에 붙는 SwiftUI 뷰)로 교체 — 디자인 PRD 7장 배치(뒤쪽 패널/양 모서리)를 따르면서 위 경고도 같이 해결될 가능성이 큼
 - [ ] 메뉴 4화면 + 볼륨 HUD 3상태 목업 반영
 - [ ] 효과음 7종 연결
 
