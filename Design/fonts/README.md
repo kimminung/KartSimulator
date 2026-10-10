@@ -2,7 +2,7 @@
 
 | 용도 | 폰트 | 라이선스 | 상태 |
 | --- | --- | --- | --- |
-| 앱 제목, 카운트다운 숫자 | **Galmuri**(갈무리) — 한글 픽셀 폰트, 제작 quiple | SIL Open Font License 1.1 | 파일 받기 대기 |
+| 앱 제목, 카운트다운 숫자 | **Galmuri**(갈무리) — 한글 픽셀 폰트, 제작 quiple | SIL Open Font License 1.1 | v2.40.4 받음: `Galmuri11-Bold.ttf`(제목), `Galmuri14.ttf`(카운트다운), `OFL.txt` |
 | HUD 숫자 | SF Pro Rounded(시스템) | Apple 시스템 폰트 — 앱 안에서 시스템 폰트로 쓰는 것은 문제없음, 파일을 저장소에 넣지 않음 | 추가 작업 없음 |
 | 라벨·본문 | SF Pro(시스템) | 위와 같음 | 추가 작업 없음 |
 
