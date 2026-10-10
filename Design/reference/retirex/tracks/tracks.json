@@ -1,0 +1,167 @@
+[
+ {
+  "id": "nad_goga",
+  "name": "뉴암스테르담 탁 트인 고가",
+  "laps": 3,
+  "difficulty": 3,
+  "lapLength": 1475,
+  "gates": {
+   "main": 206,
+   "shortcut": 8,
+   "checkpoints": 2
+  },
+  "width": [
+   30,
+   30
+  ],
+  "heights": [
+   -37,
+   -23
+  ],
+  "shortcut": true,
+  "item": true,
+  "files": [
+   "card.png",
+   "course_plan.png",
+   "minimap.png",
+   "minimap_hud.png",
+   "render_overview.png",
+   "track.json"
+  ]
+ },
+ {
+  "id": "nad_toe",
+  "name": "뉴암스테르담 발가락",
+  "laps": 2,
+  "difficulty": 3,
+  "lapLength": 3449,
+  "gates": {
+   "main": 625,
+   "shortcut": 9,
+   "checkpoints": 19
+  },
+  "width": [
+   28,
+   33.04
+  ],
+  "heights": [
+   -37,
+   -31
+  ],
+  "shortcut": true,
+  "item": false,
+  "files": [
+   "card.png",
+   "course_plan.png",
+   "minimap.png",
+   "minimap_hud.png",
+   "render_overview.png",
+   "render_shortcut.png",
+   "render_slope.png",
+   "render_start.png",
+   "track.json"
+  ]
+ },
+ {
+  "id": "nad_woonha",
+  "name": "뉴암스테르담 캐널",
+  "laps": 3,
+  "difficulty": 1,
+  "lapLength": 907,
+  "gates": {
+   "main": 165,
+   "shortcut": 0,
+   "checkpoints": 6
+  },
+  "width": [
+   28,
+   28
+  ],
+  "heights": [
+   -37,
+   -37
+  ],
+  "shortcut": false,
+  "item": true,
+  "files": [
+   "card.png",
+   "course_plan.png",
+   "minimap.png",
+   "minimap_hud.png",
+   "render_corner.png",
+   "render_overview.png",
+   "render_start.png",
+   "render_top.png",
+   "track.json"
+  ]
+ },
+ {
+  "id": "dyc_turnel",
+  "name": "뒷산 덩굴 동굴",
+  "laps": 3,
+  "difficulty": 2,
+  "lapLength": 1374,
+  "gates": {
+   "main": 250,
+   "shortcut": 0,
+   "checkpoints": 9
+  },
+  "width": [
+   12,
+   32
+  ],
+  "heights": [
+   -37,
+   -37
+  ],
+  "shortcut": false,
+  "item": true,
+  "files": [
+   "card.png",
+   "course_plan.png",
+   "minimap.png",
+   "minimap_hud.png",
+   "render_bridge.png",
+   "render_cave.png",
+   "render_overview.png",
+   "render_top.png",
+   "track.json"
+  ]
+ },
+ {
+  "id": "nad_pungcha",
+  "name": "뉴암스테르담 풍차 제방",
+  "laps": 2,
+  "difficulty": 4,
+  "lapLength": 1606,
+  "gates": {
+   "main": 282,
+   "shortcut": 4,
+   "checkpoints": 14
+  },
+  "width": [
+   7,
+   32
+  ],
+  "heights": [
+   -37,
+   -33
+  ],
+  "shortcut": true,
+  "item": false,
+  "files": [
+   "card.png",
+   "course_plan.png",
+   "minimap.png",
+   "minimap_hud.png",
+   "render_jump.png",
+   "render_market.png",
+   "render_overview.png",
+   "render_polder.png",
+   "render_start_west.png",
+   "render_waterfront.png",
+   "track.json",
+   "windmill_model.png"
+  ]
+ }
+]
