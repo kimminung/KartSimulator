@@ -21,9 +21,22 @@
 		68A1BDA3307A2EC50073A176 /* KartCoreTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = KartCoreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		68A1BDD0307A91360073A176 /* Exceptions for "KartSimulator" folder in "KartSimulator" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 000000000000000100000000 /* KartSimulator */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		000000000000000000000010 /* KartSimulator */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				68A1BDD0307A91360073A176 /* Exceptions for "KartSimulator" folder in "KartSimulator" target */,
+			);
 			path = KartSimulator;
 			sourceTree = "<group>";
 		};
@@ -324,6 +337,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = KartSimulator/Info.plist;
 				INFOPLIST_KEY_NSWorldSensingUsageDescription = "디버그용으로 헤드 위치·시선 방향을 화면에 표시하기 위해 기기 위치를 사용합니다.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
@@ -364,6 +378,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = KartSimulator/Info.plist;
 				INFOPLIST_KEY_NSWorldSensingUsageDescription = "디버그용으로 헤드 위치·시선 방향을 화면에 표시하기 위해 기기 위치를 사용합니다.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
