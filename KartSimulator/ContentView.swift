@@ -1,4 +1,5 @@
 import SwiftUI
+import RealityKit
 
 struct ContentView: View {
     @Environment(KartSelectionModel.self) private var selection
@@ -33,7 +34,7 @@ struct ContentView: View {
                         Text("색상")
                             .font(.headline)
                         ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 10) {
+                            HStack(spacing: 14) {
                                 ForEach(selection.selectedKart.colorOptions) { color in
                                     ColorSwatch(
                                         color: color,
@@ -77,15 +78,34 @@ struct ContentView: View {
     #endif
 }
 
+/// 메뉴 카드는 고정 썸네일 대신 실제 3D 모델을 보여준다 — 드래그로 돌려 볼 수 있다 (디자인 결정 20-1·20-9).
 private struct KartCard: View {
     let kart: KartModel
     let isSelected: Bool
 
+    @State private var rotationDegrees: Double = -20
+    @State private var dragStartDegrees: Double = -20
+
     var body: some View {
         VStack(spacing: 8) {
-            Image(systemName: "car.side.fill")
-                .font(.system(size: 36))
-                .frame(maxWidth: .infinity, minHeight: 72)
+            Model3D(named: kart.usdzResourceName) { model in
+                model
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+            } placeholder: {
+                ProgressView()
+            }
+            .frame(maxWidth: .infinity, minHeight: 96)
+            .rotation3DEffect(.degrees(rotationDegrees), axis: (x: 0, y: 1, z: 0))
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        rotationDegrees = dragStartDegrees + value.translation.width * 0.5
+                    }
+                    .onEnded { _ in
+                        dragStartDegrees = rotationDegrees
+                    }
+            )
             Text(kart.displayName)
                 .font(.subheadline.weight(.semibold))
         }
@@ -105,11 +125,11 @@ private struct ColorSwatch: View {
     var body: some View {
         Circle()
             .fill(Color(hex: color.swatchHex))
-            .frame(width: 28, height: 28)
+            .frame(width: 40, height: 40)
             .overlay(
                 Circle().strokeBorder(
                     isSelected ? Color.accentColor : Color.white.opacity(0.4),
-                    lineWidth: isSelected ? 3 : 1
+                    lineWidth: isSelected ? 4 : 1.5
                 )
             )
     }

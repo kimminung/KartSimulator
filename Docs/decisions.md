@@ -171,3 +171,15 @@
 - **수정**: `driveGesture`의 `onChanged`/`onEnded` 클로저가 `EntityTargetValue<SpatialEventGesture.Value>` 전체(`value`)를 `ingest()`에 넘기도록 바꾸고(기존엔 `value.gestureValue`만 넘겨서 변환에 필요한 `value`를 잃어버렸다), `ingest()` 안에서 `value.convert(event.location3D, from: .local, to: .scene)`로 scene(월드, 미터) 좌표로 변환한 뒤 거리 계산에 쓴다.
 - **참고**: 좌표 단위가 이제 정상적인 미터로 바뀌었으니, `pivotDistance`(40cm)·`reverseSpan`(40cm) 같은 수치가 실제 손 동작 범위에 맞는지는 다시 실기기로 확인이 필요하다 — 느낌이 이상하면(예: 너무 쉽게 꽉 차거나 거의 안 움직이거나) 바로 알려주면 값을 조정한다.
 - **영향받는 절**: `ImmersiveBoxView.ingest()`/`driveGesture`, 결정 20·21·24번(전부 이 변환 누락 위에서 작업했던 것들), `InputTuning`(수치 재검토 필요)
+
+## 34. 디자인 결정 20·21번에 대한 테크 반영 + 박스 치수 확정(20-10 답변)
+
+- **날짜**: 2026-10-10
+- **배경**: `main` 브랜치에 디자이너가 결정 20·21번(메뉴 피드백 답변, 바닐라 텍스처 금지)을 올리고, "merge 후 클로드에게 갱신된 문서로 수정시켜보도록 하겠습니다"라는 메모를 남겼다. 아래는 그걸 보고 바로 반영 가능한 항목들.
+- **반영**:
+  - **20-2(색상 스와치)**: `ColorSwatch` 크기 28→40pt, 간격 10→14pt로 확대. `KartCatalog.standardColors` 정렬을 알파벳 순 → 색상환 순(빨강→주황→...→마젠타→핑크, 그 다음 갈색·무채색)으로 재배열.
+  - **20-7·20-8(카트 로스터)**: `KartCatalog.karts`에서 `mms` 제거(5종 확정). 더 이상 코드에서 참조하지 않는 `Resources/Karts/mms.usdz`(29MB)도 같이 삭제해 실제로 용량 문제를 해소했다 — `KartCatalog`에서만 빼고 파일을 남겨두면 `PBXFileSystemSynchronizedRootGroup`이 폴더 전체를 그대로 번들에 넣어서 용량이 안 줄어든다.
+  - **20-9(360도 회전)**: 메뉴 `KartCard`를 SF Symbols placeholder 대신 `Model3D(named:)`로 실제 USDZ를 띄우고, `DragGesture` + `.rotation3DEffect(axis: (0,1,0))`로 드래그 회전을 추가했다(Apple 공식 튜토리얼 "Create 3D models in the Shared Space" 패턴). 이 작업이 20-1(카트 아이콘을 실제 모델/썸네일로)도 같이 해결한다 — 정적 썸네일 대신 실제로 돌려볼 수 있는 라이브 3D 프리뷰.
+  - **20-10(박스 치수)**: 디자이너가 실기기가 없어 테크에 위임한 항목. 지금까지 여러 차례 실기기 테스트로 확인한 `boxSize = [0.7, 0.4, 0.7]`m을 그대로 확정한다. PRD 원안(1.4×0.6×1.1m)보다 작지만, 책상 위 디오라마로 보면서 손이 핀치 제스처로 편하게 닿는 범위를 실기기 기준으로 맞춘 값이라 이쪽을 유지한다.
+- **보류(자산 전달 대기)**: 20-1 일부(HUD/미니맵용 픽셀 실루엣), 20-3·20-5(Galmuri 폰트 파일), 20-6(엔진음 루프 사운드 파일), 20-11~13(RetireX 팔레트/`Design/style-guide.md`, 리소스 파일명 규칙), 21(바닐라 텍스처 교체) — 전부 디자이너가 전달할 파일/문서가 필요해서 리포지토리에 자료가 도착하면 바로 연결한다.
+- **영향받는 절**: `KartCatalog.swift`, `ContentView.swift`, `README.md`(디자인 피드백 반영 결과 추가), `Docs/TechTask.md`(열린 질문 정리), 디자인 결정 20·21번
