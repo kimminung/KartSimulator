@@ -55,3 +55,22 @@
 - **이유**: M3가 "박스 임시 주행장 → 실제 트랙 좌표계·타일 배치로 교체"를 명시적으로 요구했고, 카트 전용 고정 크기(22cm)를 계속 쓰면 트랙이 생기는 순간 카트와 트랙의 비례가 어긋나기 때문.
 - **타협점**: 트랙 타일 3D 에셋이 아직 없어서, 타일을 깔지 않고 `path`를 작은 점(큐브) 점열로만 시각화한다. 벽도 아직 없어 `CollisionResolveSystem`에 해당하는 벽 충돌 로직은 구현하지 않았다(테크 PRD 12장 "벽에 정면으로 박았을 때 미끄러진다" 체크리스트는 타일 에셋 확보 후).
 - **영향받는 절**: 테크 PRD 7장(트랙 데이터), 9장(배율 — 기존 0.04 고정값 대신 트랙마다 자동 계산), `Docs/TechTask.md` M3
+
+## 20. 버그 수정: 박스 연 뒤 핀치 제스처가 완전히 무반응이던 문제
+
+- **날짜**: 2026-10-10
+- **증상**: 실기기에서 "박스 열기" 후 양손 핀치를 해도 카트가 전혀 반응하지 않았다(완전 무반응).
+- **원인**: `ImmersiveBoxView`의 `driveGesture`가 `SpatialEventGesture()`를 어떤 엔티티도 조준하지 않은 채(`.targetedToEntity`/`.targetedToAnyEntity` 없이) 붙이고 있었다. RealityKit 공식 가이드("Responding to gestures on an entity")에 따르면 `RealityView` 안에서 제스처가 발생하려면 대상 엔티티에 `InputTargetComponent` + `CollisionComponent`가 반드시 있어야 하는데, 이 프로젝트에는 그런 엔티티가 아예 없었다. 테크 PRD 5장에 적어 둔 "InputCatcher" 엔티티를 실제로는 만들지 않고 넘어간 것이 원인 — PRD에 쓰기만 하고 구현을 빠뜨렸다.
+- **진단 방법**: Apple 문서에서 `targetedToAnyEntity`/`InputTargetComponent` 관련 공식 가이드("Responding to gestures on an entity")를 확인해 "InputTargetComponent + CollisionComponent가 있는 엔티티만 이벤트를 받는다"는 조건을 재확인.
+- **수정**: `inputCatcher`라는 보이지 않는 엔티티를 박스 위치에 두고 박스보다 넉넉한 크기(`boxSize * 3`)의 `CollisionComponent` + `InputTargetComponent`를 부여, `driveGesture`를 `SpatialEventGesture().targetedToEntity(inputCatcher)`로 바꿨다. 시뮬레이터에서 빌드·실행·유닛 테스트 23개 재확인 완료 — 다만 실제 손 핀치 인식 자체는 시뮬레이터로 검증 불가하므로 실기기 확인이 필요하다.
+- **영향받는 절**: 테크 PRD 5장("InputCatcher" 설계를 실제로 구현), `Docs/TechTask.md` M2
+
+## 21. 실기기 제스처 디버그 도구 추가 (임시)
+
+- **날짜**: 2026-10-10
+- **결정**: `ImmersiveBoxView`에 실기기 전용 디버그 시각화를 임시로 추가했다. `ARKitSession` + `WorldTrackingProvider`로 헤드 앵커를 매 프레임 조회해, 머리 위치에 노란 구슬을, 기기 정면(로컬 -Z) 방향으로 초록 막대(3m)를 띄운다. 또한 `ingest()`에 `DEBUG-GESTURE` 태그를 붙인 `print`를 추가해, 들어오는 모든 핀치 이벤트의 `chirality`(LEFT/RIGHT)·`phase`·`pinching`·위치를 로그로 남긴다.
+- **이유**: 결정 20번에서 "제스처 무반응" 버그를 코드 추론만으로 고쳤는데, 실기기에서 진짜로 손을 구분해서 받는지는 아직 직접 확인하지 못했다. 사용자가 실기기를 착용한 채로는 Xcode 콘솔을 볼 수 없으므로, (1) 눈으로 볼 수 있는 시선 레이로 "박스 쪽을 보고 있는지" 스스로 확인하고, (2) 터치 시 남는 로그를 테크(Claude)가 나중에 읽어 왼손/오른손이 각각 어떻게 인식됐는지 판단한다.
+- **필요 설정**: `INFOPLIST_KEY_NSWorldSensingUsageDescription`을 추가했다(헤드 트래킹에 월드 센싱 권한이 필요). 첫 실행 시 권한 팝업이 뜰 수 있다 — 허용해야 디버그 레이가 보인다.
+- **확인**: 시뮬레이터에서 빌드·실행·유닛 테스트 23개 재확인. 시뮬레이터의 포인터 기반 입력으로 `DEBUG-GESTURE LEFT`/`RIGHT`가 `phase`(active→ended)와 함께 정상적으로 구분되어 찍히는 것까지 확인 — 제스처 조준 자체는 정상 작동. 실제 손 인식 품질은 실기기에서만 확인 가능.
+- **제거 예정**: 이 섹션 관련 코드는 모두 "디버그 전용" 주석으로 표시해 뒀다. 문제 파악이 끝나면 `ImmersiveBoxView`에서 통째로 제거한다.
+- **영향받는 절**: `Docs/TechTask.md` M2 (실기기 테스트 체크리스트)

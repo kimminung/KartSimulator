@@ -1,6 +1,7 @@
 #if os(visionOS)
 import SwiftUI
 import RealityKit
+import ARKit
 import simd
 
 struct ImmersiveBoxView: View {
@@ -8,6 +9,7 @@ struct ImmersiveBoxView: View {
 
     @State private var rootEntity = Entity()
     @State private var kartSlot = Entity()
+    @State private var inputCatcher = Entity()
     @State private var loadedKartID: String?
     @State private var loadedColorID: String?
     @State private var isLoading = false
@@ -35,6 +37,15 @@ struct ImmersiveBoxView: View {
     @State private var latestCheckpointCount = 0
     @State private var latestIsOffTrack = false
 
+    // MARK: - 디버그 전용 (실기기 제스처 문제 진단용, `Docs/decisions.md` 21번 참고)
+    // 헤드 앵커 위치에 구슬, 시선(기기 정면) 방향으로 막대를 띄워 "내가 어디를 보고 있는지"를
+    // 눈으로 확인할 수 있게 한다. 원인 파악 끝나면 이 섹션과 관련 코드는 통째로 지운다.
+    @State private var headMarker = Entity()
+    @State private var gazeRay = Entity()
+    @State private var worldTracking = WorldTrackingProvider()
+    @State private var arSession = ARKitSession()
+    private let gazeRayLength: Float = 3.0
+
     private let boxSize: SIMD3<Float> = [0.7, 0.4, 0.7]
     private let boxPosition: SIMD3<Float> = [0, 1.05, -1.1]
     /// 박스 바닥에서 트랙 전체(바운딩 박스)가 차지할 폭. 나머지는 여백.
@@ -58,11 +69,47 @@ struct ImmersiveBoxView: View {
             kartSlot.position.y = -boxSize.y / 2 + 0.01
             rootEntity.addChild(kartSlot)
 
+            // 핀치 제스처를 받으려면 InputTargetComponent + CollisionComponent가 있는 엔티티가
+            // 필요하다(없으면 SpatialEventGesture가 아무것도 조준하지 못해 완전히 무반응이다).
+            // 박스보다 넉넉하게 잡아 시선이 박스 언저리만 향해도 핀치가 잡히게 한다.
+            inputCatcher.position = boxPosition
+            inputCatcher.components.set(CollisionComponent(shapes: [.generateBox(size: boxSize * 3)]))
+            inputCatcher.components.set(InputTargetComponent())
+            content.add(inputCatcher)
+
             content.add(rootEntity)
             loadTrack(into: rootEntity)
 
+            // 디버그: 헤드 위치 구슬 + 시선 방향 막대. world 좌표계에 바로 두므로 rootEntity가 아니라
+            // content에 직접 추가한다 (rootEntity는 박스 위치로 옮겨져 있어 기준이 다르다).
+            let headMaterial = UnlitMaterial(color: .yellow)
+            let headModel = ModelEntity(mesh: .generateSphere(radius: 0.015), materials: [headMaterial])
+            headMarker.addChild(headModel)
+            content.add(headMarker)
+
+            let rayMaterial = UnlitMaterial(color: .green)
+            let rayModel = ModelEntity(
+                mesh: .generateBox(size: SIMD3(0.004, 0.004, gazeRayLength)),
+                materials: [rayMaterial]
+            )
+            gazeRay.addChild(rayModel)
+            content.add(gazeRay)
+
+            if WorldTrackingProvider.isSupported {
+                Task {
+                    do {
+                        try await arSession.run([worldTracking])
+                    } catch {
+                        print("DEBUG-GAZE ARKitSession 시작 실패: \(error)")
+                    }
+                }
+            } else {
+                print("DEBUG-GAZE 이 기기/시뮬레이터는 WorldTrackingProvider를 지원하지 않습니다.")
+            }
+
             updateSubscription = content.subscribe(to: SceneEvents.Update.self) { event in
                 tickMotion(deltaTime: Float(event.deltaTime))
+                updateHeadDebugGizmo()
             }
         } update: { _ in
             guard !isLoading,
@@ -105,19 +152,31 @@ struct ImmersiveBoxView: View {
     }
 
     /// M2 입력 프로토타입: SpatialEventGesture로 받은 핀치를 HandInputResolver에 넘긴다.
+    /// `inputCatcher`를 조준해야만 이벤트가 들어온다(RealityKit 제스처는 InputTargetComponent +
+    /// CollisionComponent가 있는 엔티티를 봐야만 발생한다).
     private var driveGesture: some Gesture {
         SpatialEventGesture()
-            .onChanged { events in ingest(events, isEnding: false) }
-            .onEnded { events in ingest(events, isEnding: true) }
+            .targetedToEntity(inputCatcher)
+            .onChanged { value in ingest(value.gestureValue, isEnding: false) }
+            .onEnded { value in ingest(value.gestureValue, isEnding: true) }
     }
 
     private func ingest(_ events: SpatialEventCollection, isEnding: Bool) {
+        // 디버그: 이벤트가 아예 안 들어오는지, chirality가 없어서 걸러지는지, 왼/오 각각 어떻게
+        // 들어오는지 전부 로그로 남긴다. 원인 파악 끝나면 이 print들은 지운다 (Docs/decisions.md 21번).
+        if events.isEmpty {
+            print("DEBUG-GESTURE ingest 호출됐지만 이벤트 0개 (isEnding=\(isEnding))")
+        }
         for event in events {
-            guard let chirality = event.chirality else { continue }
+            guard let chirality = event.chirality else {
+                print("DEBUG-GESTURE chirality 없음 — phase=\(event.phase), location=\(event.location3D)")
+                continue
+            }
             let hand: HandChirality = chirality == .left ? .left : .right
             let pinching = !isEnding && event.phase == .active
             let location = event.location3D
             let position = SIMD3<Float>(Float(location.x), Float(location.y), Float(location.z))
+            print("DEBUG-GESTURE \(hand == .left ? "LEFT" : "RIGHT") phase=\(event.phase) pinching=\(pinching) pos=\(position)")
             inputResolver.ingest(HandSample(chirality: hand, isPinching: pinching, position: position, timestamp: event.timestamp))
         }
     }
@@ -189,6 +248,21 @@ struct ImmersiveBoxView: View {
     /// 트랙 월드 좌표(XZ, 미터)를 박스 바닥의 표시 좌표로 변환한다.
     private func worldToDisplay(_ worldXZ: SIMD2<Float>) -> SIMD2<Float> {
         (worldXZ - trackWorldCenter) * trackDisplayScale
+    }
+
+    /// 디버그 전용: 헤드 앵커 위치에 구슬을, 기기 정면 방향으로 막대를 띄운다.
+    @MainActor
+    private func updateHeadDebugGizmo() {
+        guard let anchor = worldTracking.queryDeviceAnchor(atTimestamp: CACurrentMediaTime()) else { return }
+        let transform = anchor.originFromAnchorTransform
+        let position = SIMD3<Float>(transform.columns.3.x, transform.columns.3.y, transform.columns.3.z)
+        // 디바이스 로컬 -Z가 정면이다(RealityKit/ARKit 공통 관례).
+        let forward = -SIMD3<Float>(transform.columns.2.x, transform.columns.2.y, transform.columns.2.z)
+        let direction = simd_normalize(forward)
+
+        headMarker.position = position
+        gazeRay.position = position + direction * (gazeRayLength / 2)
+        gazeRay.orientation = simd_quatf(from: SIMD3<Float>(0, 0, 1), to: direction)
     }
 
     @MainActor
