@@ -23,7 +23,8 @@ public final class RaceModel {
     }
 
     public func updateMotion(speedMetersPerSecond: Float, deltaTime: TimeInterval) {
-        hud.speedKmh = Double(speedMetersPerSecond) * 3.6
+        // 후진 중엔 속도가 음수라, 속도계에는 크기만 보여준다(방향은 HUD의 `drive` 텍스트로 구분).
+        hud.speedKmh = Double(abs(speedMetersPerSecond)) * 3.6
         guard hud.phase == .racing else { return }
         hud.lapTime += deltaTime
         hud.totalTime += deltaTime

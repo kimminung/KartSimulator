@@ -6,6 +6,8 @@ import simd
 
 struct ImmersiveBoxView: View {
     @Environment(KartSelectionModel.self) private var selection
+    @Environment(ImmersiveSessionModel.self) private var immersiveSession
+    @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
 
     @State private var rootEntity = Entity()
     @State private var kartSlot = Entity()
@@ -89,9 +91,11 @@ struct ImmersiveBoxView: View {
 
             // 핀치 제스처를 받으려면 InputTargetComponent + CollisionComponent가 있는 엔티티가
             // 필요하다(없으면 SpatialEventGesture가 아무것도 조준하지 못해 완전히 무반응이다).
-            // 박스보다 넉넉하게 잡아 시선이 박스 언저리만 향해도 핀치가 잡히게 한다.
+            // 박스보다 살짝 넉넉하게 잡아 시선이 박스 언저리만 향해도 핀치가 잡히게 한다. 처음엔
+            // `boxSize * 3`(약 2.1m 입방체)을 썼는데, 창(ContentView)의 "박스 닫기" 버튼 영역까지
+            // 침범해서 그쪽 호버가 잘 안 잡히는 부작용이 있었다(결정 26번) — 1.4배로 줄였다.
             inputCatcher.position = boxPosition
-            inputCatcher.components.set(CollisionComponent(shapes: [.generateBox(size: boxSize * 3)]))
+            inputCatcher.components.set(CollisionComponent(shapes: [.generateBox(size: boxSize * 1.4)]))
             inputCatcher.components.set(InputTargetComponent())
             content.add(inputCatcher)
 
@@ -149,8 +153,16 @@ struct ImmersiveBoxView: View {
                 isLoading = false
             }
         } attachments: {
+            // "박스 닫기"를 창(ContentView)의 버튼이 아니라 이 패널에도 넣어 둔다. 창 버튼은
+            // `inputCatcher`와 같은 공간을 공유해 호버가 불안정했는데(결정 26번), 박스 바로 위에
+            // 떠 있는 이 패널은 겹치는 엔티티가 없어 바라보고 누르기 훨씬 쉽다.
             Attachment(id: "hud") {
-                RaceHUDOverlay(hud: raceModel.hud)
+                RaceHUDOverlay(hud: raceModel.hud) {
+                    Task {
+                        await dismissImmersiveSpace()
+                        immersiveSession.isOpen = false
+                    }
+                }
             }
         }
         .gesture(driveGesture)
@@ -184,11 +196,12 @@ struct ImmersiveBoxView: View {
     private var driveGesture: some Gesture {
         SpatialEventGesture()
             .targetedToEntity(inputCatcher)
-            .onChanged { value in ingest(value.gestureValue, isEnding: false) }
-            .onEnded { value in ingest(value.gestureValue, isEnding: true) }
+            .onChanged { value in ingest(value, isEnding: false) }
+            .onEnded { value in ingest(value, isEnding: true) }
     }
 
-    private func ingest(_ events: SpatialEventCollection, isEnding: Bool) {
+    private func ingest(_ value: EntityTargetValue<SpatialEventGesture.Value>, isEnding: Bool) {
+        let events = value.gestureValue
         // 디버그: 이벤트가 아예 안 들어오는지, chirality가 없어서 걸러지는지, 왼/오 각각 어떻게
         // 들어오는지 전부 로그로 남긴다. 원인 파악 끝나면 이 print들은 지운다 (Docs/decisions.md 21번).
         if events.isEmpty {
@@ -201,8 +214,12 @@ struct ImmersiveBoxView: View {
             }
             let hand: HandChirality = chirality == .left ? .left : .right
             let pinching = !isEnding && event.phase == .active
-            let location = event.location3D
-            let position = SIMD3<Float>(Float(location.x), Float(location.y), Float(location.z))
+            // `event.location3D`는 `inputCatcher`의 로컬 좌표계라 미터 단위가 아니다 — 실기기 로그로
+            // 보면 수백 단위로 찍혀서, 미터 기준으로 잡아 둔 핀치 거리 임계값(40cm 등)이 전부 무의미해지고
+            // 양손 거리가 늘 한쪽 극단에 고정돼 있었다(결정 33번). Apple 공식 샘플(Petite Asteroids)처럼
+            // scene(월드, 미터) 좌표로 변환해서 써야 한다.
+            let scenePosition = value.convert(event.location3D, from: .local, to: .scene)
+            let position = SIMD3<Float>(Float(scenePosition.x), Float(scenePosition.y), Float(scenePosition.z))
             print("DEBUG-GESTURE \(hand == .left ? "LEFT" : "RIGHT") phase=\(event.phase) pinching=\(pinching) pos=\(position)")
             // `event.timestamp`는 SwiftUI 제스처 전용 시계라 `tickMotion`의 `now`(CACurrentMediaTime)와
             // 기준 시점이 다르다. 두 값을 그대로 비교하면 항상 "스테일"로 판정돼 `HandInputResolver`가
@@ -376,6 +393,41 @@ struct ImmersiveBoxView: View {
         }
     }
 
+    /// 카트 계층에서 이름에 "front"가 들어간 자식 엔티티(Reality Composer Pro에서 차량 앞을
+    /// 표시해 둔 마커)를 찾아, 필요한 Y축 보정 각도를 계산한다. 마커가 없으면 `fallbackDegrees`를 그대로 쓴다.
+    ///
+    /// 처음엔 "마커 위치가 로컬 -Z를 향하게" 맞췄는데(결정 29번), 실기기에서 보면 차가 계속 뒤로
+    /// 달리는 것처럼 보였다 — `front_aero` 마커가 로컬 +Z에 있는 걸 보고 180도를 줬지만, 그게
+    /// 오히려 반대였던 것. 사용자가 실기기로 확인하고 "앞뒤를 반대로"라고 확정해 줘서, 목표를
+    /// -Z에서 +Z로 뒤집었다(결정 32번) — 즉 지금은 "마커 위치가 로컬 +Z를 향하게" 맞춘다.
+    private func frontCorrectionAngle(for entity: Entity, fallbackDegrees: Float) -> Float {
+        guard let front = findDescendant(in: entity, nameContains: "front") else {
+            print("DEBUG-FRONT 'front' 이름의 자식을 못 찾음 — fallback \(fallbackDegrees)도 사용")
+            return fallbackDegrees * .pi / 180
+        }
+        let nose = front.position(relativeTo: entity)
+        guard simd_length(SIMD2(nose.x, nose.z)) > 0.0001 else {
+            print("DEBUG-FRONT '\(front.name)' 위치가 원점과 거의 같아 방향을 못 구함 — fallback \(fallbackDegrees)도 사용")
+            return fallbackDegrees * .pi / 180
+        }
+        // R(φ)·(nose.x, 0, nose.z) = (0, 0, +1)이 되는 φ.
+        let angle = atan2(nose.z, nose.x) - Float.pi / 2
+        print("DEBUG-FRONT '\(front.name)' 위치=\(nose) → 보정 \(angle * 180 / .pi)도")
+        return angle
+    }
+
+    private func findDescendant(in entity: Entity, nameContains substring: String) -> Entity? {
+        if entity.name.lowercased().contains(substring) {
+            return entity
+        }
+        for child in entity.children {
+            if let found = findDescendant(in: child, nameContains: substring) {
+                return found
+            }
+        }
+        return nil
+    }
+
     @MainActor
     private func loadKart() async {
         let kart = selection.selectedKart
@@ -389,6 +441,15 @@ struct ImmersiveBoxView: View {
         do {
             let entity = try await Entity(contentsOf: url)
             await KartMaterialPainter.applyColor(colorID, kart: kart, to: entity)
+            // 전진 입력인데 카트가 뒤로 달리던 문제: 주행 로직은 `kartSlot.orientation`을 "모델의
+            // 정면은 로컬 -Z"라는 전제로 돌린다(결정 27번). 처음엔 고정 180도로 보정했는데, Reality
+            // Composer Pro에서 내보낸 계층을 보면 차량 앞을 가리키는 "front"라는 이름의 자식 엔티티가
+            // 실제로 들어 있다 — 그 위치를 읽어서 보정 각도를 모델마다 자동으로 계산한다(결정 29번).
+            // 못 찾으면 `KartModel.modelForwardCorrectionDegrees`(기본 180도)로 돌아간다.
+            entity.orientation = simd_quatf(
+                angle: frontCorrectionAngle(for: entity, fallbackDegrees: kart.modelForwardCorrectionDegrees),
+                axis: [0, 1, 0]
+            )
             // 트랙 전체를 박스에 맞추는 배율(trackDisplayScale)을 카트에도 그대로 쓰면 트랙이 넓을수록
             // 카트가 같이 작아진다 (예: track_01은 20m 폭 트랙이라 카트가 3cm도 안 됨 — 거의 안 보여서
             // "차가 안 움직인다"로 보인 원인). 카트는 트랙 크기와 무관하게 눈에 보이는 고정 크기로 둔다.
@@ -408,20 +469,25 @@ struct ImmersiveBoxView: View {
 /// M5 HUD의 1차 데이터 플러밍 — 배치/스타일은 디자인 전달 후 다듬는다 (`Docs/TechTask.md` M5).
 private struct RaceHUDOverlay: View {
     let hud: RaceHUDState
+    let onClose: () -> Void
 
     var body: some View {
-        VStack(spacing: 4) {
-            Text("LAP \(hud.lap) / \(hud.totalLaps)")
-                .font(.headline)
-            Text(String(format: "%.1f s", hud.lapTime))
-                .font(.title2.monospacedDigit())
-            Text(String(format: "%.0f km/h", hud.speedKmh))
-                .font(.subheadline.monospacedDigit())
-            if hud.respawning {
-                Text("트랙 이탈")
-                    .font(.caption.bold())
-                    .foregroundStyle(.red)
+        VStack(spacing: 8) {
+            VStack(spacing: 4) {
+                Text("LAP \(hud.lap) / \(hud.totalLaps)")
+                    .font(.headline)
+                Text(String(format: "%.1f s", hud.lapTime))
+                    .font(.title2.monospacedDigit())
+                Text(String(format: "%.0f km/h", hud.speedKmh))
+                    .font(.subheadline.monospacedDigit())
+                if hud.respawning {
+                    Text("트랙 이탈")
+                        .font(.caption.bold())
+                        .foregroundStyle(.red)
+                }
             }
+            Button("박스 닫기", action: onClose)
+                .buttonStyle(.bordered)
         }
         .padding(12)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))

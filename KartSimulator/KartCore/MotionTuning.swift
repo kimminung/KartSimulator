@@ -11,6 +11,8 @@ public struct MotionTuning: Sendable {
     public var wallSpeedKeep: Float
     public var offTrackRespawn: TimeInterval
     public var respawnSpeed: Float
+    /// 후진 최고 속도 = `maxSpeed * reverseSpeedFactor`.
+    public var reverseSpeedFactor: Float
 
     public init(
         maxSpeed: Float = 4.0,
@@ -22,7 +24,8 @@ public struct MotionTuning: Sendable {
         minTurnSpeed: Float = 0.3,
         wallSpeedKeep: Float = 0.5,
         offTrackRespawn: TimeInterval = 2.0,
-        respawnSpeed: Float = 0
+        respawnSpeed: Float = 0,
+        reverseSpeedFactor: Float = 0.5
     ) {
         self.maxSpeed = maxSpeed
         self.accel = accel
@@ -34,5 +37,6 @@ public struct MotionTuning: Sendable {
         self.wallSpeedKeep = wallSpeedKeep
         self.offTrackRespawn = offTrackRespawn
         self.respawnSpeed = respawnSpeed
+        self.reverseSpeedFactor = reverseSpeedFactor
     }
 }

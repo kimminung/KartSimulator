@@ -2,11 +2,11 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(KartSelectionModel.self) private var selection
+    @Environment(ImmersiveSessionModel.self) private var immersiveSession
     #if os(visionOS)
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
     #endif
-    @State private var isImmersiveOpen = false
     @State private var isBusy = false
 
     private let columns = [GridItem(.adaptive(minimum: 140), spacing: 16)]
@@ -48,7 +48,7 @@ struct ContentView: View {
                 }
 
                 #if os(visionOS)
-                Button(isImmersiveOpen ? "박스 닫기" : "박스 열기") {
+                Button(immersiveSession.isOpen ? "박스 닫기" : "박스 열기") {
                     Task { await toggleImmersiveSpace() }
                 }
                 .buttonStyle(.borderedProminent)
@@ -67,11 +67,11 @@ struct ContentView: View {
     private func toggleImmersiveSpace() async {
         isBusy = true
         defer { isBusy = false }
-        if isImmersiveOpen {
+        if immersiveSession.isOpen {
             await dismissImmersiveSpace()
-            isImmersiveOpen = false
+            immersiveSession.isOpen = false
         } else if case .opened = await openImmersiveSpace(id: AppScene.immersiveSpaceID) {
-            isImmersiveOpen = true
+            immersiveSession.isOpen = true
         }
     }
     #endif
@@ -118,4 +118,5 @@ private struct ColorSwatch: View {
 #Preview {
     ContentView()
         .environment(KartSelectionModel())
+        .environment(ImmersiveSessionModel())
 }

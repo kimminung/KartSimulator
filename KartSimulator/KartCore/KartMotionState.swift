@@ -18,7 +18,8 @@ public struct KartMotionState: Equatable, Sendable {
         let rate = target > speed ? tuning.accel : Self.decelRate(for: drive, tuning: tuning)
         next.speed = Self.approach(speed, toward: target, by: rate * deltaTime)
 
-        if (drive == .turnLeft || drive == .turnRight), next.speed >= tuning.minTurnSpeed || next.speed == 0 {
+        // 전진/후진 어느 쪽으로 움직이고 있어도 회전은 가능해야 한다 — 속도의 "크기"만 본다.
+        if (drive == .turnLeft || drive == .turnRight), abs(next.speed) >= tuning.minTurnSpeed || next.speed == 0 {
             let t = min(max(next.speed / tuning.maxSpeed, 0), 1)
             let turnRateDegrees = tuning.turnRateLow + (tuning.turnRateHigh - tuning.turnRateLow) * t
             let sign: Float = drive == .turnLeft ? 1 : -1
@@ -34,8 +35,9 @@ public struct KartMotionState: Equatable, Sendable {
         switch drive {
         case .stopped, .waiting: return 0
         case .turnLeft, .turnRight: return current
-        case .forwardHalf: return tuning.maxSpeed * 0.5
-        case .forwardFull: return tuning.maxSpeed
+        case .pedal(let value):
+            let clamped = min(max(value, -1), 1)
+            return clamped >= 0 ? clamped * tuning.maxSpeed : clamped * tuning.maxSpeed * tuning.reverseSpeedFactor
         }
     }
 
