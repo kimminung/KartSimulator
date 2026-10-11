@@ -51,6 +51,9 @@ struct ImmersiveBoxView: View {
     /// 디오라마에서는 박스 앞오른쪽 모서리 위에 작게(지름 0.16 m), 콕핏에서는 HUD 옆에 원래 크기(0.24 m).
     private let minimapTableDiameter: Float = 0.24
     private let minimapDioramaDiameter: Float = 0.16
+    /// 3인칭 미니맵 자리: HUD(머리 앞 1.2 m)보다 **더 오른쪽 아래**(실기기 피드백, 결정 53 — 0.45/0.45는 트랙 시야를 가렸다).
+    private let thirdPersonMinimapRight: Float = 0.8
+    private let thirdPersonMinimapDown: Float = 0.7
     @State private var latestMapPosition: SIMD2<Float> = .zero
     @State private var latestHeading: Float = 0
     /// 현재 씬 루트의 Y축 회전. 디오라마는 `dioramaYaw`, 콕핏 모드는 모드에 들어온 순간 머리 방향으로 계산.
@@ -59,6 +62,9 @@ struct ImmersiveBoxView: View {
     @State private var cockpitAnchor: SIMD3<Float> = [0, 1.2, 0]
     /// 3인칭 카메라 기준 방향(모드 진입 순간 머리 yaw, ±60°를 2초 넘게 벗어나면 리센터 — Issue #25, 결정 49).
     @State private var chaseReference = ChaseCameraReference(forwardYaw: 0)
+    /// 3인칭 HUD·미니맵이 따라가는 평활 머리 yaw와 속도(1/s) — 결정 53.
+    @State private var hudFollowYaw: Float = 0
+    private let hudFollowRate: Float = 4
     private let cockpitTuning = CockpitTuning()
     /// 디오라마: 트랙 JSON의 출발 방향은 랩·체크포인트 판정 기준이라 건드리지 않고, 박스 안의 트랙 전체를
     /// 180° 돌려 사용자 쪽에서 볼 때 카트가 반대쪽을 보고 출발하게 한다(결정 43번).
@@ -290,6 +296,7 @@ struct ImmersiveBoxView: View {
             cockpitAnchor = head.position
             // 기준 방향 = 진입 순간 머리 yaw. 들어오자마자 카트 뒤에서 앞을 보도록 씬 yaw를 바로 맞춘다.
             chaseReference = ChaseCameraReference(forwardYaw: head.yaw)
+            hudFollowYaw = head.yaw
             sceneYaw = ScenePlacement.chaseSceneYaw(kartHeading: motion.heading, referenceYaw: head.yaw)
             sceneRoot.scale = SIMD3(repeating: 1)
             sceneRoot.orientation = simd_quatf(angle: sceneYaw, axis: [0, 1, 0])
@@ -329,7 +336,7 @@ struct ImmersiveBoxView: View {
             let forward = ScenePlacement.forward(heading: head.yaw)
             let right = SIMD3<Float>(cos(head.yaw), 0, -sin(head.yaw))
             minimap.root.scale = .one
-            minimap.root.position = head.position + forward * 1.2 + right * 0.45 + SIMD3(0, -0.45, 0)
+            minimap.root.position = head.position + forward * 1.2 + right * thirdPersonMinimapRight + SIMD3(0, -thirdPersonMinimapDown, 0)
             // 로컬 +Z(랩 텍스트 쪽)가 사용자를 향하도록 yaw를 맞추고, 상판을 사용자 쪽으로 35° 기울인다.
             minimap.root.orientation = simd_quatf(angle: head.yaw, axis: [0, 1, 0]) * simd_quatf(angle: 35 * .pi / 180, axis: [1, 0, 0])
         }
@@ -350,6 +357,28 @@ struct ImmersiveBoxView: View {
         let target = ScenePlacement.cockpitTarget(anchor: cockpitAnchor, mode: mode, referenceYaw: reference, tuning: cockpitTuning)
         let kartLocal = SIMD3(motion.position.x, track.roadSurfaceHeight, motion.position.z)
         sceneRoot.position = ScenePlacement.rootPosition(placing: kartLocal, at: target, yaw: sceneYaw, scale: 1)
+        followHUD(deltaTime: deltaTime)
+    }
+
+    /// 3인칭에서 HUD·미니맵을 머리 앞에 **느리게 따라오게**(결정 53, 실기기: 차를 세운 뒤 HUD 버튼을 호버할 수 없어 탈출
+    /// 경로가 없었다 — 모드 진입 순간 위치에 고정돼 있어 몸을 돌리거나 자리를 옮기면 시야 밖에 남았다). visionOS 시스템
+    /// UI처럼 4/s 지수 평활로 따라와 운전 중에는 거의 가만히 있고, 고개를 크게 돌리면 1초쯤 뒤 다시 앞에 온다.
+    @MainActor
+    private func followHUD(deltaTime: Float) {
+        guard mode == .thirdPerson, deltaTime > 0, let head = currentHeadPose() else { return }
+        hudFollowYaw = ScenePlacement.approachAngle(from: hudFollowYaw, to: head.yaw, rate: hudFollowRate, deltaTime: deltaTime)
+        let alpha = 1 - exp(-hudFollowRate * deltaTime)
+        let forward = ScenePlacement.forward(heading: hudFollowYaw)
+        let right = SIMD3<Float>(cos(hudFollowYaw), 0, -sin(hudFollowYaw))
+        if let hudEntity {
+            let goal = head.position + forward * 1.2 + SIMD3(0, -0.15, 0)
+            hudEntity.position += (goal - hudEntity.position) * alpha
+        }
+        if let minimap {
+            let goal = head.position + forward * 1.2 + right * thirdPersonMinimapRight + SIMD3(0, -thirdPersonMinimapDown, 0)
+            minimap.root.position += (goal - minimap.root.position) * alpha
+            minimap.root.orientation = simd_quatf(angle: hudFollowYaw, axis: [0, 1, 0]) * simd_quatf(angle: 35 * .pi / 180, axis: [1, 0, 0])
+        }
     }
 
     /// 카트 모델 크기: 디오라마는 박스 배율과 무관한 고정 시각 크기(`kartVisualLength`), 실제 크기 모드는 전장 1.5 m.

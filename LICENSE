@@ -1,5 +1,5 @@
-핀치 카트 (KartSimulator) 라이선스 — 모든 권리 보유
-Pinch Kart (KartSimulator) License — All Rights Reserved
+핀치 로버 (KartSimulator) 라이선스 — 모든 권리 보유
+Pinch Rover (KartSimulator) License — All Rights Reserved
 
 Copyright (c) 2026 KimMinUng (GitHub @kimminung) and iMasterProX (GitHub @iMasterProX).
 All rights reserved. 모든 권리 보유.
@@ -20,7 +20,7 @@ All rights reserved. 모든 권리 보유.
      썸네일·실루엣(RetireX Online에서 가져온 것 포함)과 색 체계, 트랙 타일 모델과 텍스처, 아이콘·온보딩 그림·목업,
      스타일 가이드, 대체 텍스처, 자체 합성 효과음 7개, 생성 스크립트
    - 문서(`Docs/`, `README.md`)와 트랙 정의 파일
-   - 앱 이름 "핀치 카트", 화면 구성과 조작 방식의 표현
+   - 앱 이름 "핀치 로버"(Pinch Rover; 옛 가칭 "핀치 카트" 포함), 화면 구성과 조작 방식의 표현
 
 3. 허용되는 것
    - 이 저장소를 GitHub에서 열람하고, 개인적인 학습·평가 목적으로 로컬에 클론하여 빌드·실행하는 것
@@ -35,7 +35,7 @@ All rights reserved. 모든 권리 보유.
    - 에셋 단독 이용: 카트·트랙·아이콘·그림·효과음·팔레트 등 디자인 산출물을 저작물과 분리해 쓰는 것
    - 기계 학습: 저작물을 학습·미세조정 데이터로 쓰거나 그런 데이터셋에 포함하는 것
    - 저작권 표시·이 라이선스 문구를 지우거나 바꾸는 것
-   - 저작권자나 "핀치 카트"의 이름을 보증·홍보에 쓰는 것
+   - 저작권자나 "핀치 로버"의 이름을 보증·홍보에 쓰는 것
 
 5. 제3자 구성 요소 (이 라이선스가 적용되지 않으며, 각자의 원래 조건을 따른다)
    - Galmuri 폰트 (`Design/fonts/Galmuri*.ttf`, `KartSimulator/Resources/Fonts/Galmuri*.ttf`):
@@ -78,7 +78,8 @@ English (informational translation; the Korean text governs)
    thumbnails and silhouettes — including those brought over from RetireX Online — and the colour
    system, track tile models and textures, icons, onboarding illustrations, mockups, style guide,
    replacement textures, the seven self-synthesized sound effects, generator scripts), documentation,
-   track definitions, the app name "Pinch Kart" and its screen/interaction design — except the
+   track definitions, the app name "Pinch Rover" (and the former working title "Pinch Kart") and its
+   screen/interaction design — except the
    third-party components listed in Section 5.
 
 3. Permitted
@@ -99,7 +100,7 @@ English (informational translation; the Korean text governs)
      from the Work.
    - Use as training or fine-tuning data for machine learning, or inclusion in such datasets.
    - Removing or altering copyright notices or this license.
-   - Using the names of the copyright holders or "Pinch Kart" for endorsement or promotion.
+   - Using the names of the copyright holders or "Pinch Rover" for endorsement or promotion.
 
 5. Third-party components (not covered by this license; their own terms apply)
    - Galmuri font — Copyright (c) 2019–2025 Lee Minseo (quiple), SIL Open Font License 1.1 (`Design/fonts/OFL.txt`,
