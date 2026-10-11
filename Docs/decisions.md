@@ -288,7 +288,7 @@
 ## 40. [디자인] 운전 모드 3종 온보딩 그림 — 디오라마 캡션 개정, 1인칭 2장·3인칭 4장 신규
 
 - **날짜**: 2026-10-11
-- **결정자**: 디자인
+- **결정자**: 디자인(요청·사양) — 실제 작성·커밋·머지는 테크 쪽 Claude가 `design` 브랜치에서 했다(PR #16, Issue #31 검수에서 정정). 1인칭 그림 2장과 3인칭 4장은 결정 47·49로 폐기됐다.
 - **배경**: 테크 결정 39(운전 모드 3종, `Dev` 브랜치 — 이 PR 시점에는 아직 `main`에 없다)로 조작법 화면이 디오라마·1인칭·3인칭 세그먼트로 나뉘었는데, 그림은 디오라마용 5장뿐이라 테크가 1인칭·3인칭 칸에 SF Symbols로 자리만 잡아 둔 상태였다. 요청대로 디오라마 5장은 캡션 중심으로 손보고, 1인칭 2장·3인칭 4장을 새로 만들었다. 파일명은 테크가 제안한 이름 그대로다.
 - **1. 디오라마 5장**
   - `gesture_01_forward`: 전진의 뜻이 "모을수록"에서 "핀치 시작 자리를 유지"로 바뀌어(결정 39의 상대 드래그) 안쪽 화살표를 지웠다. 손을 03~05와 같은 자리(x 8/136)로 옮기고, 두 핀치 점을 잇는 `ui-cyan` 점선(dash 4/6, 70 %)으로 "그 자리에 둔다"를 표현했다.
@@ -416,3 +416,14 @@
 - **Issue #31 — `EngineSoundMachineTests` 5개 실패 수정**: 원인 두 가지. (a) 시동 2.2초 판정이 `clipTime >= 2.2`인데 1/60초를 132번 더하면 부동소수점 누적으로 2.2에 아주 조금 못 미쳐 idle로 못 넘어갔고, 그 뒤 테스트가 전부 연쇄 실패했다 → `1e-6` 여유. (b) 이미 빠르게 달리는 중에 가속 클립을 시작하면 2.6초를 다 기다려야 루프로 넘어갔다 → 속도비 `rS ≥ 0.85`이고 클립 0.5초 이상이면 바로 루프(`EngineTuning.fastHandoffSpeedRatio`/`fastHandoffMinClipTime`). 가속 클립은 회전수가 올라가는 소리라 이미 최고 속도에 가까우면 음이 어긋나던 것이기도 하다. `Assets/sfx/ENGINE.md`(디자인 소유)에 이 규칙과 "2단계 전진 → 연속 페달" 반영은 디자인에 요청(Issue #31 코멘트).
 - **확인**: visionOS 시뮬레이터 빌드, `KartCoreTests` 전체 통과(엔진음 5개 포함, 처음으로 전부 녹색). **실기기 확인 필요**: razr가 똑바로 서는지, 5종이 노면 위에 서는지(바퀴 접지는 아직), 3인칭에서 고개를 ±45° 돌려도 카트·세계가 고정인지, 60° 넘겨 2초 뒤 기준이 따라오는지, 3인칭 후진이 어지럽지 않은지.
 - **영향받는 절**: 결정 39·44·45·46(1인칭·머리 기준 부분 폐기), `KartCore/ExperienceMode`·`DriveState`·`KartMotionState`·`MotionTuning`·`HandInputResolver`·`ScenePlacement`(`ChaseCameraReference`)·`TrackDefinition.roadSurfaceHeight`·`EngineSoundMachine`, `ImmersiveBoxView`, `ContentView`, `Assets.xcassets/Onboarding`, README, `Docs/TechTask.md`
+
+## 50. [테크] Issue #31 검수 반영 1차: 라이선스·크레딧·문서 정정, 디버그 시각물 기본 끔
+
+- **날짜**: 2026-10-11
+- **반영**:
+  - **OFL 동봉·크레딧**: `Design/fonts/OFL.txt`를 앱 번들 `KartSimulator/Resources/Fonts/OFL.txt`로 복사하고, 메뉴 하단에 "Galmuri 폰트 © Lee Minseo (quiple), SIL OFL 1.1 · 미니맵 받침 © Apple" 크레딧을 넣었다(OFL 1.1 요건). 저작권자 표기를 "quiple" → "Lee Minseo (quiple)"로 고쳤다.
+  - **LICENSE 2조/5조 중복 해소**: RetireX 유래 자산(카트 모델·텍스처·썸네일·실루엣·색 체계)을 2조(공동 저작물)에서 빼고 5조로 일원화했다. 명의(개인 vs CYBOX)는 디자인 담당자가 확정한다고 명시. 엔진음 항목에 출처 사슬(CYBOX "XK ENGINE" → RetireX → 변환)과 `Design/audio/engine_preview.wav` 경로를 추가.
+  - **결정 40 결정자 문구** 정정(디자인 요청·사양, 작성·머지는 테크 Claude, PR #16). `Docs/TechTask.md` 열린 질문 중 해소된 2건(스와치 40/14 pt = 결정 36-3, 타일 대체 텍스처 = 결정 38) 체크.
+  - **디버그 시각물 기본 끔**: `ImmersiveBoxView.showsDebugVisuals = false` — 헤드 구슬·시선 막대·빨간 트레일 엔티티를 `isEnabled = false`로. 머리 yaw 계산(3인칭 리센터에 필요)과 `DEBUG-*` 로그는 유지. 시연 영상에 초록 막대가 보이던 문제 해소.
+- **안 한 것 / 사용자 결정 필요**: `mms.usdz`(Mercedes 메타데이터)가 공개 히스토리 `02940f5`에 남아 있는 문제 — 히스토리 재작성(`git filter-repo`)은 모든 클론을 다시 받아야 하므로 두 담당자가 결정한다. 디자인 소유 문서(`Docs/design-prd.md` 13장 경로, `Assets/sfx/ENGINE.md` 연속 페달 표현, `icon_pinch_in` 폐기)는 Issue #31 코멘트로 디자인에 넘겼다.
+- **영향받는 절**: `LICENSE`, `README.md` 라이선스 표, `Resources/Fonts/OFL.txt`(신규), `ContentView` 크레딧, `ImmersiveBoxView.showsDebugVisuals`, 결정 40, `Docs/TechTask.md`

@@ -81,6 +81,9 @@ struct ImmersiveBoxView: View {
     // MARK: - 디버그 전용 (실기기 제스처 문제 진단용, `Docs/decisions.md` 21번 참고)
     // 헤드 앵커 위치에 구슬, 시선(기기 정면) 방향으로 막대를 띄워 "내가 어디를 보고 있는지"를
     // 눈으로 확인할 수 있게 한다. 원인 파악 끝나면 이 섹션과 관련 코드는 통째로 지운다.
+    /// 디버그 시각물(헤드 구슬·시선 막대·주행 트레일) 표시 여부. 시연 영상에 초록 막대가 보여(Issue #31) 기본은 끔.
+    /// 머리 yaw 계산·DEBUG 로그는 그대로 돈다 — 3인칭 리센터가 머리 yaw를 쓴다.
+    private let showsDebugVisuals = false
     @State private var headMarker = Entity()
     @State private var gazeRay = Entity()
     @State private var worldTracking = WorldTrackingProvider()
@@ -140,6 +143,7 @@ struct ImmersiveBoxView: View {
             sfxPlayer = SFXPlayer(entity: kartSlot)
 
             // 디버그: 카트가 실제로 지나간 경로를 빨간 선으로 남긴다. 씬 루트(트랙 좌표계)에 쌓아 모드와 무관하게 따라온다.
+            trailRoot.isEnabled = showsDebugVisuals
             sceneRoot.addChild(trailRoot)
 
             // 핀치 제스처를 받으려면 InputTargetComponent + CollisionComponent가 있는 엔티티가
@@ -173,6 +177,7 @@ struct ImmersiveBoxView: View {
             let headMaterial = UnlitMaterial(color: .yellow)
             let headModel = ModelEntity(mesh: .generateSphere(radius: 0.015), materials: [headMaterial])
             headMarker.addChild(headModel)
+            headMarker.isEnabled = showsDebugVisuals
             content.add(headMarker)
 
             let rayMaterial = UnlitMaterial(color: .green)
@@ -181,6 +186,7 @@ struct ImmersiveBoxView: View {
                 materials: [rayMaterial]
             )
             gazeRay.addChild(rayModel)
+            gazeRay.isEnabled = showsDebugVisuals
             content.add(gazeRay)
 
             if WorldTrackingProvider.isSupported {

@@ -353,8 +353,9 @@ KartSimulator/
 
 | 구성 요소 | 조건 |
 | --- | --- |
-| Galmuri 폰트 (`Design/fonts/`) | © quiple, SIL Open Font License 1.1 (`Design/fonts/OFL.txt`) |
-| 엔진음 5개 (`engine*.wav`) | CC0 기반 녹음 변환, 출처는 `Assets/sfx/LICENSES.md` |
+| Galmuri 폰트 (`Design/fonts/`, 앱 번들 `Resources/Fonts/`) | © Lee Minseo (quiple), SIL Open Font License 1.1 (`OFL.txt` 동봉, 앱 메뉴 하단 크레딧) |
+| 엔진음 5개 (`engine*.wav`) | CYBOX "XK ENGINE" 원본(CC0 기반) 변환, 출처 사슬은 `Assets/sfx/LICENSES.md` |
+| RetireX 유래 카트 모델·텍스처·썸네일·색 체계 | 운영사 CYBOX 허락 범위 안에서 포함 (명의는 디자인 확정 대기) |
 | RetireX Online 참고 자료 (`Design/reference/retirex/`) | 참고용. 마인크래프트 요소는 Mojang/Microsoft 소유, 앱·홍보에 쓰지 않음 |
 | Apple SDK·시스템 폰트 | Apple 개발자 라이선스 (저장소에 미포함) |
 | 미니맵 받침 `Diorama_Base.usdz` (`KartSimulator/Resources/Minimap/`) | Apple Diorama 샘플 코드 라이선스 (전문은 같은 폴더 `LICENSE-Apple-Diorama-Sample.txt`) |
