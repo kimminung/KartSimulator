@@ -673,6 +673,25 @@ struct ScenePlacementTests {
         #expect(ScenePlacement.kartFitLength(mode: .thirdPerson, sceneScale: 1, dioramaVisualLength: 0.12, tuning: tuning) == 1.5)
     }
 
+    /// 3인칭 추적 카메라(결정 46): chaseSceneYaw를 씬 yaw로 쓰면 지금 카트 heading의 월드 정면이 머리 방향과 같다
+    /// = 사용자는 카트 뒤에서 카트가 가는 쪽을 본다. 평활을 거쳐도 충분히 지나면 같은 곳에 수렴한다.
+    @Test func chaseSceneYawPutsViewerBehindKart() {
+        let kartHeading: Float = 2.3, headYaw: Float = -0.4
+        let yaw = ScenePlacement.chaseSceneYaw(kartHeading: kartHeading, headYaw: headYaw)
+        let kartWorldForward = ScenePlacement.rotateY(ScenePlacement.forward(heading: kartHeading), by: yaw)
+        #expect(close(kartWorldForward, ScenePlacement.forward(heading: headYaw)))
+
+        // 카트가 90° 꺾였을 때 씬 yaw를 평활로 따라가면 1초 뒤(rate 2.5) 약 92 %, 3초 뒤 99.9 % 수렴
+        var sceneYaw = yaw
+        let turned = kartHeading + .pi / 2
+        let target = ScenePlacement.chaseSceneYaw(kartHeading: turned, headYaw: headYaw)
+        for _ in 0..<90 { sceneYaw = ScenePlacement.approachAngle(from: sceneYaw, to: target, rate: 2.5, deltaTime: 1.0 / 90.0) }
+        let remaining = abs(atan2(sin(target - sceneYaw), cos(target - sceneYaw)))
+        #expect(remaining < (Float.pi / 2) * 0.1 && remaining > 0)
+        for _ in 0..<180 { sceneYaw = ScenePlacement.approachAngle(from: sceneYaw, to: target, rate: 2.5, deltaTime: 1.0 / 90.0) }
+        #expect(abs(atan2(sin(target - sceneYaw), cos(target - sceneYaw))) < 0.01)
+    }
+
     /// 머리 yaw 평활: 최단 경로로, rate가 클수록 빨리, ±π 경계를 넘어도 짧은 쪽으로.
     @Test func approachAngleFollowsShortestPathAndRate() {
         // 한 스텝에 (1 - e^-1) ≈ 63 % 따라간다
