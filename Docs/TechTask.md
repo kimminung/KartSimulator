@@ -25,6 +25,7 @@ Oct 10, 2026 · @Coulson 기준, `Docs/tech-prd.md`에서 파생. 마일스톤 �
 - [x] 색상 선택 시 베이스컬러/이미시브 텍스처 교체
 - [ ] 실기기에서 Digital Crown으로 몰입도 조절 확인 (시뮬레이터는 크라운 입력 제한적 — 체크리스트에 남김)
 - [x] 카트 회전/관찰용 간단한 제스처(드래그로 회전) 추가 — 메뉴 `KartCard`에 구현 (결정 34번)
+- [x] 카트 카드 기본은 정적 썸네일, 호버/포커스 시에만 1.4배로 커지며 라이브 3D+드래그 회전으로 전환 (결정 36-2, 37번) — 카드 5장이 전부 라이브면 산만하다는 디자인 피드백 반영
 
 ## M2 — 입력 프로토타입 (2026-10-10 1차 구현 완료)
 
@@ -40,7 +41,7 @@ Oct 10, 2026 · @Coulson 기준, `Docs/tech-prd.md`에서 파생. 마일스톤 �
 
 ## M3 — 트랙 + 주행 로직 (2026-10-10 트랙 생성·검증 스크립트 완료)
 
-- [ ] 트랙 타일 4종 에셋 확보 (디자인 PRD 5장 — Blockbench 파이프라인은 유지, 카트만 교체됨)
+- [x] 트랙 타일 4종 에셋 확보 + 배치 — `Assets/export/glb/tile_*.glb`(디자인 전달, 결정 36-4)를 헤드리스 Blender(`wm.usd_export`, Y-up/-Z-forward 변환)로 `.usdz` 변환해 `KartSimulator/Resources/Tiles/`에 넣고, `TrackTileLibrary` + `ImmersiveBoxView.buildTrackTiles(definition:into:)`로 그리드 전체(타일 바운딩 사각형 + 빈 칸은 `grass`)를 실제 3D로 깐다. 점열 placeholder(`buildTrackVisual`)는 제거.
 - [x] `Tracks/tools/gen_track.py`, `validate_track.py` 작성
   - 그리드 중앙 사각 루프 + "노치"(변 일부를 바깥으로 밀어내는 삽입)로 난이도별 복잡도 조절
   - 검증 5종 모두 구현: 단일 순환/연결 변 일치, path 닫힘·자기교차 없음, 출발선 위치, 체크포인트 개수·순서, 한 바퀴 길이 60~140m
@@ -57,7 +58,8 @@ Oct 10, 2026 · @Coulson 기준, `Docs/tech-prd.md`에서 파생. 마일스톤 �
   - 시뮬레이터에서 2초 뒤 자동으로 박스를 여는 임시 진단 코드로 런타임 크래시·에러 없음을 확인(확인 후 제거)
 - [x] 모션 튜닝을 실제 트랙 스케일 기본값으로 복원하고 트랙 JSON `tuning` 오버라이드 지원 (위 항목에서 `MotionTuning().applying(track.tuning)`으로 구현)
 - [ ] ECS 컴포넌트 6종 + 시스템 5종 구현 (테크 PRD 4장) — 지금은 RealityKit 컴포넌트/시스템이 아니라 `ImmersiveBoxView`의 `SceneEvents.Update` 콜백 하나에서 입력·모션·이탈·랩 판정을 순서대로 호출하는 방식. 실제 트랙 타일 엔티티/콜리전이 생기는 시점에 본격적인 ECS 분리가 필요
-- [ ] 벽 충돌 로직 (현재는 벽 콜리전 자체가 없음 — 트랙 타일 3D 에셋 확보 후)
+- [ ] 벽 충돌 로직 (타일 3D는 이제 있지만 콜리전 컴포넌트를 아직 안 붙였다 — 시각적으로는 벽이 보이지만 뚫고 지나간다)
+- [ ] **실기기 확인 필요**: 타일 회전(`rot`, 컴퍼스 시계방향으로 가정하고 부호를 뒤집어 적용 — `ImmersiveBoxView.buildTrackTiles` 주석 참고)이 실제로 인접 타일끼리 노면이 이어지는지. 안 맞으면 부호를 다시 뒤집는다
 
 ## M4 — 미니맵
 
@@ -75,6 +77,7 @@ Oct 10, 2026 · @Coulson 기준, `Docs/tech-prd.md`에서 파생. 마일스톤 �
 - [x] 효과음 7종 + 엔진음 5종 연결 — `Assets/sfx/ENGINE.md` 스펙대로 `EngineSoundMachine`/`EngineAudioPlayer`/`SFXPlayer` 구현 (결정 35번). `wallBump`만 벽 콜리전이 없어 트리거 미연결
 - [x] HUD/트랙 색을 `Design/style-guide.md` 팔레트로 교체 (결정 35번)
 - [x] 제목에 Galmuri 픽셀 폰트 적용 (결정 35번, 디자인 결정 20-3·20-5)
+- [x] 핀치 상태 HUD(양손 점 + 중앙 방향 아이콘 + 세로 페달 게이지, cyan=전진/magenta=후진 6상태) — `RaceHUDOverlay`의 `PinchStatusView`/`PedalGaugeBar` (디자인 PRD 7장, 결정 37번)
 
 ## M6 — 폴리시 · 출시 준비
 

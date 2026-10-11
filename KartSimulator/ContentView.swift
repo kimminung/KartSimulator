@@ -1,5 +1,10 @@
 import SwiftUI
 import RealityKit
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 struct ContentView: View {
     @Environment(KartSelectionModel.self) private var selection
@@ -79,34 +84,49 @@ struct ContentView: View {
     #endif
 }
 
-/// 메뉴 카드는 고정 썸네일 대신 실제 3D 모델을 보여준다 — 드래그로 돌려 볼 수 있다 (디자인 결정 20-1·20-9).
+/// 기본은 정적 3D 렌더 썸네일을 작게 보여주고, 시선 포커스·호버일 때만 1.4배로 커지면서
+/// 그때만 라이브 3D 모델(`Model3D`)로 바뀌어 드래그 360° 회전을 쓸 수 있다 — 카드 5장이 전부
+/// 라이브 모델이면 산만하다는 실기기 영상 확인 후 디자인이 수정한 규칙이다 (결정 36-2).
 private struct KartCard: View {
     let kart: KartModel
     let isSelected: Bool
 
+    @State private var isFocused = false
     @State private var rotationDegrees: Double = -20
     @State private var dragStartDegrees: Double = -20
 
     var body: some View {
         VStack(spacing: 8) {
-            Model3D(named: kart.usdzResourceName) { model in
-                model
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-            } placeholder: {
-                ProgressView()
+            Group {
+                if isFocused {
+                    Model3D(named: kart.usdzResourceName) { model in
+                        model
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                    } placeholder: {
+                        ProgressView()
+                    }
+                    .rotation3DEffect(.degrees(rotationDegrees), axis: (x: 0, y: 1, z: 0))
+                    .gesture(
+                        DragGesture()
+                            .onChanged { value in
+                                rotationDegrees = dragStartDegrees + value.translation.width * 0.5
+                            }
+                            .onEnded { _ in
+                                dragStartDegrees = rotationDegrees
+                            }
+                    )
+                } else if let thumbnail = loadThumbnail(for: kart) {
+                    thumbnail
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: .infinity)
+                        .scaleEffect(0.6)
+                } else {
+                    Color.clear
+                }
             }
             .frame(maxWidth: .infinity, minHeight: 96)
-            .rotation3DEffect(.degrees(rotationDegrees), axis: (x: 0, y: 1, z: 0))
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        rotationDegrees = dragStartDegrees + value.translation.width * 0.5
-                    }
-                    .onEnded { _ in
-                        dragStartDegrees = rotationDegrees
-                    }
-            )
             Text(kart.displayName)
                 .font(.subheadline.weight(.semibold))
         }
@@ -114,8 +134,29 @@ private struct KartCard: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .strokeBorder(isSelected ? Color.accentColor : .clear, lineWidth: 3)
+                .strokeBorder(isSelected ? Color.style(StylePalette.uiCyan) : .clear, lineWidth: 2)
         )
+        .scaleEffect(isFocused ? 1.4 : 1.0)
+        .zIndex(isFocused ? 1 : 0)
+        .animation(.easeOut(duration: 0.2), value: isFocused)
+        .onHover { hovering in isFocused = hovering }
+    }
+
+    /// 썸네일은 Asset Catalog가 아니라 `Resources/KartThumbnails/`에 낱장 PNG로 들어 있어서
+    /// `Image(_:)` 이름 조회로는 못 찾는다 — 파일 자체를 읽어서 `Image`로 감싼다.
+    private func loadThumbnail(for kart: KartModel) -> Image? {
+        guard let url = Bundle.main.url(forResource: "kart_\(kart.id)_thumb", withExtension: "png") else {
+            return nil
+        }
+        #if canImport(UIKit)
+        guard let uiImage = UIImage(contentsOfFile: url.path) else { return nil }
+        return Image(uiImage: uiImage)
+        #elseif canImport(AppKit)
+        guard let nsImage = NSImage(contentsOfFile: url.path) else { return nil }
+        return Image(nsImage: nsImage)
+        #else
+        return nil
+        #endif
     }
 }
 
