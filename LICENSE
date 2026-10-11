@@ -1,0 +1,121 @@
+핀치 카트 (KartSimulator) 라이선스 — 모든 권리 보유
+Pinch Kart (KartSimulator) License — All Rights Reserved
+
+Copyright (c) 2026 KimMinUng (GitHub @kimminung) and iMasterProX (GitHub @iMasterProX).
+All rights reserved. 모든 권리 보유.
+
+────────────────────────────────────────────────────────────────────────
+한국어 (이 문서의 한국어와 영어가 다르게 읽히면 한국어를 따른다)
+────────────────────────────────────────────────────────────────────────
+
+1. 저작권자
+   이 저장소("저작물")의 저작권은 아래 두 사람이 공동으로 가진다.
+   - 테크 담당: KimMinUng (GitHub @kimminung)
+   - 디자인 담당: iMasterProX (GitHub @iMasterProX)
+
+2. 적용 범위
+   "저작물"에는 다음이 모두 포함된다. 단, 제5조의 제3자 구성 요소는 제외한다.
+   - 소스 코드(`KartSimulator/`, `KartCoreTests/`, `Tools/`, `Tracks/`)와 빌드 설정
+   - 디자인 산출물(`Design/`, `Assets/`): 카트 모델·텍스처·썸네일·실루엣, 트랙 타일 모델과 텍스처,
+     아이콘·온보딩 그림·목업, 팔레트와 스타일 가이드, 자체 합성 효과음, 생성 스크립트
+   - 문서(`Docs/`, `README.md`)와 트랙 정의 파일
+   - 앱 이름 "핀치 카트", 화면 구성과 조작 방식의 표현
+
+3. 허용되는 것
+   - 이 저장소를 GitHub에서 열람하고, 개인적인 학습·평가 목적으로 로컬에 클론하여 빌드·실행하는 것
+   - GitHub의 이용약관이 허용하는 범위에서 포크(fork)하여 저작권자에게 보낼 Pull Request를 준비하는 것
+   그 밖의 모든 권리는 저작권자에게 유보된다.
+
+4. 금지되는 것 (저작권자 두 사람 모두의 사전 서면 허락이 없는 한)
+   - 상업적 이용: 판매, 유료 배포, 광고 수익, 서비스 제공, 앱 스토어 등록 등 영리 목적의 모든 이용
+   - 재배포: 저작물의 전부 또는 일부를 원형 그대로 또는 수정하여 제3자에게 배포·공개·게시하는 것
+     (위 3항의 포크·Pull Request는 예외)
+   - 파생 저작물: 저작물을 바탕으로 다른 앱, 게임, 에셋 팩, 폰트, 사운드 팩, 디자인 시스템을 만드는 것
+   - 에셋 단독 이용: 카트·트랙·아이콘·그림·효과음·팔레트 등 디자인 산출물을 저작물과 분리해 쓰는 것
+   - 기계 학습: 저작물을 학습·미세조정 데이터로 쓰거나 그런 데이터셋에 포함하는 것
+   - 저작권 표시·이 라이선스 문구를 지우거나 바꾸는 것
+   - 저작권자나 "핀치 카트"의 이름을 보증·홍보에 쓰는 것
+
+5. 제3자 구성 요소 (이 라이선스가 적용되지 않으며, 각자의 원래 조건을 따른다)
+   - Galmuri 폰트 (`Design/fonts/Galmuri*.ttf`, `KartSimulator/Resources/Fonts/`):
+     (c) quiple, SIL Open Font License 1.1. 전문은 `Design/fonts/OFL.txt`.
+   - 엔진음 5개 (`Assets/sfx/engine*.wav`, `KartSimulator/Resources/Audio/engine*.wav`):
+     CC0 기반 녹음을 변환한 것으로, 출처와 확인 기록은 `Assets/sfx/LICENSES.md` 2장에 있다.
+   - RetireX Online 참고 자료 (`Design/reference/retirex/`):
+     참고용으로만 보관한다. 이 안의 렌더·캡처에 보이는 마인크래프트 요소는 Mojang/Microsoft의 것이며,
+     이 저작물의 일부가 아니고 앱·스토어·홍보에 쓰지 않는다. RetireX Online에서 가져온 카트 모델·텍스처·
+     썸네일·색 체계는 그 운영사(CYBOX DIGITAL ENTERTAINMENT)의 허락 범위 안에서 이 저작물에 포함되며,
+     그 허락 범위를 넘어서는 이용은 이 라이선스로도 허용되지 않는다.
+   - Apple 플랫폼 SDK·프레임워크(SwiftUI, RealityKit, ARKit 등)와 SF Pro 계열 시스템 폰트:
+     Apple의 개발자 라이선스 조건을 따른다. 저장소에 포함되어 있지 않다.
+
+6. 보증 부인
+   저작물은 "있는 그대로" 제공되며, 상품성·특정 목적 적합성·비침해를 포함한 어떠한 명시적·묵시적 보증도
+   하지 않는다. 저작권자는 저작물의 이용으로 생긴 어떠한 손해에 대해서도 책임지지 않는다.
+
+7. 종료
+   이 라이선스의 조건을 어기면 허락된 권리는 자동으로 소멸한다. 이 경우 보유한 모든 사본을 삭제해야 한다.
+
+8. 문의
+   사용 허락이 필요하면 GitHub(@kimminung, @iMasterProX)로 두 저작권자 모두에게 연락한다.
+
+────────────────────────────────────────────────────────────────────────
+English (informational translation; the Korean text governs)
+────────────────────────────────────────────────────────────────────────
+
+1. Copyright holders
+   This repository (the "Work") is jointly owned by:
+   - Tech: KimMinUng (GitHub @kimminung)
+   - Design: iMasterProX (GitHub @iMasterProX)
+
+2. Scope
+   The Work includes the source code, build settings, design deliverables (kart models, textures,
+   thumbnails, silhouettes, track tile models and textures, icons, onboarding illustrations, mockups,
+   palette, style guide, self-synthesized sound effects, generator scripts), documentation, track
+   definitions, the app name "Pinch Kart" and its screen/interaction design — except the third-party
+   components listed in Section 5.
+
+3. Permitted
+   - Viewing the repository on GitHub, and cloning, building and running it locally for personal
+     study or evaluation.
+   - Forking within GitHub's Terms of Service for the sole purpose of preparing a Pull Request to the
+     copyright holders.
+   All other rights are reserved.
+
+4. Prohibited without prior written permission from BOTH copyright holders
+   - Commercial use of any kind (sale, paid distribution, advertising revenue, service offering,
+     app store publication).
+   - Redistribution, publication or hosting of the Work or any part of it, modified or not
+     (other than the fork/Pull Request case above).
+   - Derivative works: other apps, games, asset packs, fonts, sound packs or design systems based on
+     the Work.
+   - Standalone use of any design asset (karts, tracks, icons, illustrations, sounds, palette) apart
+     from the Work.
+   - Use as training or fine-tuning data for machine learning, or inclusion in such datasets.
+   - Removing or altering copyright notices or this license.
+   - Using the names of the copyright holders or "Pinch Kart" for endorsement or promotion.
+
+5. Third-party components (not covered by this license; their own terms apply)
+   - Galmuri font — (c) quiple, SIL Open Font License 1.1 (`Design/fonts/OFL.txt`).
+   - Five engine sounds (`engine*.wav`) — converted from CC0-based recordings; provenance in
+     `Assets/sfx/LICENSES.md` Section 2.
+   - RetireX Online reference material (`Design/reference/retirex/`) — reference only. Minecraft
+     elements visible in those renders belong to Mojang/Microsoft and are not part of the Work. Kart
+     models, textures, thumbnails and the colour system taken from RetireX Online are included within
+     the permission granted by its operator (CYBOX DIGITAL ENTERTAINMENT); nothing here extends that
+     permission.
+   - Apple platform SDKs and frameworks and the SF Pro system fonts — Apple developer license terms;
+     not included in this repository.
+
+6. Disclaimer
+   THE WORK IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
+   LIMITED TO MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT
+   SHALL THE COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING FROM THE
+   WORK OR ITS USE.
+
+7. Termination
+   Any breach of these terms automatically terminates the permissions granted; all copies must then
+   be deleted.
+
+8. Contact
+   For permission requests, contact both copyright holders via GitHub (@kimminung, @iMasterProX).
