@@ -347,15 +347,14 @@ KartSimulator/
 
 ## 라이선스
 
-**이 저장소는 오픈소스가 아닙니다.** 소스 코드와 디자인 산출물(카트·트랙·아이콘·그림·효과음·팔레트 등)의 저작권은 [@kimminung](https://github.com/kimminung)과 [@iMasterProX](https://github.com/iMasterProX) 두 사람이 공동으로 가지며, 상업적 이용·재배포·파생 저작물 제작·에셋 단독 이용은 두 저작권자 모두의 사전 서면 허락 없이는 금지됩니다. 전문은 [`LICENSE`](LICENSE)에 있습니다.
+**이 저장소는 오픈소스가 아닙니다.** 소스 코드와 디자인 산출물(카트·트랙·아이콘·그림·효과음·팔레트 등, RetireX Online에서 가져온 카트 자산 포함 — Issue #34)의 저작권은 [@kimminung](https://github.com/kimminung)과 [@iMasterProX](https://github.com/iMasterProX) 두 사람이 공동으로 가지며, 상업적 이용·재배포·파생 저작물 제작·에셋 단독 이용은 두 저작권자 모두의 사전 서면 허락 없이는 금지됩니다. 전문은 [`LICENSE`](LICENSE)에 있습니다.
 
 다음은 이 라이선스가 아니라 각자의 원래 조건을 따릅니다.
 
 | 구성 요소 | 조건 |
 | --- | --- |
-| Galmuri 폰트 (`Design/fonts/`, 앱 번들 `Resources/Fonts/`) | © Lee Minseo (quiple), SIL Open Font License 1.1 (`OFL.txt` 동봉, 앱 메뉴 하단 크레딧) |
-| 엔진음 5개 (`engine*.wav`) | CYBOX "XK ENGINE" 원본(CC0 기반) 변환, 출처 사슬은 `Assets/sfx/LICENSES.md` |
-| RetireX 유래 카트 모델·텍스처·썸네일·색 체계 | 운영사 CYBOX 허락 범위 안에서 포함 (명의는 디자인 확정 대기) |
+| Galmuri 폰트 (`Design/fonts/`, 앱 번들 `Resources/Fonts/`) | © 2019–2025 Lee Minseo (quiple), SIL Open Font License 1.1 (`OFL.txt` 동봉, 앱 메뉴 하단 크레딧) |
+| 엔진음 5개 (`engine*.wav`) | CYBOX "XK ENGINE 3.0.0" 원본(CC0 기반) 변환, 출처 사슬은 `Assets/sfx/LICENSES.md` |
 | RetireX Online 참고 자료 (`Design/reference/retirex/`) | 참고용. 마인크래프트 요소는 Mojang/Microsoft 소유, 앱·홍보에 쓰지 않음 |
 | Apple SDK·시스템 폰트 | Apple 개발자 라이선스 (저장소에 미포함) |
 | 미니맵 받침 `Diorama_Base.usdz` (`KartSimulator/Resources/Minimap/`) | Apple Diorama 샘플 코드 라이선스 (전문은 같은 폴더 `LICENSE-Apple-Diorama-Sample.txt`) |

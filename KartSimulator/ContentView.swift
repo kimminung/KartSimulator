@@ -73,7 +73,7 @@ struct ContentView: View {
                 }
 
                 // 제3자 크레딧(LICENSE 5조): Galmuri는 OFL 1.1이라 앱 안 표기가 필요하다(Issue #31).
-                Text("Galmuri 폰트 © Lee Minseo (quiple), SIL Open Font License 1.1 · 미니맵 받침 © Apple (Diorama 샘플)")
+                Text("Galmuri 폰트 © 2019–2025 Lee Minseo (quiple), SIL Open Font License 1.1 · 미니맵 받침 © Apple (Diorama 샘플)")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }

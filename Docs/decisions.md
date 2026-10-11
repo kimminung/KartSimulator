@@ -437,3 +437,15 @@
 - **Issue #26 카트 리그(가능한 부분)**: USDZ에 남아 있는 `steering_wheel`(arcrix·bogubkart·gospel)/`steering_column`(razr·sirius)과 `root`로 **핸들 핀치 연동**과 **차체 기울기**를 넣었다. `KartCore/KartRigPose.swift`(순수 값, 테스트 4개): 조향 입력 `turnLeft` +1 / `turnRight` −1 → `lerp(dt × 14)` 평활 → 핸들 −steer × 82°(Z축), roll −steer × 속도비 × 4°(Z축), pitch 가속도비 × 1.5°(X축, `lerp(dt × 10)`), 바퀴 굴림 각속도 = 속도/반지름. `RealityKit/KartRig.swift`가 노드를 이름 정확 일치로 찾아 매 프레임 적용한다. 바퀴 `A`~`D`는 USDZ에 없어 코드만 준비해 두고 조용히 건너뛴다(재내보내기가 오면 바로 동작). 축 부호는 이 로스터(+Z 정면) 기준 추정이라 실기기에서 반대로 돌면 `KartRig`의 축 상수만 바꾼다.
 - **확인**: visionOS 시뮬레이터 빌드, `KartCoreTests` 63개 통과. **실기기 확인**: 디오라마 열었을 때 창과 박스가 안 겹치는지, 3인칭에서 창이 사라지고 종료 시 정면에 다시 뜨는지, 왼손 핀치에 핸들이 왼쪽으로 82° 도는지(반대면 부호), 코너에서 차체가 바깥으로 살짝 기우는지(3인칭에서 멀미면 디오라마만).
 - **영향받는 절**: `MyApp`(창 id), `AppScene.menuWindowID`, `ImmersiveSessionModel.menuWindowHidden`, `ImmersiveBoxView`(boxPosition·창 열고 닫기·`kartRig`), `KartCore/KartRigPose.swift`·`RealityKit/KartRig.swift`(신규), `Docs/TechTask.md`
+
+## 52. [테크] 디자인 LICENSE 검토(Issue #34) 반영: 카트 자산 = 공동 저작물, Galmuri 연도, XK ENGINE 3.0.0
+
+- **날짜**: 2026-10-11
+- **배경**: 공동 저작권자 iMasterProX의 LICENSE 검토(Issue #34, `design` 브랜치 결정 "49"). PR #17에서 테크가 요청한 "RetireX 카트·팔레트 디자인 확인"에 대한 답이다. 결정 50에서 테크가 임시로 적었던 "CYBOX 허락 범위 안에서 포함, 명의는 디자인 확정"을 디자인 답변대로 바꿨다.
+- **반영**:
+  - LICENSE 2조: RetireX Online에서 가져온 카트 모델·텍스처·썸네일·실루엣과 색 체계를 **두 저작권자의 공동 저작물**에 포함(한·영). 5조의 CYBOX 허락 범위 문장 삭제, RetireX 항목은 참고 폴더·마인크래프트 요소 내용만 유지.
+  - Galmuri 저작권자 "(c) 2019–2025 Lee Minseo (quiple)"(OFL.txt 1행 기준), LICENSE·README·앱 메뉴 크레딧 모두. `OFL.txt` 번들 동봉과 크레딧은 결정 50에서 이미 했다.
+  - 엔진음 출처: "XK ENGINE 3.0.0(CYBOX)의 WAV, CC0 기반 녹음 변환", `Design/audio/engine_preview.wav` 경로(결정 50에 버전만 추가).
+- **mms 히스토리 정리(49-2)는 보류 — 사용자 결정 필요**: `git filter-repo`로 `02940f5`의 `mms.usdz`를 지우고 `main`·`Dev`·`design`을 강제 푸시하는 작업은 되돌릴 수 없고 두 사람 모두 재클론해야 한다. 절차는 Issue #34에 정리돼 있고, 실행 시점·담당·GitHub Support 요청 여부를 두 분이 정한 뒤 테크가 실행한다.
+- **결정 번호 정리**: `main`에는 47(디자인 리뷰 회의)·48(미니맵)·49(1차)·50(검수)·51(2차)·52(이 항목)가 있다. `design` 브랜치가 뒤늦게 47→48로 재번호하고 LICENSE 검토를 49로 적어 다시 충돌했다 → Issue #34 코멘트로 "`main` 번호 유지, 디자인 LICENSE 검토는 머지 시 **53**"을 제안했다. 앞으로는 번호를 매기기 전에 `main`과 상대 브랜치의 마지막 번호를 확인하고, 아직 머지 안 된 결정은 PR 본문에 "번호 미정(머지 시 확정)"으로 적는 것을 규칙으로 제안(디자인 PRD 13장은 디자인 소유라 요청).
+- **영향받는 절**: `LICENSE` 2·5조, `README.md` 라이선스 표, `ContentView` 크레딧, 결정 50(일부 대체)
