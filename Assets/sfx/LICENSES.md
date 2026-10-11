@@ -4,15 +4,15 @@
 
 | 파일 | 길이 | 출처 | 라이선스 |
 | --- | --- | --- | --- |
-| `countdownTick.wav` | 0.15초 | 자체 합성(`Design/tools/sfx.mjs`) | 팀 소유 — 외부 소재 없음 |
-| `go.wav` | 0.40초 | 자체 합성 | 팀 소유 |
-| `checkpoint.wav` | 0.30초 | 자체 합성 | 팀 소유 |
-| `lapComplete.wav` | 0.50초 | 자체 합성 | 팀 소유 |
-| `finish.wav` | 1.20초 | 자체 합성 | 팀 소유 |
-| `wallBump.wav` | 0.20초 | 자체 합성 | 팀 소유 |
-| `respawn.wav` | 0.40초 | 자체 합성 | 팀 소유 |
+| `countdownTick.wav` | 0.15초 | 자체 합성(`Design/tools/sfx.mjs`) | 공동 저작물(LICENSE 2조) — 외부 소재 없음 |
+| `go.wav` | 0.40초 | 자체 합성 | 공동 저작물(LICENSE 2조) |
+| `checkpoint.wav` | 0.30초 | 자체 합성 | 공동 저작물(LICENSE 2조) |
+| `lapComplete.wav` | 0.50초 | 자체 합성 | 공동 저작물(LICENSE 2조) |
+| `finish.wav` | 1.20초 | 자체 합성 | 공동 저작물(LICENSE 2조) |
+| `wallBump.wav` | 0.20초 | 자체 합성 | 공동 저작물(LICENSE 2조) |
+| `respawn.wav` | 0.40초 | 자체 합성 | 공동 저작물(LICENSE 2조) |
 
-- 7개 모두 샘플·녹음·남의 소리를 쓰지 않고, 사각파(펄스)·삼각파·잡음을 코드로 합성했다. 그래서 출처 표기 의무가 없고, 앱 출시에 제약이 없다.
+- 7개 모두 샘플·녹음·남의 소리를 쓰지 않고, 사각파(펄스)·삼각파·잡음을 코드로 합성했다. 외부 출처 표기 의무는 없다. 저작권은 루트 `LICENSE`에 따라 @kimminung·@iMasterProX 공동 소유이고, 상업적 이용·재배포는 LICENSE 4조(두 저작권자의 서면 허락)를 따른다.
 - 규격: 44.1 kHz, 16비트, 모노, 피크 −12 dBFS로 정규화(디자인 PRD 10장). 고음이 날카롭지 않게 저역 통과 필터를 걸었다.
 - 음 높이·길이·음색을 바꾸려면 `Design/tools/sfx.mjs`의 `SOUNDS` 표를 고치고 `node Design/tools/sfx.mjs`로 다시 만든다.
 
@@ -43,7 +43,7 @@
 
 ## 3. 엔진음 합성 대체본 — 자체 합성
 
-`node Design/tools/engine.mjs --synth`가 같은 이름의 파일 5개를 `Design/audio/engine_synth/`에 만든다. 단기통 엔진의 점화 펄스, 낮은 잡음, 두 단 저역 통과로 만든 소리이고, 외부 소재가 없어 팀 소유다. 2장 원본을 쓸 수 없게 되면 이 5개를 `Assets/sfx/`로 복사한다. 파일명과 루프 여부가 같고 단발 소리 길이도 0.01초 안쪽으로 같아서, 코드는 바꿀 필요가 없다(루프 길이는 달라도 상관없다).
+`node Design/tools/engine.mjs --synth`가 같은 이름의 파일 5개를 `Design/audio/engine_synth/`에 만든다. 단기통 엔진의 점화 펄스, 낮은 잡음, 두 단 저역 통과로 만든 소리이고, 외부 소재가 없어 루트 `LICENSE` 2조의 공동 저작물이다. 2장 원본을 쓸 수 없게 되면 이 5개를 `Assets/sfx/`로 복사한다. 파일명과 루프 여부가 같고 단발 소리 길이도 0.01초 안쪽으로 같아서, 코드는 바꿀 필요가 없다(루프 길이는 달라도 상관없다).
 
 ## 4. 공통
 

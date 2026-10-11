@@ -1,6 +1,6 @@
 # 엔진음 사용 설명 (결정 20-6)
 
-RetireX Online이 실제로 쓰는 카트 엔진음과 그 재생 규칙을 핀치 카트의 조작(정지·절반·최대)에 맞게 옮긴 것이다. 테크가 이 문서만 보고 Swift로 구현할 수 있게 썼다. 파일 출처와 라이선스는 `LICENSES.md` 2장에 있다. 운영자 확인 완료: CC0 기반, 라이선스 제약 없음(2026-10-11).
+RetireX Online이 실제로 쓰는 카트 엔진음과 그 재생 규칙을 핀치 카트의 조작에 맞게 옮긴 것이다. 2026-10-11 개정(결정 49): 조작이 2단계 전진(`forwardHalf`/`forwardFull`)에서 **연속 페달 `DriveState.pedal(Float)`**(결정 30·31·39)로 바뀌고 1인칭이 폐기(결정 48)되어, 3-1장 입력 해석을 테크 구현(`EngineSoundMachine.update(dt:pedal:isHolding:speed:maxSpeed:)`)에 맞췄다. 디오라마·3인칭 모두 같은 규칙이다. 테크가 이 문서만 보고 Swift로 구현할 수 있게 썼다. 파일 출처와 라이선스는 `LICENSES.md` 2장에 있다. 운영자 확인 완료: CC0 기반, 라이선스 제약 없음(2026-10-11).
 
 ## 1. 파일
 
@@ -44,11 +44,16 @@ RetireX는 20틱/초 서버에서 클립 세 개를 상태 기계로 잇는다(`
 
 ### 3-1. 입력 해석 (`DriveState` → 엔진)
 
-| `DriveState` | 엔진에게는 | 이유 |
-| --- | --- | --- |
-| `forwardHalf`, `forwardFull` | **가속**(throttle), 목표 속도비 0.5 / 1.0 | 테크 PRD 5장 |
-| `turnLeft`, `turnRight` | **유지**(hold), 속도가 0.3 m/s 이상일 때만 | 회전 중에는 속도가 유지되므로 감속음을 내면 안 맞다 |
-| `stopped`, `waiting` | **뗌**(release) | 자연 감속 / 제동 |
+| `DriveState` | 엔진 입력 (`pedal`, `isHolding`) | 엔진에게는 | 이유 |
+| --- | --- | --- | --- |
+| `pedal(v)`, v > 0 (전진) | `pedal = v` | **가속**(throttle), 목표 속도비 = v | 디오라마는 핀치를 유지하면 v = 1.0 |
+| `pedal(v)`, v < 0 (후진) | `pedal = abs(v)` | **가속**, 목표 속도비 = abs(v) | 엔진 회전수는 방향과 무관하다. 후진도 같은 가속음 |
+| `pedal(0)` | `pedal = 0` | **뗌** | 페달이 0이면 엔진은 놓은 것과 같다 |
+| `turnLeft`, `turnRight` | `isHolding = true` | **유지**(hold), 속도가 0.3 m/s(`holdMinSpeed`) 이상일 때만 | 회전 중에는 속도가 유지되므로 감속음을 내면 안 맞다 |
+| `stopped`, `waiting` | `pedal = 0`, `isHolding = false` | **뗌**(release) | 자연 감속 / 제동 |
+
+- 가속 판정은 `pedal > 0.02`다. 디오라마·3인칭에서 전진은 거의 항상 1.0이라, 실제로는 "핀치 = 최대 회전수, 놓음 = 감속"으로 들린다.
+- 1인칭(`headSteered`)은 폐기됐다(결정 48). 남아 있는 동안에는 `accelerating`을 `pedal = 1` 또는 0으로 넘긴다.
 
 카운트다운 중과 완주 뒤에는 입력을 `stopped`로 넘긴다(카트가 움직이지 않으므로).
 
@@ -59,6 +64,8 @@ RetireX는 20틱/초 서버에서 클립 세 개를 상태 기계로 잇는다(`
 | | 식 | 정지(r=0) | 절반(0.5, 7.2 km/h) | 최대(1.0, 14.4 km/h) |
 | --- | --- | --- | --- | --- |
 | 재생 속도(=피치) | `0.70 + 0.30 × r` | 0.70 | 0.85 | 1.00 |
+
+(표의 "절반"은 속도 예시다. 입력 단계가 아니다. `r`은 실제 속도에서 구한다.)
 | 루프 음량 | `−6 dB × (1 − r)` | −6 dB | −3 dB | 0 dB |
 
 - 녹음 원래 높이가 **최대 속도**다. 가속 클립은 루프 높이에서 끝나고, 감속 클립은 루프 높이에서 시작한다. 그래서 최대 속도에서는 클립과 루프가 같은 피치(1.00)로 이어진다.
@@ -77,7 +84,7 @@ RetireX는 20틱/초 서버에서 클립 세 개를 상태 기계로 잇는다(`
 | idle | 가속 | idle 0.3초 페이드 아웃, `engineAccel` 처음부터(피치·음량은 목표 속도비 기준) | accel |
 | idle | 유지(회전, 0.3 m/s 이상) | `engineLoop` 0.25초 페이드 인 | going |
 | accel | 클립 시간 2.6초 | `engineLoop` 0.13초 페이드 인. **accel은 끄지 않는다**(꼬리가 교차 페이드) | going |
-| accel | 절반↔최대 바뀜 | accel 피치·음량을 새 목표 쪽으로 0.3초에 걸쳐 옮김 | accel |
+| accel | 목표 속도비(페달 값)가 바뀜 | accel 피치·음량을 새 목표 쪽으로 0.3초에 걸쳐 옮김 | accel |
 | accel | 뗌 | accel 0.08초 페이드 아웃, `engineDecel` 재생(피치·음량은 지금 rS 기준, 이후 고정) | decel |
 | going | 매 프레임 | 루프 피치·음량 = 3-2의 식(rS) | going |
 | going | 뗌 | loop 0.08초 페이드 아웃, `engineDecel` 재생 | decel |
@@ -112,6 +119,8 @@ RetireX는 20틱/초 서버에서 클립 세 개를 상태 기계로 잇는다(`
 - 동시에 나는 엔진 소리는 최대 3개다(accel 꼬리 + loop, decel 꼬리 + accel + idle 페이드).
 
 ## 4. Swift 구현 스케치
+
+> 이 스케치는 2단계 전진 시절의 초판이다. 실제 구현은 `KartSimulator/KartCore/EngineSoundMachine.swift`(입력 `pedal`·`isHolding`, 3-1장)이며, 그쪽이 기준이다.
 
 엔진 상태 기계는 `KartCore`의 순수 값 타입으로 두면 테스트할 수 있다. 재생은 RealityKit 어댑터가 맡는다. API 이름(`AudioFileResource` 초기화, `AudioPlaybackController.speed`/`gain`/`fade`)은 visionOS SDK 버전에 따라 다를 수 있으니 Xcode에서 확인한다. `speed`가 없거나 피치가 안 바뀌면 `AVAudioEngine` + `AVAudioUnitVarispeed`로 같은 명령을 실행한다.
 
@@ -321,11 +330,11 @@ import RealityKit
 **단위 시험**(`KartCoreTests`, 상태 기계만): 아래 각 경우의 명령 순서와 상태를 확인한다.
 
 1. `countdownStarted` → 2.2초 뒤 `.play(.idle)`, 상태 idle.
-2. idle에서 `forwardFull` 유지 → `.stop(.idle)` + `.play(.accel, rate: 1.0)` → 클립 시간 2.6초에 `.play(.loop)`(accel stop 없음) → 이후 매 프레임 `.set(.loop)`.
-3. `forwardHalf`로 같은 과정 → accel 재생 속도 0.85. 클립 시간 기준이라 실제 2.6/0.85 ≈ 3.06초 뒤에 루프가 시작된다.
+2. idle에서 `pedal = 1` 유지 → `.stop(.idle)` + `.play(.accel, rate: 1.0)` → 클립 시간 2.6초에 `.play(.loop)`(accel stop 없음) → 이후 매 프레임 `.set(.loop)`.
+3. `pedal = 0.5`로 같은 과정 → accel 재생 속도 0.85. 클립 시간 기준이라 실제 2.6/0.85 ≈ 3.06초 뒤에 루프가 시작된다.
 4. going 중 `stopped` → `.stop(.loop, 0.08)` + `.play(.decel)` → 2.2초 뒤 idle.
 5. going 중 `waiting`(제동, 5 m/s²) → 약 1.0초에 `.stop(.decel, 0.4)` + idle. 자연 감속(`stopped`, 2 m/s²)은 2.0초에 서므로 끊지 않고 2.2초에 idle.
-6. decel 중 rS ≥ 0.5에서 다시 `forwardFull` → `.play(.loop)`(accel 아님). rS < 0.5면 `.play(.accel)`.
+6. decel 중 rS ≥ 0.5에서 다시 `pedal = 1` → `.play(.loop)`(accel 아님). rS < 0.5면 `.play(.accel)`.
 7. going 중 `turnLeft`(속도 유지) → 상태 going 그대로, decel 없음.
 8. 루프 페이드 인 중(0.13초)에는 `.set(.loop, gainDb: nil)`.
 9. `finished` 중 decel이 끝나면 off, idle 재생 없음.
@@ -334,7 +343,7 @@ import RealityKit
 **청취 확인**(실기기):
 - 최대 전진: 시동 꺼짐 없이 가속에서 주행으로 넘어가는 순간에 음 높이·음량이 튀지 않는다.
 - 3초 넘게 직진해도 루프 반복이 들리지 않는다.
-- 절반↔최대를 바꾸면 피치가 부드럽게 옮겨 간다.
+- 페달 값을 바꾸면 피치가 부드럽게 옮겨 간다.
 - 효과음(체크포인트·랩)이 엔진음 위로 또렷하다.
 
 ## 6. 다시 만들기 · 합성본으로 바꾸기
