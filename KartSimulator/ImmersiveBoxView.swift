@@ -8,6 +8,8 @@ struct ImmersiveBoxView: View {
     @Environment(KartSelectionModel.self) private var selection
     @Environment(ImmersiveSessionModel.self) private var immersiveSession
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismissWindow) private var dismissWindow
 
     @State private var rootEntity = Entity()
     @State private var kartSlot = Entity()
@@ -40,6 +42,8 @@ struct ImmersiveBoxView: View {
     @State private var boxFloor = Entity()
     @State private var hudEntity: Entity?
     @State private var loadedKartEntity: Entity?
+    /// 카트 움직이는 부품(핸들·차체·바퀴) 리그(Issue #26, 결정 51). 카트를 로드할 때마다 새로 만든다.
+    @State private var kartRig: KartRig?
     /// 월드 좌표에 그대로 두는 것들(미니맵)의 부모. `rootEntity`는 박스 위치로 옮겨져 있어 기준이 다르다.
     @State private var worldAnchor = Entity()
     /// M4 미니맵(결정 48). 트랙을 읽은 뒤 비동기로 만들어진다.
@@ -47,6 +51,9 @@ struct ImmersiveBoxView: View {
     /// 디오라마에서는 박스 앞오른쪽 모서리 위에 작게(지름 0.16 m), 콕핏에서는 HUD 옆에 원래 크기(0.24 m).
     private let minimapTableDiameter: Float = 0.24
     private let minimapDioramaDiameter: Float = 0.16
+    /// 3인칭 미니맵 자리: HUD(머리 앞 1.2 m)보다 **더 오른쪽 아래**(실기기 피드백, 결정 53 — 0.45/0.45는 트랙 시야를 가렸다).
+    private let thirdPersonMinimapRight: Float = 0.65
+    private let thirdPersonMinimapDown: Float = 0.8
     @State private var latestMapPosition: SIMD2<Float> = .zero
     @State private var latestHeading: Float = 0
     /// 현재 씬 루트의 Y축 회전. 디오라마는 `dioramaYaw`, 콕핏 모드는 모드에 들어온 순간 머리 방향으로 계산.
@@ -55,6 +62,12 @@ struct ImmersiveBoxView: View {
     @State private var cockpitAnchor: SIMD3<Float> = [0, 1.2, 0]
     /// 3인칭 카메라 기준 방향(모드 진입 순간 머리 yaw, ±60°를 2초 넘게 벗어나면 리센터 — Issue #25, 결정 49).
     @State private var chaseReference = ChaseCameraReference(forwardYaw: 0)
+    /// 3인칭 HUD·미니맵이 따라가는 평활 머리 yaw와 속도(1/s) — 결정 53.
+    @State private var hudFollowYaw: Float = 0
+    private let hudFollowRate: Float = 4
+    /// 종료 안전망: 3인칭에서 정지 + 양손 해제가 이만큼 이어지면 메뉴 창을 다시 연다(결정 53 추가).
+    @State private var stoppedHandsFreeSeconds: Float = 0
+    private let menuWindowReopenAfter: Float = 4
     private let cockpitTuning = CockpitTuning()
     /// 디오라마: 트랙 JSON의 출발 방향은 랩·체크포인트 판정 기준이라 건드리지 않고, 박스 안의 트랙 전체를
     /// 180° 돌려 사용자 쪽에서 볼 때 카트가 반대쪽을 보고 출발하게 한다(결정 43번).
@@ -100,7 +113,9 @@ struct ImmersiveBoxView: View {
     private let motionLogInterval: Float = 0.25
 
     private let boxSize: SIMD3<Float> = [0.7, 0.4, 0.7]
-    private let boxPosition: SIMD3<Float> = [0, 1.05, -1.1]
+    /// 박스 중심. Issue #27(결정 51): 메뉴 창이 박스를 가리지 않도록 박스를 창 **아래·앞**에 둔다 — 창은 프로그램으로
+    /// 옮길 수 없어(visionOS는 첫 창 배치를 시스템이 정함) 박스 쪽을 낮췄다(윗면 1.05 m, 전에는 1.25 m).
+    private let boxPosition: SIMD3<Float> = [0, 0.85, -0.9]
     /// HUD(속도/랩 표시)를 발밑이 아니라 박스 바로 위에 띄우기 위한 위치.
     private var hudPosition: SIMD3<Float> {
         boxPosition + SIMD3(0, boxSize.y / 2 + 0.15, 0)
@@ -232,6 +247,8 @@ struct ImmersiveBoxView: View {
             Attachment(id: "hud") {
                 RaceHUDOverlay(hud: raceModel.hud, mode: mode, onModeChange: { mode = $0 }) {
                     Task {
+                        // 3인칭에서 숨긴 메뉴 창을 먼저 사용자 정면에 다시 연다(Issue #27). 창이 하나도 없으면 공간을 닫는 순간 앱이 사라진다.
+                        if immersiveSession.menuWindowHidden { openWindow(id: AppScene.menuWindowID); immersiveSession.menuWindowHidden = false }
                         await dismissImmersiveSpace()
                         immersiveSession.isOpen = false
                     }
@@ -256,6 +273,12 @@ struct ImmersiveBoxView: View {
         let isDiorama = mode == .diorama
         boxFrame.isEnabled = isDiorama
         boxFloor.isEnabled = isDiorama
+        // 메뉴 창(Issue #27): 3인칭(실제 크기 트랙)에서는 창을 치우고, 디오라마로 돌아오면 다시 연다. 종료는 HUD "박스 닫기".
+        if isDiorama {
+            if immersiveSession.menuWindowHidden { openWindow(id: AppScene.menuWindowID); immersiveSession.menuWindowHidden = false }
+        } else if !immersiveSession.menuWindowHidden {
+            dismissWindow(id: AppScene.menuWindowID); immersiveSession.menuWindowHidden = true
+        }
 
         if isDiorama {
             sceneYaw = dioramaYaw
@@ -276,6 +299,7 @@ struct ImmersiveBoxView: View {
             cockpitAnchor = head.position
             // 기준 방향 = 진입 순간 머리 yaw. 들어오자마자 카트 뒤에서 앞을 보도록 씬 yaw를 바로 맞춘다.
             chaseReference = ChaseCameraReference(forwardYaw: head.yaw)
+            hudFollowYaw = head.yaw
             sceneYaw = ScenePlacement.chaseSceneYaw(kartHeading: motion.heading, referenceYaw: head.yaw)
             sceneRoot.scale = SIMD3(repeating: 1)
             sceneRoot.orientation = simd_quatf(angle: sceneYaw, axis: [0, 1, 0])
@@ -283,9 +307,13 @@ struct ImmersiveBoxView: View {
             // HUD는 들어온 순간 머리 앞 1.2 m, 약간 아래에 고정(빌보드라 방향은 알아서 사용자를 본다).
             let hudForward = ScenePlacement.forward(heading: head.yaw)
             hudEntity?.position = head.position + hudForward * 1.2 + SIMD3(0, -0.15, 0)
-            // 핀치는 `inputCatcher`를 봐야만 잡히므로(결정 26·33) 실제 크기 모드에서는 사용자 주변 전체를 덮는다.
+            // 핀치는 `inputCatcher`를 봐야만 잡히므로(결정 26·33) 실제 크기 모드에서는 넓게 덮되, **머리를 콜라이더 안에
+            // 넣지 않는다**(결정 53 추가): 머리가 40 m 상자 안에 있으면 시선 레이가 상자를 거리 0에서 맞춰 HUD 버튼이
+            // 호버되지 않았다(실기기: 디오라마·3인칭·박스 닫기 버튼 먹통). 눈높이 1.1 m 아래의 바닥 슬래브(트랙·카트를
+            // 보는 시선)와 기준 방향 15 m 앞의 벽(지평선 쪽 시선) 두 조각으로 나눠 HUD(눈앞 1.2 m)는 빈 공간에 둔다.
             inputCatcher.position = head.position
-            inputCatcher.components.set(CollisionComponent(shapes: [.generateBox(size: SIMD3(repeating: 40))]))
+            inputCatcher.orientation = simd_quatf(angle: head.yaw, axis: [0, 1, 0])
+            inputCatcher.components.set(CollisionComponent(shapes: Self.thirdPersonCatcherShapes()))
         }
 
         if let kart = loadedKartEntity {
@@ -293,6 +321,14 @@ struct ImmersiveBoxView: View {
         }
         layoutMinimap()
         print("DEBUG-LAYOUT mode=\(mode) sceneYaw=\(sceneYaw * 180 / .pi)도 scale=\(sceneRoot.scale.x) anchor=\(cockpitAnchor)")
+    }
+
+    /// 3인칭 입력 캐처 조각(결정 53 추가). 캐처 로컬: 원점 = 머리, −Z = 기준 방향.
+    private static func thirdPersonCatcherShapes() -> [ShapeResource] {
+        [
+            ShapeResource.generateBox(size: SIMD3(40, 0.6, 40)).offsetBy(translation: SIMD3(0, -1.4, 0)),   // 바닥 슬래브: 윗면 눈높이 −1.1 m
+            ShapeResource.generateBox(size: SIMD3(40, 40, 0.6)).offsetBy(translation: SIMD3(0, 0, -15)),    // 앞 벽: 기준 방향 15 m
+        ]
     }
 
     /// 미니맵 마커(카트 복제본)의 가장 긴 변. 디자인 PRD 6장 "약 1.5 cm"(지름 0.24 m 테이블 기준 미니맵 로컬).
@@ -315,7 +351,7 @@ struct ImmersiveBoxView: View {
             let forward = ScenePlacement.forward(heading: head.yaw)
             let right = SIMD3<Float>(cos(head.yaw), 0, -sin(head.yaw))
             minimap.root.scale = .one
-            minimap.root.position = head.position + forward * 1.2 + right * 0.45 + SIMD3(0, -0.45, 0)
+            minimap.root.position = head.position + forward * 1.2 + right * thirdPersonMinimapRight + SIMD3(0, -thirdPersonMinimapDown, 0)
             // 로컬 +Z(랩 텍스트 쪽)가 사용자를 향하도록 yaw를 맞추고, 상판을 사용자 쪽으로 35° 기울인다.
             minimap.root.orientation = simd_quatf(angle: head.yaw, axis: [0, 1, 0]) * simd_quatf(angle: 35 * .pi / 180, axis: [1, 0, 0])
         }
@@ -336,6 +372,45 @@ struct ImmersiveBoxView: View {
         let target = ScenePlacement.cockpitTarget(anchor: cockpitAnchor, mode: mode, referenceYaw: reference, tuning: cockpitTuning)
         let kartLocal = SIMD3(motion.position.x, track.roadSurfaceHeight, motion.position.z)
         sceneRoot.position = ScenePlacement.rootPosition(placing: kartLocal, at: target, yaw: sceneYaw, scale: 1)
+        inputCatcher.orientation = simd_quatf(angle: reference, axis: [0, 1, 0]) // 앞 벽이 기준 방향(리센터 포함)을 따라간다
+        followHUD(deltaTime: deltaTime)
+    }
+
+    /// 종료 안전망(결정 53 추가): 3인칭에서 차를 세우고 양손을 다 뗀 채 `menuWindowReopenAfter`초가 지나면 숨겨 둔 메뉴 창을
+    /// 사용자 정면에 다시 연다. HUD 버튼이 어떤 이유로든 안 눌려도 시스템 창의 "박스 닫기"로 나갈 수 있다(디지털 크라운
+    /// 길게 누르기 → 홈은 visionOS 공통 탈출구). 다시 핀치하면 타이머는 0으로 돌아간다.
+    @MainActor
+    private func updateExitSafetyNet(drive: DriveState, left: HandStatus, right: HandStatus, deltaTime: Float) {
+        guard mode == .thirdPerson, immersiveSession.menuWindowHidden else { stoppedHandsFreeSeconds = 0; return }
+        let stopped = abs(motion.speed) < 0.05 && drive == .stopped && !left.pinching && !right.pinching
+        stoppedHandsFreeSeconds = stopped ? stoppedHandsFreeSeconds + deltaTime : 0
+        if stoppedHandsFreeSeconds >= menuWindowReopenAfter {
+            openWindow(id: AppScene.menuWindowID)
+            immersiveSession.menuWindowHidden = false
+            stoppedHandsFreeSeconds = 0
+            print("DEBUG-EXIT 정지 + 양손 해제 \(menuWindowReopenAfter)초 → 메뉴 창 재오픈(종료 안전망)")
+        }
+    }
+
+    /// 3인칭에서 HUD·미니맵을 머리 앞에 **느리게 따라오게**(결정 53, 실기기: 차를 세운 뒤 HUD 버튼을 호버할 수 없어 탈출
+    /// 경로가 없었다 — 모드 진입 순간 위치에 고정돼 있어 몸을 돌리거나 자리를 옮기면 시야 밖에 남았다). visionOS 시스템
+    /// UI처럼 4/s 지수 평활로 따라와 운전 중에는 거의 가만히 있고, 고개를 크게 돌리면 1초쯤 뒤 다시 앞에 온다.
+    @MainActor
+    private func followHUD(deltaTime: Float) {
+        guard mode == .thirdPerson, deltaTime > 0, let head = currentHeadPose() else { return }
+        hudFollowYaw = ScenePlacement.approachAngle(from: hudFollowYaw, to: head.yaw, rate: hudFollowRate, deltaTime: deltaTime)
+        let alpha = 1 - exp(-hudFollowRate * deltaTime)
+        let forward = ScenePlacement.forward(heading: hudFollowYaw)
+        let right = SIMD3<Float>(cos(hudFollowYaw), 0, -sin(hudFollowYaw))
+        if let hudEntity {
+            let goal = head.position + forward * 1.2 + SIMD3(0, -0.15, 0)
+            hudEntity.position += (goal - hudEntity.position) * alpha
+        }
+        if let minimap {
+            let goal = head.position + forward * 1.2 + right * thirdPersonMinimapRight + SIMD3(0, -thirdPersonMinimapDown, 0)
+            minimap.root.position += (goal - minimap.root.position) * alpha
+            minimap.root.orientation = simd_quatf(angle: hudFollowYaw, axis: [0, 1, 0]) * simd_quatf(angle: 35 * .pi / 180, axis: [1, 0, 0])
+        }
     }
 
     /// 카트 모델 크기: 디오라마는 박스 배율과 무관한 고정 시각 크기(`kartVisualLength`), 실제 크기 모드는 전장 1.5 m.
@@ -589,7 +664,10 @@ struct ImmersiveBoxView: View {
         let now = CACurrentMediaTime()
         let (drive, leftStatus, rightStatus) = inputResolver.resolve(now: now, mode: mode)
         let tuning = MotionTuning().applying(track.tuning)
+        let previousSpeed = motion.speed
         motion = motion.advancing(drive: drive, tuning: tuning, deltaTime: deltaTime)
+        // 카트 리그(핸들·차체 기울기·바퀴, Issue #26): 손 입력과 속도 변화로 부품을 돌린다.
+        kartRig?.update(drive: drive, speed: motion.speed, maxSpeed: tuning.maxSpeed, acceleration: (motion.speed - previousSpeed) / deltaTime, deltaTime: deltaTime)
 
         let positionXZ = SIMD2(motion.position.x, motion.position.z)
         let (pathIndex, distanceFromCenterline, projectedOnCenterline) = trackPath.closestSegment(to: positionXZ)
@@ -629,6 +707,8 @@ struct ImmersiveBoxView: View {
 
         let isOffTrack = distanceFromCenterline > (track.width / 2 + 0.5)
         offTrackMonitor.update(isOffTrack: isOffTrack, deltaTime: TimeInterval(deltaTime), threshold: tuning.offTrackRespawn)
+
+        updateExitSafetyNet(drive: drive, left: leftStatus, right: rightStatus, deltaTime: deltaTime)
 
         latestDrive = drive
         latestLeftStatus = leftStatus
@@ -778,6 +858,7 @@ struct ImmersiveBoxView: View {
             kartSlot.children.removeAll()
             kartSlot.addChild(entity)
             loadedKartEntity = entity
+            kartRig = KartRig(kart: entity)
             minimap?.setMarker(cloneOf: entity, markerLength: minimapMarkerLength)
 
             loadedKartID = kart.id

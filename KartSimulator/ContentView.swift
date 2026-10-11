@@ -23,7 +23,7 @@ struct ContentView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("핀치 카트")
+                    Text("핀치 로버") // 앱 이름 확정: 핀치 로버 / Pinch Rover (결정 53, Issue #30)
                         // 제목에만 픽셀 폰트(Galmuri) 적용 — 본문/숫자/라벨은 시스템 폰트 유지 (디자인 결정 20-3·20-5).
                         .font(.custom("Galmuri11-Bold", size: 40, relativeTo: .largeTitle))
                     Text("카트를 고르고 박스 안에서 확인해 보세요.")
@@ -73,7 +73,7 @@ struct ContentView: View {
                 }
 
                 // 제3자 크레딧(LICENSE 5조): Galmuri는 OFL 1.1이라 앱 안 표기가 필요하다(Issue #31).
-                Text("Galmuri 폰트 © Lee Minseo (quiple), SIL Open Font License 1.1 · 미니맵 받침 © Apple (Diorama 샘플)")
+                Text("Galmuri 폰트 © 2019–2025 Lee Minseo (quiple), SIL Open Font License 1.1 · 미니맵 받침 © Apple (Diorama 샘플)")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }

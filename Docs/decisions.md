@@ -427,3 +427,36 @@
   - **디버그 시각물 기본 끔**: `ImmersiveBoxView.showsDebugVisuals = false` — 헤드 구슬·시선 막대·빨간 트레일 엔티티를 `isEnabled = false`로. 머리 yaw 계산(3인칭 리센터에 필요)과 `DEBUG-*` 로그는 유지. 시연 영상에 초록 막대가 보이던 문제 해소.
 - **안 한 것 / 사용자 결정 필요**: `mms.usdz`(Mercedes 메타데이터)가 공개 히스토리 `02940f5`에 남아 있는 문제 — 히스토리 재작성(`git filter-repo`)은 모든 클론을 다시 받아야 하므로 두 담당자가 결정한다. 디자인 소유 문서(`Docs/design-prd.md` 13장 경로, `Assets/sfx/ENGINE.md` 연속 페달 표현, `icon_pinch_in` 폐기)는 Issue #31 코멘트로 디자인에 넘겼다.
 - **영향받는 절**: `LICENSE`, `README.md` 라이선스 표, `Resources/Fonts/OFL.txt`(신규), `ContentView` 크레딧, `ImmersiveBoxView.showsDebugVisuals`, 결정 40, `Docs/TechTask.md`
+
+## 51. [테크] 리뷰 회의 반영 2차: 창 배치(Issue #27), 카트 리그 — 핸들 82° 핀치 연동·차체 기울기(Issue #26 일부)
+
+- **날짜**: 2026-10-11
+- **Issue #27 창 배치**: visionOS는 첫 창의 위치를 시스템이 정하고 프로그램으로 옮길 수 없다(`defaultWindowPlacement`는 다른 창 기준 상대 배치만). 그래서 디자인 후보 (a)+(c)를 썼다.
+  - 디오라마: **박스를 창 아래·앞으로** — `boxPosition` (0, 1.05, −1.1) → (0, 0.85, −0.9), 윗면 1.25 → 1.05 m. HUD·입력 캐처·미니맵은 `boxPosition` 기준이라 같이 내려간다. 창 아랫변과 실제로 안 겹치는지는 실기기에서 보고 더 내린다.
+  - 3인칭: 들어갈 때 `dismissWindow(id: "menu")`로 메뉴 창을 치우고, 디오라마로 돌아오거나 HUD "박스 닫기"를 누르면 `openWindow(id: "menu")`로 사용자 정면에 다시 연다(창이 하나도 없으면 공간을 닫는 순간 앱이 사라지므로 **먼저** 연다). `WindowGroup`은 `openWindow`마다 새 창을 만들기 때문에 `ImmersiveSessionModel.menuWindowHidden`으로 우리가 숨긴 경우에만 다시 연다. `WindowGroup(id: AppScene.menuWindowID)`.
+- **Issue #26 카트 리그(가능한 부분)**: USDZ에 남아 있는 `steering_wheel`(arcrix·bogubkart·gospel)/`steering_column`(razr·sirius)과 `root`로 **핸들 핀치 연동**과 **차체 기울기**를 넣었다. `KartCore/KartRigPose.swift`(순수 값, 테스트 4개): 조향 입력 `turnLeft` +1 / `turnRight` −1 → `lerp(dt × 14)` 평활 → 핸들 −steer × 82°(Z축), roll −steer × 속도비 × 4°(Z축), pitch 가속도비 × 1.5°(X축, `lerp(dt × 10)`), 바퀴 굴림 각속도 = 속도/반지름. `RealityKit/KartRig.swift`가 노드를 이름 정확 일치로 찾아 매 프레임 적용한다. 바퀴 `A`~`D`는 USDZ에 없어 코드만 준비해 두고 조용히 건너뛴다(재내보내기가 오면 바로 동작). 축 부호는 이 로스터(+Z 정면) 기준 추정이라 실기기에서 반대로 돌면 `KartRig`의 축 상수만 바꾼다.
+- **확인**: visionOS 시뮬레이터 빌드, `KartCoreTests` 63개 통과. **실기기 확인**: 디오라마 열었을 때 창과 박스가 안 겹치는지, 3인칭에서 창이 사라지고 종료 시 정면에 다시 뜨는지, 왼손 핀치에 핸들이 왼쪽으로 82° 도는지(반대면 부호), 코너에서 차체가 바깥으로 살짝 기우는지(3인칭에서 멀미면 디오라마만).
+- **영향받는 절**: `MyApp`(창 id), `AppScene.menuWindowID`, `ImmersiveSessionModel.menuWindowHidden`, `ImmersiveBoxView`(boxPosition·창 열고 닫기·`kartRig`), `KartCore/KartRigPose.swift`·`RealityKit/KartRig.swift`(신규), `Docs/TechTask.md`
+
+## 52. [테크] 디자인 LICENSE 검토(Issue #34) 반영: 카트 자산 = 공동 저작물, Galmuri 연도, XK ENGINE 3.0.0
+
+- **날짜**: 2026-10-11
+- **배경**: 공동 저작권자 iMasterProX의 LICENSE 검토(Issue #34, `design` 브랜치 결정 "49"). PR #17에서 테크가 요청한 "RetireX 카트·팔레트 디자인 확인"에 대한 답이다. 결정 50에서 테크가 임시로 적었던 "CYBOX 허락 범위 안에서 포함, 명의는 디자인 확정"을 디자인 답변대로 바꿨다.
+- **반영**:
+  - LICENSE 2조: RetireX Online에서 가져온 카트 모델·텍스처·썸네일·실루엣과 색 체계를 **두 저작권자의 공동 저작물**에 포함(한·영). 5조의 CYBOX 허락 범위 문장 삭제, RetireX 항목은 참고 폴더·마인크래프트 요소 내용만 유지.
+  - Galmuri 저작권자 "(c) 2019–2025 Lee Minseo (quiple)"(OFL.txt 1행 기준), LICENSE·README·앱 메뉴 크레딧 모두. `OFL.txt` 번들 동봉과 크레딧은 결정 50에서 이미 했다.
+  - 엔진음 출처: "XK ENGINE 3.0.0(CYBOX)의 WAV, CC0 기반 녹음 변환", `Design/audio/engine_preview.wav` 경로(결정 50에 버전만 추가).
+- **mms 히스토리 정리(49-2)는 보류 — 사용자 결정 필요**: `git filter-repo`로 `02940f5`의 `mms.usdz`를 지우고 `main`·`Dev`·`design`을 강제 푸시하는 작업은 되돌릴 수 없고 두 사람 모두 재클론해야 한다. 절차는 Issue #34에 정리돼 있고, 실행 시점·담당·GitHub Support 요청 여부를 두 분이 정한 뒤 테크가 실행한다.
+- **결정 번호 정리**: `main`에는 47(디자인 리뷰 회의)·48(미니맵)·49(1차)·50(검수)·51(2차)·52(이 항목)가 있다. `design` 브랜치가 뒤늦게 47→48로 재번호하고 LICENSE 검토를 49로 적어 다시 충돌했다 → Issue #34 코멘트로 "`main` 번호 유지, 디자인 LICENSE 검토는 머지 시 **54**"를 제안했다(처음 53으로 제안했으나 테크 결정 53이 먼저 들어가 54로 정정). 앞으로는 번호를 매기기 전에 `main`과 상대 브랜치의 마지막 번호를 확인하고, 아직 머지 안 된 결정은 PR 본문에 "번호 미정(머지 시 확정)"으로 적는 것을 규칙으로 제안(디자인 PRD 13장은 디자인 소유라 요청).
+- **영향받는 절**: `LICENSE` 2·5조, `README.md` 라이선스 표, `ContentView` 크레딧, 결정 50(일부 대체)
+
+## 53. [테크] 3인칭 HUD·미니맵 머리 따라오기(탈출 경로), 앱 이름 "핀치 로버" 확정, mms는 히스토리 재작성 없이 제외 유지
+
+- **날짜**: 2026-10-11
+- **실기기 피드백(PR #35)**: 창 배치·핸들·차체 기울기는 만족. 다만 **3인칭에서 차를 세운 뒤 HUD 버튼을 다시 호버할 수 없어 탈출 경로가 없었다.** 결정 44·48에서 HUD·미니맵을 모드 진입 순간 머리 앞에 **고정**해 두었기 때문에, 추적 카메라로 몸·고개를 돌리거나 자리를 옮기면 HUD가 시야 밖(또는 등 뒤)에 남았다.
+- **수정**: `ImmersiveBoxView.followHUD` — 3인칭에서 HUD와 미니맵이 매 프레임 머리 위치·yaw를 4/s 지수 평활로 따라온다(visionOS 시스템 UI의 느린 추종과 같은 느낌). 운전 중에는 거의 가만히 있고, 고개를 크게 돌리면 1초쯤 뒤 다시 앞에 온다. 디오라마는 그대로 박스 위 고정. 미니맵은 HUD 오른쪽 아래 상대 위치·35° 기울기를 유지하되, 실기기 피드백으로 **더 오른쪽 아래**(오른쪽 0.45 → 0.8 m, 아래 0.45 → 0.7 m)로 옮겨 트랙 시야를 가리지 않게 했다.
+- **앱 이름 확정(결정 7 보류 해소, Issue #30)**: 디자인 제안 **"핀치 로버" / "Pinch Rover"**에 테크(사용자)가 동의했다. 반영: `Info.plist` `CFBundleDisplayName`, `ContentView` 제목(Galmuri), LICENSE 제목·2조·4조(옛 가칭 "핀치 카트"도 저작물 범위에 포함), README 제목·소개, TechTask. 디자인 소유 문서(PRD 1·15장, `Design/proposals/app-name.md`, 목업 `01_start`)는 디자인에 요청. App Store 동명 앱·상표 검색은 사용자가 직접 확인했다는 전제(상표 등록 여부는 별도).
+- **mms(Issue #34 49-2)**: 사용자 결정 — **히스토리 재작성은 하지 않고** 프로젝트 파일에서 제외된 상태(`5c0c948`에서 삭제됨)를 유지한다. 저장소에 현재 파일은 없고, LICENSE 2조 저작물 범위에도 들지 않는다. GitHub Support 요청도 하지 않는다.
+- **확인**: visionOS 시뮬레이터 빌드·테스트 63개 통과. 실기기: 3인칭에서 차를 세우고 고개를 돌려도 HUD가 1초 안에 앞에 와서 버튼이 호버되는지.
+- **영향받는 절**: `ImmersiveBoxView.followHUD`/`hudFollowYaw`, `Info.plist`, `ContentView`, `LICENSE`, `README.md`, `Docs/TechTask.md`, Issue #30·#34
+- **추가(2차 실기기, 같은 PR)**: HUD는 잘 따라오지만 **디오라마·3인칭·박스 닫기 버튼이 호버되지 않아** 여전히 못 나갔다. 원인: 3인칭 입력 캐처가 머리를 중심으로 한 40 m 상자라 **머리가 콜라이더 안**에 있었고, 시선 레이가 상자를 거리 0에서 맞춰 1.2 m 앞 HUD 버튼이 호버 우선권을 잃었다(디오라마는 머리가 캐처 밖이라 멀쩡). 수정 ① 캐처를 "눈높이 1.1 m 아래 바닥 슬래브(40×0.6×40) + 기준 방향 15 m 앞 벽(40×40×0.6)" 두 조각으로 바꿔 머리와 HUD 주변을 비웠다(`thirdPersonCatcherShapes`, 벽은 리센터를 따라 돈다). 트랙·카트를 보는 시선은 슬래브에, 지평선 쪽 시선은 벽에 닿아 핀치는 계속 잡힌다. ② **종료 안전망** `updateExitSafetyNet`: 3인칭에서 차를 세우고 양손을 뗀 채 4초가 지나면 숨겨 둔 메뉴 창을 정면에 다시 열어 시스템 창의 "박스 닫기"로 나갈 수 있게 했다. ③ 미니맵을 "약간 왼쪽 아래로": 오른쪽 0.8 → 0.65 m, 아래 0.7 → 0.8 m. README에 디지털 크라운 길게 누르기(홈)도 공통 탈출구로 적었다.

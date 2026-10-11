@@ -711,3 +711,50 @@ struct ChaseCameraReferenceTests {
         #expect(ref.forwardYaw == 1.1)
     }
 }
+
+// MARK: - 카트 리그 자세 (Issue #26, 결정 51): 핸들 82°·앞바퀴 30° 핀치 연동, 차체 roll/pitch, 바퀴 굴림
+
+struct KartRigPoseTests {
+    private let tuning = KartRigTuning()
+
+    @Test func steeringFollowsPinchAndSettlesWithinTenthOfASecond() {
+        var pose = KartRigPose()
+        for _ in 0..<9 { pose.update(drive: .turnLeft, speed: 0, maxSpeed: 4, acceleration: 0, wheelRadius: 0.1, deltaTime: 1.0 / 90.0, tuning: tuning) }
+        // lerp(dt×14)를 0.1초: 1 − (1 − 14/90)^9 ≈ 0.78 이상
+        #expect(pose.steer > 0.75)
+        #expect(pose.steeringWheelAngle(tuning: tuning) > 0.75 * 82 && pose.frontWheelAngle(tuning: tuning) > 0.75 * 30)
+        for _ in 0..<90 { pose.update(drive: .turnRight, speed: 0, maxSpeed: 4, acceleration: 0, wheelRadius: 0.1, deltaTime: 1.0 / 90.0, tuning: tuning) }
+        #expect(pose.steer < -0.99)
+        for _ in 0..<90 { pose.update(drive: .stopped, speed: 0, maxSpeed: 4, acceleration: 0, wheelRadius: 0.1, deltaTime: 1.0 / 90.0, tuning: tuning) }
+        #expect(abs(pose.steer) < 0.01, "손을 떼면 핸들이 돌아온다")
+    }
+
+    @Test func bodyRollsOutwardProportionalToSpeed() {
+        var slow = KartRigPose(), fast = KartRigPose()
+        for _ in 0..<180 {
+            slow.update(drive: .turnLeft, speed: 1, maxSpeed: 4, acceleration: 0, wheelRadius: 0.1, deltaTime: 1.0 / 90.0, tuning: tuning)
+            fast.update(drive: .turnLeft, speed: 4, maxSpeed: 4, acceleration: 0, wheelRadius: 0.1, deltaTime: 1.0 / 90.0, tuning: tuning)
+        }
+        // 왼쪽으로 돌면 roll은 음수(바깥=오른쪽), 최고 속도에서 약 −4°
+        #expect(fast.roll < slow.roll && slow.roll < 0)
+        #expect(abs(fast.roll + tuning.bodyRollDegrees) < 0.1)
+    }
+
+    @Test func pitchFollowsAccelerationSign() {
+        var pose = KartRigPose()
+        for _ in 0..<90 { pose.update(drive: .pedal(1), speed: 2, maxSpeed: 4, acceleration: 4, wheelRadius: 0.1, deltaTime: 1.0 / 90.0, tuning: tuning) }
+        #expect(pose.pitch > 0.9 * tuning.bodyPitchDegrees, "가속하면 뒤로")
+        for _ in 0..<90 { pose.update(drive: .stopped, speed: 2, maxSpeed: 4, acceleration: -4, wheelRadius: 0.1, deltaTime: 1.0 / 90.0, tuning: tuning) }
+        #expect(pose.pitch < -0.9 * tuning.bodyPitchDegrees, "감속하면 앞으로")
+    }
+
+    @Test func wheelSpinMatchesTravelDistance() {
+        var pose = KartRigPose()
+        // 반지름 0.1 m, 2 m/s로 0.1초 → 0.2 m 이동 = 2 rad ≈ 114.6°
+        for _ in 0..<9 { pose.update(drive: .pedal(1), speed: 2, maxSpeed: 4, acceleration: 0, wheelRadius: 0.1, deltaTime: 1.0 / 90.0, tuning: tuning) }
+        #expect(abs(pose.wheelSpin - 114.59) < 0.5)
+        var still = KartRigPose()
+        still.update(drive: .stopped, speed: 0, maxSpeed: 4, acceleration: 0, wheelRadius: 0.1, deltaTime: 1, tuning: tuning)
+        #expect(still.wheelSpin == 0, "정지하면 바퀴가 멈춘다")
+    }
+}
