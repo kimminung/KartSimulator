@@ -427,3 +427,13 @@
   - **디버그 시각물 기본 끔**: `ImmersiveBoxView.showsDebugVisuals = false` — 헤드 구슬·시선 막대·빨간 트레일 엔티티를 `isEnabled = false`로. 머리 yaw 계산(3인칭 리센터에 필요)과 `DEBUG-*` 로그는 유지. 시연 영상에 초록 막대가 보이던 문제 해소.
 - **안 한 것 / 사용자 결정 필요**: `mms.usdz`(Mercedes 메타데이터)가 공개 히스토리 `02940f5`에 남아 있는 문제 — 히스토리 재작성(`git filter-repo`)은 모든 클론을 다시 받아야 하므로 두 담당자가 결정한다. 디자인 소유 문서(`Docs/design-prd.md` 13장 경로, `Assets/sfx/ENGINE.md` 연속 페달 표현, `icon_pinch_in` 폐기)는 Issue #31 코멘트로 디자인에 넘겼다.
 - **영향받는 절**: `LICENSE`, `README.md` 라이선스 표, `Resources/Fonts/OFL.txt`(신규), `ContentView` 크레딧, `ImmersiveBoxView.showsDebugVisuals`, 결정 40, `Docs/TechTask.md`
+
+## 51. [테크] 리뷰 회의 반영 2차: 창 배치(Issue #27), 카트 리그 — 핸들 82° 핀치 연동·차체 기울기(Issue #26 일부)
+
+- **날짜**: 2026-10-11
+- **Issue #27 창 배치**: visionOS는 첫 창의 위치를 시스템이 정하고 프로그램으로 옮길 수 없다(`defaultWindowPlacement`는 다른 창 기준 상대 배치만). 그래서 디자인 후보 (a)+(c)를 썼다.
+  - 디오라마: **박스를 창 아래·앞으로** — `boxPosition` (0, 1.05, −1.1) → (0, 0.85, −0.9), 윗면 1.25 → 1.05 m. HUD·입력 캐처·미니맵은 `boxPosition` 기준이라 같이 내려간다. 창 아랫변과 실제로 안 겹치는지는 실기기에서 보고 더 내린다.
+  - 3인칭: 들어갈 때 `dismissWindow(id: "menu")`로 메뉴 창을 치우고, 디오라마로 돌아오거나 HUD "박스 닫기"를 누르면 `openWindow(id: "menu")`로 사용자 정면에 다시 연다(창이 하나도 없으면 공간을 닫는 순간 앱이 사라지므로 **먼저** 연다). `WindowGroup`은 `openWindow`마다 새 창을 만들기 때문에 `ImmersiveSessionModel.menuWindowHidden`으로 우리가 숨긴 경우에만 다시 연다. `WindowGroup(id: AppScene.menuWindowID)`.
+- **Issue #26 카트 리그(가능한 부분)**: USDZ에 남아 있는 `steering_wheel`(arcrix·bogubkart·gospel)/`steering_column`(razr·sirius)과 `root`로 **핸들 핀치 연동**과 **차체 기울기**를 넣었다. `KartCore/KartRigPose.swift`(순수 값, 테스트 4개): 조향 입력 `turnLeft` +1 / `turnRight` −1 → `lerp(dt × 14)` 평활 → 핸들 −steer × 82°(Z축), roll −steer × 속도비 × 4°(Z축), pitch 가속도비 × 1.5°(X축, `lerp(dt × 10)`), 바퀴 굴림 각속도 = 속도/반지름. `RealityKit/KartRig.swift`가 노드를 이름 정확 일치로 찾아 매 프레임 적용한다. 바퀴 `A`~`D`는 USDZ에 없어 코드만 준비해 두고 조용히 건너뛴다(재내보내기가 오면 바로 동작). 축 부호는 이 로스터(+Z 정면) 기준 추정이라 실기기에서 반대로 돌면 `KartRig`의 축 상수만 바꾼다.
+- **확인**: visionOS 시뮬레이터 빌드, `KartCoreTests` 63개 통과. **실기기 확인**: 디오라마 열었을 때 창과 박스가 안 겹치는지, 3인칭에서 창이 사라지고 종료 시 정면에 다시 뜨는지, 왼손 핀치에 핸들이 왼쪽으로 82° 도는지(반대면 부호), 코너에서 차체가 바깥으로 살짝 기우는지(3인칭에서 멀미면 디오라마만).
+- **영향받는 절**: `MyApp`(창 id), `AppScene.menuWindowID`, `ImmersiveSessionModel.menuWindowHidden`, `ImmersiveBoxView`(boxPosition·창 열고 닫기·`kartRig`), `KartCore/KartRigPose.swift`·`RealityKit/KartRig.swift`(신규), `Docs/TechTask.md`

@@ -8,6 +8,8 @@ struct ImmersiveBoxView: View {
     @Environment(KartSelectionModel.self) private var selection
     @Environment(ImmersiveSessionModel.self) private var immersiveSession
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismissWindow) private var dismissWindow
 
     @State private var rootEntity = Entity()
     @State private var kartSlot = Entity()
@@ -40,6 +42,8 @@ struct ImmersiveBoxView: View {
     @State private var boxFloor = Entity()
     @State private var hudEntity: Entity?
     @State private var loadedKartEntity: Entity?
+    /// 카트 움직이는 부품(핸들·차체·바퀴) 리그(Issue #26, 결정 51). 카트를 로드할 때마다 새로 만든다.
+    @State private var kartRig: KartRig?
     /// 월드 좌표에 그대로 두는 것들(미니맵)의 부모. `rootEntity`는 박스 위치로 옮겨져 있어 기준이 다르다.
     @State private var worldAnchor = Entity()
     /// M4 미니맵(결정 48). 트랙을 읽은 뒤 비동기로 만들어진다.
@@ -100,7 +104,9 @@ struct ImmersiveBoxView: View {
     private let motionLogInterval: Float = 0.25
 
     private let boxSize: SIMD3<Float> = [0.7, 0.4, 0.7]
-    private let boxPosition: SIMD3<Float> = [0, 1.05, -1.1]
+    /// 박스 중심. Issue #27(결정 51): 메뉴 창이 박스를 가리지 않도록 박스를 창 **아래·앞**에 둔다 — 창은 프로그램으로
+    /// 옮길 수 없어(visionOS는 첫 창 배치를 시스템이 정함) 박스 쪽을 낮췄다(윗면 1.05 m, 전에는 1.25 m).
+    private let boxPosition: SIMD3<Float> = [0, 0.85, -0.9]
     /// HUD(속도/랩 표시)를 발밑이 아니라 박스 바로 위에 띄우기 위한 위치.
     private var hudPosition: SIMD3<Float> {
         boxPosition + SIMD3(0, boxSize.y / 2 + 0.15, 0)
@@ -232,6 +238,8 @@ struct ImmersiveBoxView: View {
             Attachment(id: "hud") {
                 RaceHUDOverlay(hud: raceModel.hud, mode: mode, onModeChange: { mode = $0 }) {
                     Task {
+                        // 3인칭에서 숨긴 메뉴 창을 먼저 사용자 정면에 다시 연다(Issue #27). 창이 하나도 없으면 공간을 닫는 순간 앱이 사라진다.
+                        if immersiveSession.menuWindowHidden { openWindow(id: AppScene.menuWindowID); immersiveSession.menuWindowHidden = false }
                         await dismissImmersiveSpace()
                         immersiveSession.isOpen = false
                     }
@@ -256,6 +264,12 @@ struct ImmersiveBoxView: View {
         let isDiorama = mode == .diorama
         boxFrame.isEnabled = isDiorama
         boxFloor.isEnabled = isDiorama
+        // 메뉴 창(Issue #27): 3인칭(실제 크기 트랙)에서는 창을 치우고, 디오라마로 돌아오면 다시 연다. 종료는 HUD "박스 닫기".
+        if isDiorama {
+            if immersiveSession.menuWindowHidden { openWindow(id: AppScene.menuWindowID); immersiveSession.menuWindowHidden = false }
+        } else if !immersiveSession.menuWindowHidden {
+            dismissWindow(id: AppScene.menuWindowID); immersiveSession.menuWindowHidden = true
+        }
 
         if isDiorama {
             sceneYaw = dioramaYaw
@@ -589,7 +603,10 @@ struct ImmersiveBoxView: View {
         let now = CACurrentMediaTime()
         let (drive, leftStatus, rightStatus) = inputResolver.resolve(now: now, mode: mode)
         let tuning = MotionTuning().applying(track.tuning)
+        let previousSpeed = motion.speed
         motion = motion.advancing(drive: drive, tuning: tuning, deltaTime: deltaTime)
+        // 카트 리그(핸들·차체 기울기·바퀴, Issue #26): 손 입력과 속도 변화로 부품을 돌린다.
+        kartRig?.update(drive: drive, speed: motion.speed, maxSpeed: tuning.maxSpeed, acceleration: (motion.speed - previousSpeed) / deltaTime, deltaTime: deltaTime)
 
         let positionXZ = SIMD2(motion.position.x, motion.position.z)
         let (pathIndex, distanceFromCenterline, projectedOnCenterline) = trackPath.closestSegment(to: positionXZ)
@@ -778,6 +795,7 @@ struct ImmersiveBoxView: View {
             kartSlot.children.removeAll()
             kartSlot.addChild(entity)
             loadedKartEntity = entity
+            kartRig = KartRig(kart: entity)
             minimap?.setMarker(cloneOf: entity, markerLength: minimapMarkerLength)
 
             loadedKartID = kart.id

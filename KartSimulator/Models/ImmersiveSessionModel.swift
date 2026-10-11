@@ -6,4 +6,7 @@ import Observation
 @Observable
 final class ImmersiveSessionModel {
     var isOpen = false
+    /// 3인칭에 들어가면서 메뉴 창을 `dismissWindow`로 숨겼는지(Issue #27). `WindowGroup`은 `openWindow`마다 새 창을
+    /// 만들기 때문에, 우리가 숨긴 경우에만 다시 연다.
+    var menuWindowHidden = false
 }

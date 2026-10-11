@@ -9,7 +9,7 @@ struct MyApp: App {
     #endif
 
     var body: some Scene {
-        WindowGroup {
+        WindowGroup(id: AppScene.menuWindowID) {
             ContentView()
                 .environment(kartSelection)
                 .environment(immersiveSession)
