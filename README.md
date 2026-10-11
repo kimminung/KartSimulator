@@ -12,7 +12,7 @@
 
 Apple Vision Pro 실기기에서 Phase 1을 플레이한 영상입니다. 썸네일을 누르면 YouTube로 이동합니다.
 
-[![비전프로 카트 시뮬레이터 프로젝트 — 실기기 시연 (YouTube)](https://i.ytimg.com/vi/Xv__kSJXJ0I/hqdefault.jpg)](https://youtu.be/Xv__kSJXJ0I)
+[![비전프로 카트 시뮬레이터 프로젝트 — 실기기 시연 (YouTube)](Docs/review/demo-video-thumb.jpg)](https://youtu.be/Xv__kSJXJ0I)
 
 ▶ https://youtu.be/Xv__kSJXJ0I
 
