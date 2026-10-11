@@ -37,7 +37,8 @@
 | `ui-gold` | `#FEDA34` | 기록·순위 강조("신기록!", BEST, 난이도 점) |
 | `ui-ink` | `#F2F9FF` | 글자(살짝 차가운 흰색) |
 | `ui-warn` | `#FF3236` | 경고(손이 안 보임 등) |
-| `ui-green` / `ui-magenta` | `#56E27A` / `#FF5CD6` | 보조 버튼 색(RetireX 버튼 5색 중), 1차에는 거의 안 씀 |
+| `ui-magenta` | `#FF5CD6` | **후진**: 핀치아웃 화살표, 페달 게이지의 후진 쪽(전진은 `ui-cyan`) |
+| `ui-green` | `#56E27A` | 보조 버튼 색(RetireX 버튼 5색 중), 1차에는 거의 안 씀 |
 
 - 카드·버튼의 바탕은 당분간 visionOS **글래스 재질**을 쓴다(결정 20-4). RetireX 색은 강조색과 글자에만 입힌다. 목업(`Design/mockups/`)도 그렇게 그렸다.
 - 주 버튼은 `ui-cyan` 바탕에 `ui-night` 글자를 쓴다. 보조 버튼은 글래스 바탕에 `ui-ink` 글자를 쓴다.
@@ -62,7 +63,7 @@
 **색상 스와치(결정 20-2)**
 
 - 순서는 위 표의 "순서" 열이다. 빨강부터 색상환을 한 바퀴 돈 뒤 흰색에서 검정까지 무채색을 놓는다.
-- 원 지름은 28 pt, 간격은 10 pt로 한다(1 m 거리 기준, visionOS 최소 눈 대상 크기 맞춤). 한 줄에 9개씩, 두 줄이다.
+- 원 지름은 40 pt, 간격은 14 pt로 한다(1 m 거리 기준). 처음 정한 28 pt/10 pt는 실기기에서 작아, 테크가 키운 값(결정 34)을 기준으로 삼는다. 한 줄에 9개씩, 두 줄이다.
 - 선택한 원에는 2 pt `ui-cyan` 링과 2 pt 틈을 둔다. 그 아래에 색 이름을 작게(13 pt, `ui-ink` 70 %) 보여 준다.
 - 무채색 원(`white`, `undyed`, `silver`)에는 1 pt `ui-rim` 테두리를 둔다. 밝은 글래스 위에서도 원이 보이게 하려는 것이다.
 
@@ -98,7 +99,7 @@
 | 상태 색 | 활성 `ui-cyan`, 비활성 `ui-ink` 40 %, 경고 `ui-warn` |
 | 파일 | `Design/icons/icon_<이름>.svg` |
 
-세트: `hand_left_pinch`, `hand_left_open`, `hand_right_pinch`, `hand_right_open`, `arrow_forward`, `arrow_forward_full`, `arrow_left`, `arrow_right`, `spread`, `stop`, `flag_checkpoint`, `flag_finish`, `play`, `pause`, `restart`, `hand_missing`, 그리고 미니맵용 `minimap_start_flag`, `minimap_checkpoint_1~3`. 한 장 미리보기는 `Design/icons/_sheet.png`다.
+세트: `hand_left_pinch`, `hand_left_open`, `hand_right_pinch`, `hand_right_open`, `arrow_forward`, `arrow_reverse`(후진, `ui-magenta`), `arrow_left`, `arrow_right`, `pinch_in`(모으기 = 전진), `spread`(벌리기 = 후진), `stop`, `flag_checkpoint`, `flag_finish`, `play`, `pause`, `restart`, `hand_missing`, 그리고 미니맵용 `minimap_start_flag`, `minimap_checkpoint_1~3`. 한 장 미리보기는 `Design/icons/_sheet.png`다.
 
 **카트 그림(결정 20-1)**
 

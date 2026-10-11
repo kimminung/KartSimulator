@@ -12,7 +12,7 @@ const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const ICONS = path.join(REPO, "Design/icons"), ONB = path.join(REPO, "Design/onboarding");
 for (const d of [ICONS, ONB]) fs.mkdirSync(d, { recursive: true });
 // Design/style-guide.md: RetireX UI colours (ink, cyan, warn) and kart colours (kart = marker 1 red, white 15, black 0)
-const PAL = { ink: "#F2F9FF", cyan: "#00F6F9", warn: "#FF3236", kart: "#EE4949", white: "#F1F2EE", dark: "#252934", night: "#000918" };
+const PAL = { ink: "#F2F9FF", cyan: "#00F6F9", magenta: "#FF5CD6", warn: "#FF3236", kart: "#EE4949", white: "#F1F2EE", dark: "#252934", night: "#000918" };
 
 // mask rows: '#' = pixel; returns <rect>s merged per row run
 function rects(mask, s = 1, ox = 0, oy = 0, fill = "currentColor") {
@@ -89,6 +89,7 @@ const pinchDot = (x, y, fill = "currentColor") => `<rect x="${x}" y="${y}" width
 const R = (x, y, w, h) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="currentColor"/>`;
 // filled pixel arrow heads (5 rows, 2 px tip widening by 2 per row) on the 24 grid
 const HEAD_UP = (y) => [0, 1, 2, 3, 4].map((i) => R(11 - i, y + i, 2 + 2 * i, 1)).join("");
+const HEAD_DOWN = (y) => [0, 1, 2, 3, 4].map((i) => R(11 - i, y - i, 2 + 2 * i, 1)).join("");
 const HEAD_LEFT = (yc) => [0, 1, 2, 3, 4].map((i) => R(3 + i, yc + 1 - 1 - i, 1, 2 + 2 * i)).join("");
 const HEAD_RIGHT = (yc) => [0, 1, 2, 3, 4].map((i) => R(20 - i, yc - i, 1, 2 + 2 * i)).join("");
 const ICON = {
@@ -97,10 +98,11 @@ const ICON = {
   hand_right_open: rects(mirror(HAND_OPEN_L)),
   hand_right_pinch: rects(mirror(HAND_PINCH_L)) + pinchDot(8, 3),
   arrow_forward: HEAD_UP(3) + R(11, 8, 2, 13),
-  arrow_forward_full: HEAD_UP(2) + HEAD_UP(8) + R(11, 13, 2, 8),
+  arrow_reverse: HEAD_DOWN(20) + R(11, 3, 2, 13), // pedal < 0 (decision 31: pinch out = reverse)
   arrow_left: HEAD_LEFT(9) + R(8, 9, 8, 2) + R(14, 11, 2, 10),
   arrow_right: HEAD_RIGHT(9) + R(8, 9, 8, 2) + R(8, 11, 2, 10),
-  spread: R(4, 11, 16, 2) + R(4, 9, 2, 6) + R(18, 9, 2, 6) + R(6, 7, 2, 2) + R(6, 15, 2, 2) + R(16, 7, 2, 2) + R(16, 15, 2, 2),
+  spread: R(4, 11, 16, 2) + R(4, 9, 2, 6) + R(18, 9, 2, 6) + R(6, 7, 2, 2) + R(6, 15, 2, 2) + R(16, 7, 2, 2) + R(16, 15, 2, 2), // pinch out: hands apart -> reverse
+  pinch_in: R(2, 11, 7, 2) + R(7, 9, 2, 6) + R(5, 7, 2, 2) + R(5, 15, 2, 2) + R(15, 11, 7, 2) + R(15, 9, 2, 6) + R(17, 7, 2, 2) + R(17, 15, 2, 2) + R(11, 6, 2, 12), // hands together -> forward
   stop: R(6, 6, 12, 12),
   flag_checkpoint: R(5, 3, 2, 18) + R(7, 3, 12, 2) + R(7, 5, 10, 2) + R(7, 7, 12, 2) + R(7, 9, 10, 2) + R(3, 19, 6, 2),
   flag_finish: R(5, 3, 2, 18) + R(7, 3, 3, 3) + R(13, 3, 3, 3) + R(10, 6, 3, 3) + R(16, 6, 3, 3) + R(7, 9, 3, 3) + R(13, 9, 3, 3) + `<rect x="7" y="3" width="12" height="9" fill="none" stroke="currentColor" stroke-width="1"/>` + R(3, 19, 6, 2),
@@ -136,12 +138,17 @@ const arrowH = (x, y, w, dir) => `<rect x="${x}" y="${y}" width="${w}" height="4
 const turnArrow = (x, y, dir) => dir === "l"
   ? `<path d="M${x + 14} ${y + 26} V${y + 8} H${x}" fill="none" stroke="${PAL.cyan}" stroke-width="4"/><polygon points="${x - 6},${y + 8} ${x + 2},${y} ${x + 2},${y + 16}" fill="${PAL.cyan}"/>`
   : `<path d="M${x} ${y + 26} V${y + 8} H${x + 14}" fill="none" stroke="${PAL.cyan}" stroke-width="4"/><polygon points="${x + 20},${y + 8} ${x + 12},${y} ${x + 12},${y + 16}" fill="${PAL.cyan}"/>`;
+const kartUp = `<polygon points="120,160 112,172 128,172" fill="${PAL.cyan}"/>`, kartDown = `<polygon points="120,238 112,226 128,226" fill="${PAL.magenta}"/>`;
+// pinch in (hands close, arrows point inward) = forward; pinch out (hands wide, arrows outward) = reverse
 const G = {
-  gesture_01_forward: hand(HAND_PINCH_L, 8, 20, [13, 3]) + hand(mirror(HAND_PINCH_L), 136, 20, [10, 3]) + arrowH(82, 70, 76, "lr") + kartSvg(96, 176, 0) + `<polygon points="120,160 112,172 128,172" fill="${PAL.cyan}"/>`,
-  gesture_02_left: hand(HAND_PINCH_L, 8, 20, [13, 3]) + hand(mirror(HAND_OPEN_L), 136, 20) + kartSvg(96, 176, -30) + turnArrow(56, 150, "l"),
-  gesture_03_right: hand(HAND_OPEN_L, 8, 20) + hand(mirror(HAND_PINCH_L), 136, 20, [10, 3]) + kartSvg(96, 176, 30) + turnArrow(166, 150, "r"),
-  gesture_04_stop: hand(HAND_OPEN_L, 8, 20) + hand(mirror(HAND_OPEN_L), 136, 20) + kartSvg(96, 176, 0) + `<rect x="152" y="188" width="24" height="24" fill="${PAL.ink}"/>`,
+  gesture_01_forward: hand(HAND_PINCH_L, 36, 20, [13, 3]) + hand(mirror(HAND_PINCH_L), 108, 20, [10, 3]) + arrowH(48, 132, 48, "r") + arrowH(144, 132, 48, "l") + kartSvg(96, 176, 0) + kartUp,
+  gesture_02_reverse: hand(HAND_PINCH_L, -12, 20, [13, 3]) + hand(mirror(HAND_PINCH_L), 156, 20, [10, 3]) + arrowH(76, 132, 30, "l").replaceAll(PAL.cyan, PAL.magenta) + arrowH(134, 132, 30, "r").replaceAll(PAL.cyan, PAL.magenta) + kartSvg(96, 172, 0) + kartDown,
+  gesture_03_left: hand(HAND_PINCH_L, 8, 20, [13, 3]) + hand(mirror(HAND_OPEN_L), 136, 20) + kartSvg(96, 176, -30) + turnArrow(56, 150, "l"),
+  gesture_04_right: hand(HAND_OPEN_L, 8, 20) + hand(mirror(HAND_PINCH_L), 136, 20, [10, 3]) + kartSvg(96, 176, 30) + turnArrow(166, 150, "r"),
+  gesture_05_stop: hand(HAND_OPEN_L, 8, 20) + hand(mirror(HAND_OPEN_L), 136, 20) + kartSvg(96, 176, 0) + `<rect x="152" y="188" width="24" height="24" fill="${PAL.ink}"/>`,
 };
+for (const old of ["gesture_02_left", "gesture_03_right", "gesture_04_stop"]) fs.rmSync(path.join(ONB, old + ".svg"), { force: true });
+fs.rmSync(path.join(ICONS, "icon_arrow_forward_full.svg"), { force: true });
 for (const [name, body] of Object.entries(G)) fs.writeFileSync(path.join(ONB, `${name}.svg`), `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240" shape-rendering="crispEdges"><title>${name}</title>${body}</svg>\n`);
 
 // ---- previews (need sharp)
@@ -154,14 +161,14 @@ if (sharp) {
   names.forEach((f, i) => {
     const x = (i % cols) * cell, y = Math.floor(i / cols) * cell;
     const inner = fs.readFileSync(path.join(ICONS, f), "utf8").replace(/<\?xml[^>]*>/, "").replace(/<svg[^>]*>/, "").replace("</svg>", "").replace(/<title>.*?<\/title>/, "");
-    const col = /checkpoint_2/.test(f) ? PAL.cyan : /checkpoint/.test(f) ? "rgba(255,255,255,0.4)" : /pinch/.test(f) ? PAL.cyan : /missing/.test(f) ? PAL.warn : PAL.ink;
+    const col = /checkpoint_2/.test(f) ? PAL.cyan : /checkpoint/.test(f) ? "rgba(255,255,255,0.4)" : /pinch/.test(f) ? PAL.cyan : /missing/.test(f) ? PAL.warn : /reverse|spread/.test(f) ? PAL.magenta : PAL.ink;
     sheet += `<g transform="translate(${x + 39} ${y + 22}) scale(3)" color="${col}" style="color:${col}">${inner}</g><text x="${x + cell / 2}" y="${y + 120}" font-family="Segoe UI" font-size="11" fill="#c8d2dc" text-anchor="middle">${f.replace("icon_", "").replace(".svg", "")}</text>`;
   });
   sheet += "</svg>";
   await sharp(Buffer.from(sheet)).png().toFile(path.join(ICONS, "_sheet.png"));
   const g = Object.keys(G);
   let gs = `<svg xmlns="http://www.w3.org/2000/svg" width="${g.length * 260}" height="300"><rect width="100%" height="100%" fill="#010B1A"/>`;
-  const caption = ["양손을 핀치하고 벌리면 전진", "왼손만 핀치하면 좌회전", "오른손만 핀치하면 우회전", "양손을 떼면 멈춤"];
+  const caption = ["양손을 모을수록 빨리 전진", "양손을 벌릴수록 빨리 후진", "왼손만 핀치하면 좌회전", "오른손만 핀치하면 우회전", "양손을 떼면 멈춤"];
   g.forEach((n, i) => { const inner = fs.readFileSync(path.join(ONB, n + ".svg"), "utf8").replace(/<svg[^>]*>/, "").replace("</svg>", "").replace(/<title>.*?<\/title>/, ""); gs += `<g transform="translate(${i * 260 + 10} 10)">${inner}</g><text x="${i * 260 + 130}" y="280" font-family="Malgun Gothic" font-size="15" fill="#e6edf3" text-anchor="middle">${caption[i]}</text>`; });
   gs += "</svg>";
   await sharp(Buffer.from(gs)).png().toFile(path.join(ONB, "_sheet.png"));
