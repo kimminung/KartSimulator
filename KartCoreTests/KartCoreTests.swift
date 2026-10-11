@@ -541,3 +541,55 @@ struct OffTrackMonitorTests {
         #expect(monitor.shouldRespawn == false)
     }
 }
+
+// MARK: - 카트 정면 보정 (결정 27·29·42): "front" 마커 방향을 주행 수학의 정면 축(로컬 -Z)으로 보낸다
+
+struct KartForwardCorrectionTests {
+    private func rotated(_ x: Float, _ z: Float) -> SIMD2<Float>? {
+        guard let angle = KartForwardCorrection.angle(noseX: x, noseZ: z) else { return nil }
+        return KartForwardCorrection.rotatedXZ(noseX: x, noseZ: z, by: angle)
+    }
+
+    private func isMinusZ(_ v: SIMD2<Float>?) -> Bool {
+        guard let v else { return false }
+        return abs(v.x) < 1e-4 && abs(v.y + 1) < 1e-4
+    }
+
+    /// 이 로스터의 실제 상황: `front_aero` 마커가 로컬 +Z(0, 0.24, 1.41)에 있다 → 180도 보정이어야 한다.
+    @Test func noseOnPlusZNeedsHalfTurn() {
+        let angle = KartForwardCorrection.angle(noseX: 0, noseZ: 1.41)
+        #expect(angle != nil)
+        #expect(abs(abs(angle!) - .pi) < 1e-4)
+        #expect(isMinusZ(rotated(0, 1.41)))
+    }
+
+    /// 이미 -Z가 정면인 모델은 보정이 0이어야 한다.
+    @Test func noseOnMinusZNeedsNoRotation() {
+        let angle = KartForwardCorrection.angle(noseX: 0, noseZ: -2)
+        #expect(angle != nil)
+        #expect(abs(angle!) < 1e-4)
+        #expect(isMinusZ(rotated(0, -2)))
+    }
+
+    /// 옆으로 export된 모델(+X / -X 정면)도 -Z로 보내야 한다.
+    @Test func noseOnSideAxesEndsUpOnMinusZ() {
+        #expect(isMinusZ(rotated(1, 0)))
+        #expect(isMinusZ(rotated(-1, 0)))
+        #expect(isMinusZ(rotated(0.7, 0.7)))
+    }
+
+    /// 보정 뒤의 정면(-Z)은 heading 0일 때 `KartMotionState`가 나아가는 방향과 같아야 한다.
+    @Test func correctedNoseMatchesMotionForwardAtHeadingZero() {
+        var motion = KartMotionState(speed: 1, heading: 0, position: .zero)
+        motion = motion.advancing(drive: .pedal(1.0), tuning: MotionTuning(), deltaTime: 1)
+        let moved = SIMD2<Float>(motion.position.x, motion.position.z)
+        let nose = rotated(0, 1.41)!
+        // 같은 방향(내적 > 0)이고 X 성분은 0
+        #expect(moved.y < 0 && abs(moved.x) < 1e-4)
+        #expect(nose.x * moved.x + nose.y * moved.y > 0)
+    }
+
+    @Test func degenerateNoseReturnsNil() {
+        #expect(KartForwardCorrection.angle(noseX: 0, noseZ: 0) == nil)
+    }
+}

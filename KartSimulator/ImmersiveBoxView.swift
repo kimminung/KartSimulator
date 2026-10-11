@@ -29,6 +29,11 @@ struct ImmersiveBoxView: View {
     @State private var wasAgainstWall = false
     @State private var trackDisplayScale: Float = 1
     @State private var trackWorldCenter: SIMD2<Float> = .zero
+    /// 트랙 월드 좌표 → 박스 표시 좌표로 옮길 때 Y축으로 추가 회전하는 각도(라디안). 트랙 JSON의 출발
+    /// 방향은 랩·체크포인트 판정이 따르는 기준이라 건드리지 않고, 대신 **박스 안의 트랙 전체를 180°
+    /// 돌려** 사용자 쪽에서 볼 때 카트가 반대쪽을 보고 출발하게 한다(결정 43번). `worldToDisplay`·
+    /// 타일 회전·`kartSlot` 회전에 모두 같은 값을 더하고, 1인칭 머리 방향은 같은 값을 빼서 트랙 좌표로 되돌린다.
+    private let trackDisplayYaw: Float = .pi
     @State private var raceModel = RaceModel()
     @State private var tileLibrary = TrackTileLibrary()
 
@@ -368,13 +373,17 @@ struct ImmersiveBoxView: View {
         let display = worldToDisplay(worldCenter)
         entity.scale = SIMD3(repeating: trackDisplayScale)
         entity.position = SIMD3(display.x, floorY, display.y)
-        entity.orientation = simd_quatf(angle: rotationDegrees * .pi / 180, axis: [0, 1, 0])
+        entity.orientation = simd_quatf(angle: rotationDegrees * .pi / 180 + trackDisplayYaw, axis: [0, 1, 0])
         parent.addChild(entity)
     }
 
-    /// 트랙 월드 좌표(XZ, 미터)를 박스 바닥의 표시 좌표로 변환한다.
+    /// 트랙 월드 좌표(XZ, 미터)를 박스 바닥의 표시 좌표로 변환한다: 트랙 중심 기준으로 옮기고,
+    /// `trackDisplayYaw`만큼 Y축 회전(R_y(ψ)·(x, z) = (x cosψ + z sinψ, -x sinψ + z cosψ))한 뒤 배율.
     private func worldToDisplay(_ worldXZ: SIMD2<Float>) -> SIMD2<Float> {
-        (worldXZ - trackWorldCenter) * trackDisplayScale
+        let local = worldXZ - trackWorldCenter
+        let c = cos(trackDisplayYaw), s = sin(trackDisplayYaw)
+        let rotated = SIMD2<Float>(local.x * c + local.y * s, -local.x * s + local.y * c)
+        return rotated * trackDisplayScale
     }
 
     /// 디버그 전용: 박스 바닥 표시 좌표 두 점을 빨간 막대 하나로 이어 붙인다(경로 누적용).
@@ -400,8 +409,8 @@ struct ImmersiveBoxView: View {
     /// 헤드 앵커 위치에 구슬을, 기기 정면 방향으로 막대를 띄운다(디버그 시각화, 결정 21번).
     /// 1인칭 모드에서는 여기서 구한 정면 방향이 그대로 조향 입력(`desiredHeading`)이 된다 —
     /// "아이트래킹"이라고 불러왔지만 실제로는 머리(기기) 방향이다(결정 39 기술 노트). `rootEntity`가
-    /// 회전 없이 평행이동만 하므로 씬 좌표축이 트랙 좌표축과 그대로 일치해서, 변환 없이 바로
-    /// `motion.heading`과 같은 공식(`forward = (-sin(h), 0, -cos(h))`)으로 뒤집어 쓸 수 있다.
+    /// 회전 없이 평행이동만 하므로 여기서 돌려주는 값은 **씬(표시) 좌표계** heading이다 — 트랙 좌표계로
+    /// 쓰려면 `tickMotion`에서 `trackDisplayYaw`를 빼야 한다(결정 43번).
     @MainActor
     @discardableResult
     private func updateHeadDebugGizmo() -> Float? {
@@ -428,7 +437,9 @@ struct ImmersiveBoxView: View {
         let now = CACurrentMediaTime()
         let (drive, leftStatus, rightStatus) = inputResolver.resolve(now: now, mode: mode)
         let tuning = MotionTuning().applying(track.tuning)
-        motion = motion.advancing(drive: drive, desiredHeading: mode == .firstPerson ? desiredHeading : nil, tuning: tuning, deltaTime: deltaTime)
+        // 머리 방향은 씬(표시) 좌표계 기준이라, 표시 회전 `trackDisplayYaw`를 빼서 트랙 좌표계 heading으로 되돌린다.
+        let trackSpaceDesiredHeading = desiredHeading.map { $0 - trackDisplayYaw }
+        motion = motion.advancing(drive: drive, desiredHeading: mode == .firstPerson ? trackSpaceDesiredHeading : nil, tuning: tuning, deltaTime: deltaTime)
 
         let positionXZ = SIMD2(motion.position.x, motion.position.z)
         let (pathIndex, distanceFromCenterline, projectedOnCenterline) = trackPath.closestSegment(to: positionXZ)
@@ -520,7 +531,7 @@ struct ImmersiveBoxView: View {
         let display = worldToDisplay(positionXZ)
         kartSlot.position.x = display.x
         kartSlot.position.z = display.y
-        kartSlot.orientation = simd_quatf(angle: motion.heading, axis: [0, 1, 0])
+        kartSlot.orientation = simd_quatf(angle: motion.heading + trackDisplayYaw, axis: [0, 1, 0])
 
         // 디버그: 실제로 이동한 거리를 빨간 선으로 쌓고, 콘솔에도 주기적으로 남긴다.
         if let last = lastTrailDisplayPoint {
@@ -541,25 +552,24 @@ struct ImmersiveBoxView: View {
     }
 
     /// 카트 계층에서 이름에 "front"가 들어간 자식 엔티티(Reality Composer Pro에서 차량 앞을
-    /// 표시해 둔 마커)를 찾아, 필요한 Y축 보정 각도를 계산한다. 마커가 없으면 `fallbackDegrees`를 그대로 쓴다.
+    /// 표시해 둔 마커)를 찾아, 그 방향을 주행 수학의 정면 축인 로컬 **-Z**로 보내는 Y축 보정 각도를
+    /// 계산한다(`KartForwardCorrection`, 결정 29·42번). 마커가 없으면 `fallbackDegrees`를 그대로 쓴다.
     ///
-    /// 처음엔 "마커 위치가 로컬 -Z를 향하게" 맞췄는데(결정 29번), 실기기에서 보면 차가 계속 뒤로
-    /// 달리는 것처럼 보였다 — `front_aero` 마커가 로컬 +Z에 있는 걸 보고 180도를 줬지만, 그게
-    /// 오히려 반대였던 것. 사용자가 실기기로 확인하고 "앞뒤를 반대로"라고 확정해 줘서, 목표를
-    /// -Z에서 +Z로 뒤집었다(결정 32번) — 즉 지금은 "마커 위치가 로컬 +Z를 향하게" 맞춘다.
+    /// 결정 32번에서 목표를 +Z로 뒤집었던 적이 있는데, 그건 손 좌표 변환 버그(결정 33번)로 카트가
+    /// 실제로 후진하던 것을 모델이 뒤집힌 것으로 오인한 수정이었다. 실기기에서 "뒷부분부터 전진"으로
+    /// 다시 보고되어 -Z로 되돌렸다(결정 42번). 공식은 `KartCoreTests`가 세 축으로 고정한다.
     private func frontCorrectionAngle(for entity: Entity, fallbackDegrees: Float) -> Float {
         guard let front = findDescendant(in: entity, nameContains: "front") else {
             print("DEBUG-FRONT 'front' 이름의 자식을 못 찾음 — fallback \(fallbackDegrees)도 사용")
             return fallbackDegrees * .pi / 180
         }
         let nose = front.position(relativeTo: entity)
-        guard simd_length(SIMD2(nose.x, nose.z)) > 0.0001 else {
+        guard let angle = KartForwardCorrection.angle(noseX: nose.x, noseZ: nose.z) else {
             print("DEBUG-FRONT '\(front.name)' 위치가 원점과 거의 같아 방향을 못 구함 — fallback \(fallbackDegrees)도 사용")
             return fallbackDegrees * .pi / 180
         }
-        // R(φ)·(nose.x, 0, nose.z) = (0, 0, +1)이 되는 φ.
-        let angle = atan2(nose.z, nose.x) - Float.pi / 2
-        print("DEBUG-FRONT '\(front.name)' 위치=\(nose) → 보정 \(angle * 180 / .pi)도")
+        let after = KartForwardCorrection.rotatedXZ(noseX: nose.x, noseZ: nose.z, by: angle)
+        print("DEBUG-FRONT '\(front.name)' 위치=\(nose) → 보정 \(angle * 180 / .pi)도, 보정 후 nose XZ=\(after) (목표 (0, -1))")
         return angle
     }
 
@@ -588,11 +598,10 @@ struct ImmersiveBoxView: View {
         do {
             let entity = try await Entity(contentsOf: url)
             await KartMaterialPainter.applyColor(colorID, kart: kart, to: entity)
-            // 전진 입력인데 카트가 뒤로 달리던 문제: 주행 로직은 `kartSlot.orientation`을 "모델의
-            // 정면은 로컬 -Z"라는 전제로 돌린다(결정 27번). 처음엔 고정 180도로 보정했는데, Reality
-            // Composer Pro에서 내보낸 계층을 보면 차량 앞을 가리키는 "front"라는 이름의 자식 엔티티가
-            // 실제로 들어 있다 — 그 위치를 읽어서 보정 각도를 모델마다 자동으로 계산한다(결정 29번).
-            // 못 찾으면 `KartModel.modelForwardCorrectionDegrees`(기본 180도)로 돌아간다.
+            // 주행 로직은 `kartSlot.orientation`을 "모델의 정면은 로컬 -Z"라는 전제로 돌린다(결정 27번).
+            // Reality Composer Pro에서 내보낸 계층에는 차량 앞을 가리키는 "front"라는 이름의 자식
+            // 엔티티가 들어 있어, 그 위치를 읽어서 보정 각도를 모델마다 자동으로 계산한다(결정 29·42번).
+            // 못 찾으면 `KartModel.modelForwardCorrectionDegrees`(이 로스터는 +Z가 정면이라 180도)로 돌아간다.
             entity.orientation = simd_quatf(
                 angle: frontCorrectionAngle(for: entity, fallbackDegrees: kart.modelForwardCorrectionDegrees),
                 axis: [0, 1, 0]

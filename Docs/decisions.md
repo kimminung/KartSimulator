@@ -314,3 +314,25 @@
   - `ContentView`: 모드별로 따로 있던 `DioramaOnboardingContent`/`FirstPersonOnboardingContent`/`ThirdPersonOnboardingContent`와 `SymbolInstructionCard`를 하나의 `GestureInstruction.gestures(for:)` 표 + `GestureInstructionGrid`로 합쳤다. 캡션은 디자인 `_sheet.png`·PRD 9장 표와 글자 그대로 같다. 그림 아래 한 줄 안내(`footnote(for:)`)를 모드별로 두어, 디오라마의 옛 "양손 사이 약 40 cm = 중립" 문구를 "기준은 핀치를 시작한 순간의 손 간격" 설명으로 대체했다(결정 39의 상대 드래그).
 - **확인**: visionOS 시뮬레이터 destination으로 빌드 통과. 코드 로직 변경은 없고 UI 자료만 바뀌어 `KartCoreTests`에는 영향 없음.
 - **영향받는 절**: `Docs/TechTask.md` M5 조작법 항목, `ContentView.swift`, `Assets.xcassets/Onboarding/`, PR #15(Dev→main)에 커밋 추가
+
+## 42. [테크] 카트 정면 보정 방향 되돌림: 결정 32는 오진이었다 — "front" 마커를 다시 로컬 -Z로
+
+- **날짜**: 2026-10-11
+- **증상**: 실기기에서 전진 입력을 주면 카트가 **뒷부분부터** 이동한다(이동 방향과 모델이 바라보는 방향이 반대). 모드 3종 Phase 1(결정 39) 이후 디오라마는 양손 핀치 즉시 `pedal(1.0)`이라 전진이 분명한데도 그랬다.
+- **원인**: 주행 수학은 "모델 정면 = 로컬 -Z"를 전제로 한다(`forward = (-sin h, 0, -cos h)`와 `kartSlot.orientation = R_y(h)`가 그 전제에서만 일치, 결정 27번). 결정 29번의 `frontCorrectionAngle`은 "front" 마커를 -Z로 보내는 올바른 공식(`φ = π/2 + atan2(nose.z, nose.x)`)이었는데, 결정 32번에서 이를 +Z 목표로 뒤집었다. 그 시점에는 **손 좌표가 scene 좌표로 변환되지 않아**(결정 33번, 바로 다음 수정) 카트가 실제로 후진하고 있었고, 그걸 "모델이 뒤집혀 보인다"로 오인해 모델 쪽을 뒤집은 것이다. 결정 33으로 입력이 정상이 되자 이번엔 모델이 반대로 남았다. 이 로스터의 `front_aero` 마커는 로컬 +Z(0, 0.24, 1.41)에 있으므로 올바른 보정은 180도이고, 결정 32의 공식은 0도를 내고 있었다.
+- **수정**:
+  - 공식을 `KartCore/KartForwardCorrection.swift`(신규, 플랫폼 독립)로 빼고 결정 29의 -Z 목표로 되돌렸다. `ImmersiveBoxView.frontCorrectionAngle`은 이 함수를 쓰고, `DEBUG-FRONT` 로그에 "보정 후 nose XZ(목표 (0, -1))"를 같이 찍는다.
+  - `KartModel.modelForwardCorrectionDegrees` fallback을 0 → 180으로 되돌렸다(마커가 있으면 쓰이지 않음).
+  - `KartCoreTests`에 `KartForwardCorrectionTests` 5개 추가: +Z 마커 → 180도, -Z → 0도, ±X·대각선 → 모두 -Z로 수렴, 보정 뒤 정면이 heading 0에서 `KartMotionState`가 나아가는 방향과 일치, 영벡터 → nil. 다시는 눈대중으로 뒤집지 않도록 수학으로 고정.
+- **교훈**: 입력(핸드 트래킹)과 표시(모델 축) 두 군데가 동시에 의심될 때는 `DEBUG-MOTION`의 `speed` 부호와 `pos` 변화로 입력부터 확정한 뒤 모델을 건드린다. 결정 32는 그 순서를 지키지 않았다.
+- **확인**: visionOS 시뮬레이터 빌드 + `KartCoreTests` 통과(기존 `EngineSoundMachineTests` 5개 실패는 그대로). 실기기 확인은 사용자 몫 — "전진 시 카트 앞부분이 먼저 나가는지".
+- **영향받는 절**: 결정 32번(폐기), `KartCore/KartForwardCorrection.swift`(신규), `ImmersiveBoxView.frontCorrectionAngle`, `KartCatalog.modelForwardCorrectionDegrees`, `KartCoreTests`
+
+## 43. [테크] 디오라마 출발 방향 반전 — 트랙 JSON이 아니라 박스 표시를 180° 돌림
+
+- **날짜**: 2026-10-11
+- **요청**: 결정 42 확인 뒤 "디오라마 모드 시작 시 차량이 반대쪽을 바라보고 시작되면 좋겠다".
+- **선택지**: (a) `track.start.heading`을 π 더하기 → 랩·체크포인트 판정이 경로 진행 방향을 따르므로 트랙을 거꾸로 도는 셈이 되어 `LapTracker`가 깨진다. (b) 트랙 JSON을 역방향으로 다시 생성 → 생성·검증 스크립트와 체크포인트 순서까지 손대야 한다. (c) **박스 안의 트랙 표시 전체를 180° 돌리기** → 주행·랩 로직은 트랙 좌표계 그대로, 사용자 쪽에서 보이는 것만 바뀐다. (c)를 골랐다.
+- **구현**: `ImmersiveBoxView.trackDisplayYaw = π`. `worldToDisplay`가 트랙 중심 기준으로 R_y(ψ) 회전을 거친 뒤 배율을 곱하고, 타일 회전과 `kartSlot.orientation`에 같은 ψ를 더한다(표시 벡터 R_y(ψ)R_y(h)(-Z) = R_y(h+ψ)(-Z)). 1인칭의 머리 방향은 씬 좌표계 값이라 `tickMotion`에서 ψ를 빼 트랙 좌표계로 되돌린다 — 고개를 돌린 쪽으로 카트가 도는 관계는 그대로다. 디버그 트레일은 표시 좌표를 쓰므로 자동으로 따라온다. 리스폰은 트랙 좌표라 영향 없음.
+- **확인**: visionOS 시뮬레이터 빌드 통과. `KartCoreTests`는 트랙 좌표계 로직만 다뤄 영향 없음. 실기기 확인: 출발 시 카트가 이전과 반대쪽을 보는지, 1인칭에서 고개 돌린 쪽으로 카트가 도는지.
+- **영향받는 절**: `ImmersiveBoxView`(`trackDisplayYaw`, `worldToDisplay`, `placeTile`, `tickMotion`), README 사용법("좌/우는 카트 기준" 설명은 그대로 유효)

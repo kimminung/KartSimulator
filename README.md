@@ -8,6 +8,14 @@
 | ![카트 선택 메뉴](Docs/review/pr14-device-screenshots/03-kart-select-menu.png) | ![박스 디오라마](Docs/review/pr14-device-screenshots/01-box-overview-wide.png) | ![주행](Docs/review/pr14-device-screenshots/06-driving-close.png) |
 | 카트 5종 × 도색 17색을 고르는 메뉴 | 눈앞에 열리는 0.7 × 0.4 × 0.7 m 박스 디오라마 | 타일 트랙 위를 달리는 카트 (실기기 캡처) |
 
+### 실기기 시연 영상
+
+Apple Vision Pro 실기기에서 Phase 1을 플레이한 영상입니다. 썸네일을 누르면 YouTube로 이동합니다.
+
+[![비전프로 카트 시뮬레이터 프로젝트 — 실기기 시연 (YouTube)](Docs/review/demo-video-thumb.jpg)](https://youtu.be/Xv__kSJXJ0I)
+
+▶ https://youtu.be/Xv__kSJXJ0I
+
 > **현재 단계: Phase 1** — 운전 모드 3종(디오라마·1인칭·3인칭)의 입력·조향 로직까지 완성. 다음 단계(Phase 2)는 1인칭 모드에서 트랙을 실제 크기로 키우고 카트를 머리 위치에 고정하는 "콕핏" 연출입니다.
 
 | 플랫폼 | 언어·프레임워크 | 테스트 | 상태 |
