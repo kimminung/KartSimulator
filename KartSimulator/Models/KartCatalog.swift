@@ -11,11 +11,11 @@ struct KartModel: Identifiable, Hashable {
     let displayName: String
     let usdzResourceName: String
     let colorOptions: [KartColorOption]
-    /// "front" 이름 마커를 못 찾았을 때만 쓰는 보정값(도). 실기기 확인 결과 이 로스터는 마커가
-    /// 로컬 +Z를 향한 상태가 정방향이라, 마커를 못 찾는 경우도 일단 보정 없음(0)으로 둔다
-    /// (`ImmersiveBoxView.frontCorrectionAngle`, 결정 32번). 실기기에서 "카트가 뒤로 달린다"로
-    /// 보이면 이 값을 조정한다.
-    let modelForwardCorrectionDegrees: Float = 0
+    /// "front" 이름 마커를 못 찾았을 때만 쓰는 보정값(도). 이 로스터는 정면을 로컬 +Z로 export했고
+    /// 주행 수학은 정면 = 로컬 -Z를 전제로 하므로 180도가 맞다(결정 27·42번). 결정 32번에서 0으로
+    /// 바꿨던 것은 손 좌표 버그(결정 33번)로 인한 오진이었다. 마커가 있으면 이 값은 쓰이지 않는다
+    /// (`ImmersiveBoxView.frontCorrectionAngle` → `KartForwardCorrection`).
+    let modelForwardCorrectionDegrees: Float = 180
 
     var hasColorVariants: Bool { !colorOptions.isEmpty }
 }

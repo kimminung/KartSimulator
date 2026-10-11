@@ -541,25 +541,24 @@ struct ImmersiveBoxView: View {
     }
 
     /// 카트 계층에서 이름에 "front"가 들어간 자식 엔티티(Reality Composer Pro에서 차량 앞을
-    /// 표시해 둔 마커)를 찾아, 필요한 Y축 보정 각도를 계산한다. 마커가 없으면 `fallbackDegrees`를 그대로 쓴다.
+    /// 표시해 둔 마커)를 찾아, 그 방향을 주행 수학의 정면 축인 로컬 **-Z**로 보내는 Y축 보정 각도를
+    /// 계산한다(`KartForwardCorrection`, 결정 29·42번). 마커가 없으면 `fallbackDegrees`를 그대로 쓴다.
     ///
-    /// 처음엔 "마커 위치가 로컬 -Z를 향하게" 맞췄는데(결정 29번), 실기기에서 보면 차가 계속 뒤로
-    /// 달리는 것처럼 보였다 — `front_aero` 마커가 로컬 +Z에 있는 걸 보고 180도를 줬지만, 그게
-    /// 오히려 반대였던 것. 사용자가 실기기로 확인하고 "앞뒤를 반대로"라고 확정해 줘서, 목표를
-    /// -Z에서 +Z로 뒤집었다(결정 32번) — 즉 지금은 "마커 위치가 로컬 +Z를 향하게" 맞춘다.
+    /// 결정 32번에서 목표를 +Z로 뒤집었던 적이 있는데, 그건 손 좌표 변환 버그(결정 33번)로 카트가
+    /// 실제로 후진하던 것을 모델이 뒤집힌 것으로 오인한 수정이었다. 실기기에서 "뒷부분부터 전진"으로
+    /// 다시 보고되어 -Z로 되돌렸다(결정 42번). 공식은 `KartCoreTests`가 세 축으로 고정한다.
     private func frontCorrectionAngle(for entity: Entity, fallbackDegrees: Float) -> Float {
         guard let front = findDescendant(in: entity, nameContains: "front") else {
             print("DEBUG-FRONT 'front' 이름의 자식을 못 찾음 — fallback \(fallbackDegrees)도 사용")
             return fallbackDegrees * .pi / 180
         }
         let nose = front.position(relativeTo: entity)
-        guard simd_length(SIMD2(nose.x, nose.z)) > 0.0001 else {
+        guard let angle = KartForwardCorrection.angle(noseX: nose.x, noseZ: nose.z) else {
             print("DEBUG-FRONT '\(front.name)' 위치가 원점과 거의 같아 방향을 못 구함 — fallback \(fallbackDegrees)도 사용")
             return fallbackDegrees * .pi / 180
         }
-        // R(φ)·(nose.x, 0, nose.z) = (0, 0, +1)이 되는 φ.
-        let angle = atan2(nose.z, nose.x) - Float.pi / 2
-        print("DEBUG-FRONT '\(front.name)' 위치=\(nose) → 보정 \(angle * 180 / .pi)도")
+        let after = KartForwardCorrection.rotatedXZ(noseX: nose.x, noseZ: nose.z, by: angle)
+        print("DEBUG-FRONT '\(front.name)' 위치=\(nose) → 보정 \(angle * 180 / .pi)도, 보정 후 nose XZ=\(after) (목표 (0, -1))")
         return angle
     }
 
@@ -588,11 +587,10 @@ struct ImmersiveBoxView: View {
         do {
             let entity = try await Entity(contentsOf: url)
             await KartMaterialPainter.applyColor(colorID, kart: kart, to: entity)
-            // 전진 입력인데 카트가 뒤로 달리던 문제: 주행 로직은 `kartSlot.orientation`을 "모델의
-            // 정면은 로컬 -Z"라는 전제로 돌린다(결정 27번). 처음엔 고정 180도로 보정했는데, Reality
-            // Composer Pro에서 내보낸 계층을 보면 차량 앞을 가리키는 "front"라는 이름의 자식 엔티티가
-            // 실제로 들어 있다 — 그 위치를 읽어서 보정 각도를 모델마다 자동으로 계산한다(결정 29번).
-            // 못 찾으면 `KartModel.modelForwardCorrectionDegrees`(기본 180도)로 돌아간다.
+            // 주행 로직은 `kartSlot.orientation`을 "모델의 정면은 로컬 -Z"라는 전제로 돌린다(결정 27번).
+            // Reality Composer Pro에서 내보낸 계층에는 차량 앞을 가리키는 "front"라는 이름의 자식
+            // 엔티티가 들어 있어, 그 위치를 읽어서 보정 각도를 모델마다 자동으로 계산한다(결정 29·42번).
+            // 못 찾으면 `KartModel.modelForwardCorrectionDegrees`(이 로스터는 +Z가 정면이라 180도)로 돌아간다.
             entity.orientation = simd_quatf(
                 angle: frontCorrectionAngle(for: entity, fallbackDegrees: kart.modelForwardCorrectionDegrees),
                 axis: [0, 1, 0]
