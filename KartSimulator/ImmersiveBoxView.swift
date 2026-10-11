@@ -44,6 +44,8 @@ struct ImmersiveBoxView: View {
     @State private var sceneYaw: Float = .pi
     /// 콕핏 모드에 들어온 순간의 머리 위치(월드). 이후 카트는 매 프레임 이 점 기준으로 따라붙는다.
     @State private var cockpitAnchor: SIMD3<Float> = [0, 1.2, 0]
+    /// 3인칭: 평활된 머리 yaw(씬 좌표계). 카트를 이 방향 앞에 두어 고개를 돌려도 시야 중앙에 있게 한다(결정 45).
+    @State private var smoothedHeadYaw: Float = 0
     private let cockpitTuning = CockpitTuning()
     /// 디오라마: 트랙 JSON의 출발 방향은 랩·체크포인트 판정 기준이라 건드리지 않고, 박스 안의 트랙 전체를
     /// 180° 돌려 사용자 쪽에서 볼 때 카트가 반대쪽을 보고 출발하게 한다(결정 43번).
@@ -247,10 +249,11 @@ struct ImmersiveBoxView: View {
             // 모드에 들어온 순간의 머리 위치·방향을 기준으로 잡는다(시뮬레이터처럼 못 읽으면 기본값).
             let head = currentHeadPose() ?? (position: SIMD3<Float>(0, 1.2, 0), yaw: Float(0))
             cockpitAnchor = head.position
+            smoothedHeadYaw = head.yaw
             sceneYaw = ScenePlacement.sceneYaw(startHeading: track?.start.heading ?? 0, headYaw: head.yaw)
             sceneRoot.scale = SIMD3(repeating: 1)
             sceneRoot.orientation = simd_quatf(angle: sceneYaw, axis: [0, 1, 0])
-            followKart()
+            followKart(headYaw: head.yaw, deltaTime: 0)
             // HUD는 들어온 순간 머리 앞 1.2 m, 약간 아래에 고정(빌보드라 방향은 알아서 사용자를 본다).
             let hudForward = ScenePlacement.forward(heading: head.yaw)
             hudEntity?.position = head.position + hudForward * 1.2 + SIMD3(0, -0.15, 0)
@@ -265,12 +268,20 @@ struct ImmersiveBoxView: View {
         print("DEBUG-LAYOUT mode=\(mode) sceneYaw=\(sceneYaw * 180 / .pi)도 scale=\(sceneRoot.scale.x) anchor=\(cockpitAnchor)")
     }
 
-    /// 콕핏 모드: 카트의 트랙 좌표가 콕핏 목표점(머리 아래 / 앞)에 오도록 씬 루트를 평행이동한다.
+    /// 콕핏 모드: 카트의 트랙 좌표가 콕핏 목표점(머리 아래 / 바라보는 방향 앞)에 오도록 씬 루트를 평행이동한다.
+    /// 3인칭은 현재 머리 yaw(평활)를 써서 고개를 돌려도 카트가 시야 중앙에 머문다(결정 45).
     @MainActor
-    private func followKart() {
+    private func followKart(headYaw: Float?, deltaTime: Float) {
         guard mode != .diorama else { return }
+        if let headYaw {
+            smoothedHeadYaw = ScenePlacement.approachAngle(
+                from: smoothedHeadYaw, to: headYaw,
+                rate: cockpitTuning.thirdPersonHeadYawSmoothingRate, deltaTime: deltaTime
+            )
+        }
         let target = ScenePlacement.cockpitTarget(
-            anchor: cockpitAnchor, mode: mode, kartHeading: motion.heading, sceneYaw: sceneYaw, tuning: cockpitTuning
+            anchor: cockpitAnchor, mode: mode, kartHeading: motion.heading, sceneYaw: sceneYaw,
+            headYaw: headYaw == nil ? nil : smoothedHeadYaw, tuning: cockpitTuning
         )
         sceneRoot.position = ScenePlacement.rootPosition(placing: motion.position, at: target, yaw: sceneYaw, scale: 1)
     }
@@ -620,7 +631,7 @@ struct ImmersiveBoxView: View {
         let kartTrackPosition = SIMD2(motion.position.x, motion.position.z)
         kartSlot.position = SIMD3(kartTrackPosition.x, 0, kartTrackPosition.y)
         kartSlot.orientation = simd_quatf(angle: motion.heading, axis: [0, 1, 0])
-        followKart()
+        followKart(headYaw: desiredHeading, deltaTime: deltaTime)
 
         // 디버그: 실제로 이동한 거리를 빨간 선으로 쌓고, 콘솔에도 주기적으로 남긴다.
         if let last = lastTrailDisplayPoint {
