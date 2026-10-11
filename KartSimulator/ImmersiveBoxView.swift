@@ -29,11 +29,25 @@ struct ImmersiveBoxView: View {
     @State private var wasAgainstWall = false
     @State private var trackDisplayScale: Float = 1
     @State private var trackWorldCenter: SIMD2<Float> = .zero
-    /// 트랙 월드 좌표 → 박스 표시 좌표로 옮길 때 Y축으로 추가 회전하는 각도(라디안). 트랙 JSON의 출발
-    /// 방향은 랩·체크포인트 판정이 따르는 기준이라 건드리지 않고, 대신 **박스 안의 트랙 전체를 180°
-    /// 돌려** 사용자 쪽에서 볼 때 카트가 반대쪽을 보고 출발하게 한다(결정 43번). `worldToDisplay`·
-    /// 타일 회전·`kartSlot` 회전에 모두 같은 값을 더하고, 1인칭 머리 방향은 같은 값을 빼서 트랙 좌표로 되돌린다.
-    private let trackDisplayYaw: Float = .pi
+
+    // MARK: - 씬 루트 (Phase 2, 결정 44)
+    // 트랙 타일·카트·트레일은 전부 `sceneRoot` 아래에 **트랙 좌표계(미터, 노면 y = 0) 실제 크기**로 둔다.
+    // 모드에 따라 `sceneRoot`의 변환(`world = position + scale · R_y(yaw) · local`)만 바꾼다:
+    // 디오라마 = 박스 맞춤 배율 + 180° 회전(결정 43) + 박스 바닥, 1인칭·3인칭 = 배율 1 + 매 프레임
+    // 카트가 사용자 머리 아래(또는 앞)로 오도록 평행이동(월드는 돌지 않는다 — 멀미 요인 최소화).
+    @State private var sceneRoot = Entity()
+    @State private var boxFrame = Entity()
+    @State private var boxFloor = Entity()
+    @State private var hudEntity: Entity?
+    @State private var loadedKartEntity: Entity?
+    /// 현재 씬 루트의 Y축 회전. 디오라마는 `dioramaYaw`, 콕핏 모드는 모드에 들어온 순간 머리 방향으로 계산.
+    @State private var sceneYaw: Float = .pi
+    /// 콕핏 모드에 들어온 순간의 머리 위치(월드). 이후 카트는 매 프레임 이 점 기준으로 따라붙는다.
+    @State private var cockpitAnchor: SIMD3<Float> = [0, 1.2, 0]
+    private let cockpitTuning = CockpitTuning()
+    /// 디오라마: 트랙 JSON의 출발 방향은 랩·체크포인트 판정 기준이라 건드리지 않고, 박스 안의 트랙 전체를
+    /// 180° 돌려 사용자 쪽에서 볼 때 카트가 반대쪽을 보고 출발하게 한다(결정 43번).
+    private let dioramaYaw: Float = .pi
     @State private var raceModel = RaceModel()
     @State private var tileLibrary = TrackTileLibrary()
 
@@ -67,8 +81,8 @@ struct ImmersiveBoxView: View {
     @State private var lastTrailDisplayPoint: SIMD2<Float>?
     @State private var totalDistanceTraveled: Float = 0
     @State private var motionLogAccumulator: Float = 0
-    /// 박스 바닥 기준 이 거리 이상 움직였을 때만 새 선 조각을 추가한다(매 프레임 추가하면 세그먼트가 과도하게 늘어난다).
-    private let trailMinSegmentLength: Float = 0.003
+    /// 트랙 좌표(미터) 기준 이 거리 이상 움직였을 때만 새 선 조각을 추가한다(매 프레임 추가하면 세그먼트가 과도하게 늘어난다).
+    private let trailMinSegmentLength: Float = 0.1
     private let motionLogInterval: Float = 0.25
 
     private let boxSize: SIMD3<Float> = [0.7, 0.4, 0.7]
@@ -86,8 +100,8 @@ struct ImmersiveBoxView: View {
         RealityView { content, attachments in
             rootEntity.position = boxPosition
 
-            let frame = BoxFrameBuilder.makeFrame(size: boxSize, thickness: 0.006, color: .white)
-            rootEntity.addChild(frame)
+            boxFrame = BoxFrameBuilder.makeFrame(size: boxSize, thickness: 0.006, color: .white)
+            rootEntity.addChild(boxFrame)
 
             let floor = ModelEntity(
                 mesh: .generateBox(width: boxSize.x * 0.96, height: 0.01, depth: boxSize.z * 0.96),
@@ -96,10 +110,14 @@ struct ImmersiveBoxView: View {
             )
             floor.position.y = -boxSize.y / 2 + 0.005
             rootEntity.addChild(floor)
+            boxFloor = floor
+
+            // 씬 루트(트랙 좌표계 실제 크기). 변환은 `applyModeLayout()`이 모드별로 정한다.
+            sceneRoot.name = "sceneRoot"
+            content.add(sceneRoot)
 
             kartSlot.name = "kartSlot"
-            kartSlot.position.y = -boxSize.y / 2 + 0.01
-            rootEntity.addChild(kartSlot)
+            sceneRoot.addChild(kartSlot)
 
             // 엔진음·효과음을 kartSlot에 붙인다(카트 모델 자체가 아니라 — 카트는 색상/모델이
             // 바뀔 때마다 통째로 교체되지만 kartSlot은 그대로라, 여기 붙이면 다시 로드할 필요가 없다).
@@ -110,8 +128,8 @@ struct ImmersiveBoxView: View {
             }
             sfxPlayer = SFXPlayer(entity: kartSlot)
 
-            // 디버그: 카트가 실제로 지나간 경로를 빨간 선으로 남긴다. rootEntity 로컬 좌표(박스 기준)에 쌓는다.
-            rootEntity.addChild(trailRoot)
+            // 디버그: 카트가 실제로 지나간 경로를 빨간 선으로 남긴다. 씬 루트(트랙 좌표계)에 쌓아 모드와 무관하게 따라온다.
+            sceneRoot.addChild(trailRoot)
 
             // 핀치 제스처를 받으려면 InputTargetComponent + CollisionComponent가 있는 엔티티가
             // 필요하다(없으면 SpatialEventGesture가 아무것도 조준하지 못해 완전히 무반응이다).
@@ -124,9 +142,9 @@ struct ImmersiveBoxView: View {
             content.add(inputCatcher)
 
             content.add(rootEntity)
-            loadTrack(into: rootEntity)
+            loadTrack()
             if let track {
-                await buildTrackTiles(definition: track, into: rootEntity)
+                await buildTrackTiles(definition: track, into: sceneRoot)
             }
 
             // 디버그: 헤드 위치 구슬 + 시선 방향 막대. world 좌표계에 바로 두므로 rootEntity가 아니라
@@ -163,6 +181,7 @@ struct ImmersiveBoxView: View {
                 hudAttachment.position = hudPosition
                 hudAttachment.components.set(BillboardComponent())
                 content.add(hudAttachment)
+                hudEntity = hudAttachment
             }
 
             updateSubscription = content.subscribe(to: SceneEvents.Update.self) { event in
@@ -193,9 +212,86 @@ struct ImmersiveBoxView: View {
             }
         }
         .gesture(driveGesture)
+        .onChange(of: mode) { _, _ in
+            applyModeLayout()
+        }
         .task {
             await runHUDUpdateLoop()
         }
+    }
+
+    // MARK: - 모드별 씬 배치 (Phase 2, 결정 44)
+
+    /// 모드가 바뀌거나 트랙을 막 읽었을 때 한 번 호출. 박스 프레임·바닥 표시, 씬 루트 변환, 카트 크기,
+    /// HUD 위치, 입력 캐처 범위를 모드에 맞춘다. 콕핏 모드의 매 프레임 따라붙기는 `tickMotion`이 한다.
+    @MainActor
+    private func applyModeLayout() {
+        let isDiorama = mode == .diorama
+        boxFrame.isEnabled = isDiorama
+        boxFloor.isEnabled = isDiorama
+
+        if isDiorama {
+            sceneYaw = dioramaYaw
+            sceneRoot.scale = SIMD3(repeating: trackDisplayScale)
+            sceneRoot.orientation = simd_quatf(angle: sceneYaw, axis: [0, 1, 0])
+            // 트랙 중심(노면 y = 0)이 박스 바닥 중앙에 오게.
+            let boxFloorWorld = boxPosition + SIMD3(0, -boxSize.y / 2 + 0.011, 0)
+            sceneRoot.position = ScenePlacement.rootPosition(
+                placing: SIMD3(trackWorldCenter.x, 0, trackWorldCenter.y),
+                at: boxFloorWorld, yaw: sceneYaw, scale: trackDisplayScale
+            )
+            hudEntity?.position = hudPosition
+            inputCatcher.position = boxPosition
+            inputCatcher.components.set(CollisionComponent(shapes: [.generateBox(size: boxSize * 1.4)]))
+        } else {
+            // 모드에 들어온 순간의 머리 위치·방향을 기준으로 잡는다(시뮬레이터처럼 못 읽으면 기본값).
+            let head = currentHeadPose() ?? (position: SIMD3<Float>(0, 1.2, 0), yaw: Float(0))
+            cockpitAnchor = head.position
+            sceneYaw = ScenePlacement.sceneYaw(startHeading: track?.start.heading ?? 0, headYaw: head.yaw)
+            sceneRoot.scale = SIMD3(repeating: 1)
+            sceneRoot.orientation = simd_quatf(angle: sceneYaw, axis: [0, 1, 0])
+            followKart()
+            // HUD는 들어온 순간 머리 앞 1.2 m, 약간 아래에 고정(빌보드라 방향은 알아서 사용자를 본다).
+            let hudForward = ScenePlacement.forward(heading: head.yaw)
+            hudEntity?.position = head.position + hudForward * 1.2 + SIMD3(0, -0.15, 0)
+            // 핀치는 `inputCatcher`를 봐야만 잡히므로(결정 26·33) 실제 크기 모드에서는 사용자 주변 전체를 덮는다.
+            inputCatcher.position = head.position
+            inputCatcher.components.set(CollisionComponent(shapes: [.generateBox(size: SIMD3(repeating: 40))]))
+        }
+
+        if let kart = loadedKartEntity {
+            fitKart(kart)
+        }
+        print("DEBUG-LAYOUT mode=\(mode) sceneYaw=\(sceneYaw * 180 / .pi)도 scale=\(sceneRoot.scale.x) anchor=\(cockpitAnchor)")
+    }
+
+    /// 콕핏 모드: 카트의 트랙 좌표가 콕핏 목표점(머리 아래 / 앞)에 오도록 씬 루트를 평행이동한다.
+    @MainActor
+    private func followKart() {
+        guard mode != .diorama else { return }
+        let target = ScenePlacement.cockpitTarget(
+            anchor: cockpitAnchor, mode: mode, kartHeading: motion.heading, sceneYaw: sceneYaw, tuning: cockpitTuning
+        )
+        sceneRoot.position = ScenePlacement.rootPosition(placing: motion.position, at: target, yaw: sceneYaw, scale: 1)
+    }
+
+    /// 카트 모델 크기: 디오라마는 박스 배율과 무관한 고정 시각 크기(`kartVisualLength`), 실제 크기 모드는 전장 1.5 m.
+    @MainActor
+    private func fitKart(_ entity: Entity) {
+        let length = ScenePlacement.kartFitLength(
+            mode: mode, sceneScale: sceneRoot.scale.x, dioramaVisualLength: kartVisualLength, tuning: cockpitTuning
+        )
+        KartFitter.fit(entity, maxDimension: length)
+    }
+
+    /// 머리(기기) 위치와 yaw(씬 좌표계, `KartMotionState`와 같은 heading 공식). 월드 트래킹이 없으면 nil.
+    @MainActor
+    private func currentHeadPose() -> (position: SIMD3<Float>, yaw: Float)? {
+        guard let anchor = worldTracking.queryDeviceAnchor(atTimestamp: CACurrentMediaTime()) else { return nil }
+        let t = anchor.originFromAnchorTransform
+        let position = SIMD3<Float>(t.columns.3.x, t.columns.3.y, t.columns.3.z)
+        let forward = -SIMD3<Float>(t.columns.2.x, t.columns.2.y, t.columns.2.z)
+        return (position, atan2(-forward.x, -forward.z))
     }
 
     /// `raceModel`(HUD가 읽는 Observable) 갱신을 RealityKit 프레임 콜백과 분리된 주기로 돌린다.
@@ -259,7 +355,7 @@ struct ImmersiveBoxView: View {
     /// `Tracks/track_01.json`(앱 번들에 복사된 사본)을 읽어 월드→박스 배율을 계산한다.
     /// 타일 3D 배치는 `buildTrackTiles(definition:into:)`가 비동기로 따로 한다(디자인 결정 36-4).
     @MainActor
-    private func loadTrack(into parent: Entity) {
+    private func loadTrack() {
         guard let url = Bundle.main.url(forResource: "track_01", withExtension: "json") else {
             print("트랙 리소스를 찾을 수 없습니다: track_01.json")
             return
@@ -289,6 +385,7 @@ struct ImmersiveBoxView: View {
                 position: SIMD3(startPoint.x, 0, startPoint.y)
             )
             raceModel.start(totalLaps: definition.laps)
+            applyModeLayout()
             startCountdown()
         } catch {
             print("트랙 로드 실패: \(error)")
@@ -314,7 +411,8 @@ struct ImmersiveBoxView: View {
     @MainActor
     private func buildTrackTiles(definition: TrackDefinition, into parent: Entity) async {
         guard !definition.tiles.isEmpty else { return }
-        let floorY = -boxSize.y / 2 + 0.011
+        // 씬 루트는 트랙 좌표계(노면 y = 0)다. 박스 바닥 높이·배율은 `applyModeLayout()`이 씬 루트 변환으로 준다.
+        let floorY: Float = 0
         var occupied = Set<Int>()
 
         func cellKey(_ col: Int, _ row: Int) -> Int { row * definition.grid.cols + col }
@@ -369,27 +467,18 @@ struct ImmersiveBoxView: View {
         into parent: Entity
     ) async {
         guard let entity = await tileLibrary.makeTile(type: type) else { return }
-        let worldCenter = SIMD2(Float(col) * tileSize + tileSize / 2, -(Float(row) * tileSize + tileSize / 2))
-        let display = worldToDisplay(worldCenter)
-        entity.scale = SIMD3(repeating: trackDisplayScale)
-        entity.position = SIMD3(display.x, floorY, display.y)
-        entity.orientation = simd_quatf(angle: rotationDegrees * .pi / 180 + trackDisplayYaw, axis: [0, 1, 0])
+        // 트랙 좌표계 그대로(실제 크기, 미터). gen_track.py의 타일 중심 공식과 동일.
+        let center = SIMD2(Float(col) * tileSize + tileSize / 2, -(Float(row) * tileSize + tileSize / 2))
+        entity.position = SIMD3(center.x, floorY, center.y)
+        entity.orientation = simd_quatf(angle: rotationDegrees * .pi / 180, axis: [0, 1, 0])
         parent.addChild(entity)
     }
 
-    /// 트랙 월드 좌표(XZ, 미터)를 박스 바닥의 표시 좌표로 변환한다: 트랙 중심 기준으로 옮기고,
-    /// `trackDisplayYaw`만큼 Y축 회전(R_y(ψ)·(x, z) = (x cosψ + z sinψ, -x sinψ + z cosψ))한 뒤 배율.
-    private func worldToDisplay(_ worldXZ: SIMD2<Float>) -> SIMD2<Float> {
-        let local = worldXZ - trackWorldCenter
-        let c = cos(trackDisplayYaw), s = sin(trackDisplayYaw)
-        let rotated = SIMD2<Float>(local.x * c + local.y * s, -local.x * s + local.y * c)
-        return rotated * trackDisplayScale
-    }
-
-    /// 디버그 전용: 박스 바닥 표시 좌표 두 점을 빨간 막대 하나로 이어 붙인다(경로 누적용).
+    /// 디버그 전용: 트랙 좌표(XZ, 미터) 두 점을 빨간 막대 하나로 이어 붙인다(경로 누적용). 씬 루트 아래라
+    /// 디오라마에서는 배율만큼 작아지고(약 2 mm), 실제 크기 모드에서는 6 cm 폭으로 노면에 깔린다.
     @MainActor
     private func addTrailSegment(from a: SIMD2<Float>, to b: SIMD2<Float>) {
-        let floorY = -boxSize.y / 2 + 0.013
+        let floorY: Float = 0.03
         let start = SIMD3<Float>(a.x, floorY, a.y)
         let end = SIMD3<Float>(b.x, floorY, b.y)
         let delta = end - start
@@ -398,7 +487,7 @@ struct ImmersiveBoxView: View {
 
         let material = UnlitMaterial(color: .red)
         let segment = ModelEntity(
-            mesh: .generateBox(size: SIMD3(0.003, 0.003, length)),
+            mesh: .generateBox(size: SIMD3(0.06, 0.06, length)),
             materials: [material]
         )
         segment.position = (start + end) / 2
@@ -408,9 +497,8 @@ struct ImmersiveBoxView: View {
 
     /// 헤드 앵커 위치에 구슬을, 기기 정면 방향으로 막대를 띄운다(디버그 시각화, 결정 21번).
     /// 1인칭 모드에서는 여기서 구한 정면 방향이 그대로 조향 입력(`desiredHeading`)이 된다 —
-    /// "아이트래킹"이라고 불러왔지만 실제로는 머리(기기) 방향이다(결정 39 기술 노트). `rootEntity`가
-    /// 회전 없이 평행이동만 하므로 여기서 돌려주는 값은 **씬(표시) 좌표계** heading이다 — 트랙 좌표계로
-    /// 쓰려면 `tickMotion`에서 `trackDisplayYaw`를 빼야 한다(결정 43번).
+    /// "아이트래킹"이라고 불러왔지만 실제로는 머리(기기) 방향이다(결정 39 기술 노트). 여기서 돌려주는 값은
+    /// **씬(월드) 좌표계** heading이다 — 트랙 좌표계로 쓰려면 `tickMotion`에서 `sceneYaw`를 빼야 한다(결정 43·44번).
     @MainActor
     @discardableResult
     private func updateHeadDebugGizmo() -> Float? {
@@ -437,8 +525,8 @@ struct ImmersiveBoxView: View {
         let now = CACurrentMediaTime()
         let (drive, leftStatus, rightStatus) = inputResolver.resolve(now: now, mode: mode)
         let tuning = MotionTuning().applying(track.tuning)
-        // 머리 방향은 씬(표시) 좌표계 기준이라, 표시 회전 `trackDisplayYaw`를 빼서 트랙 좌표계 heading으로 되돌린다.
-        let trackSpaceDesiredHeading = desiredHeading.map { $0 - trackDisplayYaw }
+        // 머리 방향은 씬(월드) 좌표계 기준이라, 씬 루트 회전 `sceneYaw`를 빼서 트랙 좌표계 heading으로 되돌린다.
+        let trackSpaceDesiredHeading = desiredHeading.map { $0 - sceneYaw }
         motion = motion.advancing(drive: drive, desiredHeading: mode == .firstPerson ? trackSpaceDesiredHeading : nil, tuning: tuning, deltaTime: deltaTime)
 
         let positionXZ = SIMD2(motion.position.x, motion.position.z)
@@ -528,19 +616,20 @@ struct ImmersiveBoxView: View {
             engineAudioPlayer?.run(engineMachine.respawned())
         }
 
-        let display = worldToDisplay(positionXZ)
-        kartSlot.position.x = display.x
-        kartSlot.position.z = display.y
-        kartSlot.orientation = simd_quatf(angle: motion.heading + trackDisplayYaw, axis: [0, 1, 0])
+        // 카트는 씬 루트(트랙 좌표계) 안에서 트랙 좌표 그대로 움직인다. 표시 배율·회전·콕핏 따라붙기는 씬 루트 몫.
+        let kartTrackPosition = SIMD2(motion.position.x, motion.position.z)
+        kartSlot.position = SIMD3(kartTrackPosition.x, 0, kartTrackPosition.y)
+        kartSlot.orientation = simd_quatf(angle: motion.heading, axis: [0, 1, 0])
+        followKart()
 
         // 디버그: 실제로 이동한 거리를 빨간 선으로 쌓고, 콘솔에도 주기적으로 남긴다.
         if let last = lastTrailDisplayPoint {
-            if simd_distance(last, display) >= trailMinSegmentLength {
-                addTrailSegment(from: last, to: display)
-                lastTrailDisplayPoint = display
+            if simd_distance(last, kartTrackPosition) >= trailMinSegmentLength {
+                addTrailSegment(from: last, to: kartTrackPosition)
+                lastTrailDisplayPoint = kartTrackPosition
             }
         } else {
-            lastTrailDisplayPoint = display
+            lastTrailDisplayPoint = kartTrackPosition
         }
 
         totalDistanceTraveled += motion.speed * deltaTime
@@ -606,13 +695,14 @@ struct ImmersiveBoxView: View {
                 angle: frontCorrectionAngle(for: entity, fallbackDegrees: kart.modelForwardCorrectionDegrees),
                 axis: [0, 1, 0]
             )
-            // 트랙 전체를 박스에 맞추는 배율(trackDisplayScale)을 카트에도 그대로 쓰면 트랙이 넓을수록
-            // 카트가 같이 작아진다 (예: track_01은 20m 폭 트랙이라 카트가 3cm도 안 됨 — 거의 안 보여서
-            // "차가 안 움직인다"로 보인 원인). 카트는 트랙 크기와 무관하게 눈에 보이는 고정 크기로 둔다.
-            KartFitter.fit(entity, maxDimension: kartVisualLength)
+            // 디오라마: 트랙 배율(trackDisplayScale)을 카트에도 그대로 쓰면 트랙이 넓을수록 카트가 같이
+            // 작아진다(track_01은 20m 폭이라 3cm도 안 됨). 트랙 크기와 무관하게 고정 시각 크기(0.12 m)로 두되,
+            // 씬 루트가 배율을 갖고 있으니 트랙 단위로는 그만큼 키워서 넣는다. 실제 크기 모드는 전장 1.5 m(결정 44).
+            fitKart(entity)
 
             kartSlot.children.removeAll()
             kartSlot.addChild(entity)
+            loadedKartEntity = entity
 
             loadedKartID = kart.id
             loadedColorID = colorID

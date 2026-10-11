@@ -10,17 +10,18 @@
 
 ### 실기기 시연 영상
 
-Apple Vision Pro 실기기에서 Phase 1을 플레이한 영상입니다. 썸네일을 누르면 YouTube로 이동합니다.
+Apple Vision Pro 실기기에서 플레이한 영상입니다. 썸네일을 누르면 YouTube로 이동합니다.
 
-[![비전프로 카트 시뮬레이터 프로젝트 — 실기기 시연 (YouTube)](Docs/review/demo-video-thumb.jpg)](https://youtu.be/Xv__kSJXJ0I)
+| Phase 2 — 1인칭·3인칭 콕핏 + 디오라마 | Phase 1 — 디오라마 |
+| --- | --- |
+| [![비전프로용 카트 시뮬레이터 앱 1인칭, 3인칭, 디오라마 모드 (YouTube)](Docs/review/demo-video-phase2-thumb.jpg)](https://youtu.be/PIXJQDFln3s) | [![비전프로 카트 시뮬레이터 프로젝트 — 실기기 시연 (YouTube)](Docs/review/demo-video-thumb.jpg)](https://youtu.be/Xv__kSJXJ0I) |
+| ▶ https://youtu.be/PIXJQDFln3s | ▶ https://youtu.be/Xv__kSJXJ0I |
 
-▶ https://youtu.be/Xv__kSJXJ0I
-
-> **현재 단계: Phase 1** — 운전 모드 3종(디오라마·1인칭·3인칭)의 입력·조향 로직까지 완성. 다음 단계(Phase 2)는 1인칭 모드에서 트랙을 실제 크기로 키우고 카트를 머리 위치에 고정하는 "콕핏" 연출입니다.
+> **현재 단계: Phase 2** — Phase 1에서 운전 모드 3종(디오라마·1인칭·3인칭)의 입력·조향 로직을 완성했고, Phase 2에서 1인칭·3인칭을 **실제 크기 트랙 + 카트를 머리 위치에 따라붙이는 콕핏**으로 바꿨습니다(결정 44, 실기기 확인 완료). 위 스크린샷은 Phase 1 시점입니다.
 
 | 플랫폼 | 언어·프레임워크 | 테스트 | 상태 |
 | --- | --- | --- | --- |
-| visionOS 27 (Apple Vision Pro) | Swift · SwiftUI · RealityKit · ARKit 손 추적 | Swift Testing (`KartCoreTests` 45개) | Phase 1 완료, M4 미니맵·M6 출시 준비 남음 |
+| visionOS 27 (Apple Vision Pro) | Swift · SwiftUI · RealityKit · ARKit 손·머리 추적 | Swift Testing (`KartCoreTests` 56개) | Phase 2 실기기 확인 완료, M4 미니맵·M6 출시 준비 남음 |
 
 ---
 
@@ -84,14 +85,14 @@ Apple Vision Pro 실기기에서 Phase 1을 플레이한 영상입니다. 썸네
 
 | | 디오라마 (기본) | 1인칭 | 3인칭 |
 | --- | --- | --- | --- |
-| **시점** | 박스를 밖에서 내려다봄 | 카트에 탄 시점 (Phase 2) | 1인칭과 같은 시점 |
+| **시점** | 박스를 밖에서 내려다봄 | 실제 크기 트랙, 카트가 내 자리에 따라붙음 | 실제 크기 트랙, 카트가 2.5 m 앞에 따라붙음 |
 | **조향** | 한 손만 핀치 → 좌/우회전 | 머리 방향을 따라 서서히 | 한 손만 핀치 → 좌/우회전 |
 | **전진·가속** | 양손 핀치 유지 | 한쪽 손이라도 핀치 | 양손 핀치 |
 | **후진** | 핀치한 채로 양손 벌리기 | 없음 | 없음 |
 
 세 모드 모두 양손을 다 떼면 서서히 멈춥니다.
 
-> **지금은 Phase 1입니다.** 세 모드 모두 아직 같은 크기의 박스로 보이고 **조작 방식만** 다릅니다. 1인칭·3인칭에서 트랙을 실제 크기로 키우고 카트를 내 머리 위치에 맞춰 카트에 탄 듯 보이게 하는 작업은 다음 단계(Phase 2)에서 진행합니다.
+> **Phase 2(결정 44)**: 1인칭·3인칭으로 바꾸면 박스가 사라지고 트랙이 **실제 크기(타일 4 m)**로 주변에 깔립니다. 카트는 모드에 들어온 순간의 머리 위치를 기준으로 매 프레임 따라붙고(1인칭은 발밑 0.9 m, 3인칭은 앞 2.5 m·아래 1.8 m), 출발 방향은 그때 바라보던 쪽입니다. 월드는 **평행이동만 하고 회전하지 않아** 어지러움을 줄였습니다. 멀미가 느껴지면 디오라마로 돌아오면 됩니다.
 
 ### 모드 전환
 
@@ -203,11 +204,11 @@ sequenceDiagram
 
 | 폴더 | 역할 |
 | --- | --- |
-| `KartSimulator/KartCore/` | 입력 해석, 주행 물리, 트랙 경로, 랩·HUD 상태, 엔진음 상태 기계 |
+| `KartSimulator/KartCore/` | 입력 해석, 주행 물리, 트랙 경로, 랩·HUD 상태, 엔진음 상태 기계, 카트 정면 보정, 씬 배치(콕핏) |
 | `KartSimulator/RealityKit/` | 박스 프레임, 타일 라이브러리, 카트 맞춤·도색, 오디오 재생 |
 | `KartSimulator/Models/` | 카트 카탈로그·선택 상태, 이머시브 세션 상태 |
 | `KartSimulator/Resources/` | 카트 USDZ·텍스처, 타일 USDZ, 효과음·엔진음, Galmuri 폰트 |
-| `KartCoreTests/` | Swift Testing 45개 (입력 해석·조향·트랙 경로·랩) |
+| `KartCoreTests/` | Swift Testing 56개 (입력 해석·조향·정면 보정·씬 배치·트랙 경로·랩) |
 | `Tracks/`, `Tools/` | 트랙 JSON 2개 + 생성·검증 스크립트, glb→USDZ 변환 |
 
 ## 디자인 산출물 (디자인)
@@ -289,11 +290,11 @@ flowchart TB
 | M0 | 프로젝트 셋업, visionOS 빌드, 카트 USDZ, `KartCoreTests` | ✅ |
 | M1 | 박스 이머시브 공간 + 카트 쇼케이스(카드 호버 라이브 3D, 도색) | ✅ (Digital Crown 실기기 확인 1건 남음) |
 | M2 | 핀치 입력 프로토타입 → 연속 페달 → 운전 모드 3종 Phase 1 | ✅ |
+| Phase 2 | 1인칭·3인칭 콕핏: 실제 크기 트랙 + 머리 위치 따라붙기 (`ScenePlacement`) | ✅ 실기기 확인 완료 (3인칭 멀미 튜닝 진행 중) |
 | M3 | 트랙 타일 3D 배치, 주행 로직, 벽 콜리전, 트랙 생성·검증 스크립트 | ✅ |
 | M4 | 미니맵(Diorama 테이블, 궤적, 마커) | ⬜ |
 | M5 | HUD·효과음·엔진음·팔레트·폰트·조작법 화면 | 🟨 메뉴 4화면(시작/대기/카운트다운/결과) 남음 |
 | M6 | 성능 예산, 앱 이름 확정, 출시 준비 | ⬜ |
-| **Phase 2** | 1인칭 콕핏: 실제 크기 트랙 + 머리 위치에 카트 고정 | ⬜ 다음 |
 
 상세 체크리스트는 `Docs/TechTask.md`, 디자인 납품 체크리스트는 `Docs/design-prd.md` 15장.
 

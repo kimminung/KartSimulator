@@ -336,3 +336,16 @@
 - **구현**: `ImmersiveBoxView.trackDisplayYaw = π`. `worldToDisplay`가 트랙 중심 기준으로 R_y(ψ) 회전을 거친 뒤 배율을 곱하고, 타일 회전과 `kartSlot.orientation`에 같은 ψ를 더한다(표시 벡터 R_y(ψ)R_y(h)(-Z) = R_y(h+ψ)(-Z)). 1인칭의 머리 방향은 씬 좌표계 값이라 `tickMotion`에서 ψ를 빼 트랙 좌표계로 되돌린다 — 고개를 돌린 쪽으로 카트가 도는 관계는 그대로다. 디버그 트레일은 표시 좌표를 쓰므로 자동으로 따라온다. 리스폰은 트랙 좌표라 영향 없음.
 - **확인**: visionOS 시뮬레이터 빌드 통과. `KartCoreTests`는 트랙 좌표계 로직만 다뤄 영향 없음. 실기기 확인: 출발 시 카트가 이전과 반대쪽을 보는지, 1인칭에서 고개 돌린 쪽으로 카트가 도는지.
 - **영향받는 절**: `ImmersiveBoxView`(`trackDisplayYaw`, `worldToDisplay`, `placeTile`, `tickMotion`), README 사용법("좌/우는 카트 기준" 설명은 그대로 유효)
+
+## 44. [테크] Phase 2 — 1인칭·3인칭 콕핏: 트랙 실제 크기 + 카트를 머리 위치에 따라붙임
+
+- **날짜**: 2026-10-11
+- **배경**: 결정 39에서 미뤄 둔 Phase 2. Phase 1의 1인칭·3인칭은 디오라마와 같은 작은 박스 안에서 조작법만 달랐다. 이제 두 모드는 트랙이 **실제 크기(타일 4 m)**로 사용자 주변에 깔리고, 카트가 사용자 위치에 "고정"돼 카트에 탄 듯 보인다.
+- **구조**: 트랙 타일·카트·디버그 트레일을 전부 새 `sceneRoot` 아래 **트랙 좌표계(미터, 노면 y = 0) 실제 크기**로 둔다. 모드에 따라 `sceneRoot`의 변환(`world = position + scale · R_y(yaw) · local`) 하나만 바꾼다.
+  - **디오라마**: scale = 박스 맞춤 배율(기존 `trackDisplayScale`), yaw = π(결정 43), position = 트랙 중심이 박스 바닥 중앙에. 카트 모델은 배율로 나눠 넣어 눈에 보이는 크기 0.12 m를 유지(기존 동작 그대로). 결정 43의 `worldToDisplay`/`trackDisplayYaw`는 이 변환으로 흡수돼 삭제.
+  - **1인칭·3인칭(콕핏)**: scale = 1. 모드에 들어온 순간 머리 위치를 `cockpitAnchor`로, 머리 yaw로 `sceneYaw = headYaw − startHeading`을 잡아 **출발 방향이 사용자가 보는 쪽**이 되게 한다. 이후 매 프레임 `followKart()`가 "카트 트랙 좌표 → 콕핏 목표점"이 되도록 `sceneRoot.position`만 옮긴다 — **월드는 평행이동만 하고 돌지 않는다**(회전 vection이 멀미의 주범이라 의도적으로 뺐다). 1인칭 목표점 = 머리 아래 0.9 m(앉은 드라이버 눈높이), 3인칭 = 머리 아래 1.8 m + 카트 진행 방향(월드)으로 2.5 m 앞(`CockpitTuning`). 카트 모델은 전장 1.5 m 실제 크기.
+  - 수학은 `KartCore/ScenePlacement.swift`(`forward`/`rotateY`/`rootPosition`/`sceneYaw`/`cockpitTarget`/`kartFitLength`)로 분리하고 `ScenePlacementTests` 6개로 고정했다(배치 왕복, heading 합성, 출발 방향 = 머리 방향, 모드별 목표점, 1인칭 따라붙기, 카트 크기).
+- **모드 전환 시(`applyModeLayout`)**: 박스 프레임·바닥은 디오라마에서만 보이고, HUD는 콕핏 모드에서 머리 앞 1.2 m·0.15 m 아래에 고정(빌보드), 핀치 입력 캐처는 사용자 주변 40 m 상자로 넓힌다(핀치는 캐처를 봐야만 잡히므로 — 결정 26·33). 카트 모델은 모드에 맞춰 다시 맞춘다. 머리 방향 조향(`desiredHeading`)은 `sceneYaw`를 빼서 트랙 좌표계로 되돌린다(결정 43의 일반화).
+- **의도적으로 안 한 것**: 스트리밍/컬링(트랙 16~64 타일이라 실기기 측정 후에만, 결정 39), 3인칭 추적 카메라식 월드 회전(멀미), 콕핏 내부(핸들·대시보드) 모델, 사용자가 걸어 다닐 때 anchor 갱신(들어온 순간 고정). 시뮬레이터처럼 월드 트래킹이 없으면 anchor (0, 1.2, 0)·yaw 0으로 대체.
+- **확인**: visionOS 시뮬레이터 빌드 통과, `ScenePlacementTests` 6개 + 기존 테스트 통과(기존 `EngineSoundMachineTests` 5개 실패는 그대로). **실기기 확인 필요**: 1인칭에서 카트가 발밑/앞에 보이는지와 눈높이 0.9 m가 적절한지, 3인칭 2.5 m·1.8 m가 적절한지, 실제 크기 트랙에서 프레임이 떨어지지 않는지(떨어지면 컬링 착수), 모드 전환 후 핀치가 계속 잡히는지.
+- **영향받는 절**: `Docs/TechTask.md` M2·M6, README(Phase 2), `KartCore/ScenePlacement.swift`(신규), `ImmersiveBoxView`(`sceneRoot`/`applyModeLayout`/`followKart`/`fitKart`/`currentHeadPose`), `KartCoreTests`
