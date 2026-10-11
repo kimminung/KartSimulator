@@ -24,9 +24,11 @@ struct ImmersiveBoxView: View {
     @State private var trackPath: TrackPath?
     @State private var lapTracker: LapTracker?
     @State private var offTrackMonitor = OffTrackMonitor()
+    @State private var wasAgainstWall = false
     @State private var trackDisplayScale: Float = 1
     @State private var trackWorldCenter: SIMD2<Float> = .zero
     @State private var raceModel = RaceModel()
+    @State private var tileLibrary = TrackTileLibrary()
 
     // 엔진음 + 효과음 (`Assets/sfx/ENGINE.md` 스펙대로, 디자인 결정 20-6).
     @State private var engineMachine = EngineSoundMachine()
@@ -116,6 +118,9 @@ struct ImmersiveBoxView: View {
 
             content.add(rootEntity)
             loadTrack(into: rootEntity)
+            if let track {
+                await buildTrackTiles(definition: track, into: rootEntity)
+            }
 
             // 디버그: 헤드 위치 구슬 + 시선 방향 막대. world 좌표계에 바로 두므로 rootEntity가 아니라
             // content에 직접 추가한다 (rootEntity는 박스 위치로 옮겨져 있어 기준이 다르다).
@@ -244,8 +249,8 @@ struct ImmersiveBoxView: View {
         }
     }
 
-    /// `Tracks/track_01.json`(앱 번들에 복사된 사본)을 읽어 월드→박스 배율을 계산하고,
-    /// path를 따라 간단한 점열 시각화를 깔아 둔다. 실제 타일 3D 에셋은 M3 이후(디자인 전달 후).
+    /// `Tracks/track_01.json`(앱 번들에 복사된 사본)을 읽어 월드→박스 배율을 계산한다.
+    /// 타일 3D 배치는 `buildTrackTiles(definition:into:)`가 비동기로 따로 한다(디자인 결정 36-4).
     @MainActor
     private func loadTrack(into parent: Entity) {
         guard let url = Bundle.main.url(forResource: "track_01", withExtension: "json") else {
@@ -269,8 +274,6 @@ struct ImmersiveBoxView: View {
             lapTracker = LapTracker(track: definition)
             trackDisplayScale = trackFootprint / worldSpan
             trackWorldCenter = SIMD2((minX + maxX) / 2, (minZ + maxZ) / 2)
-
-            parent.addChild(buildTrackVisual(definition: definition, path: path))
 
             let startPoint = path.points[definition.start.pathIndex]
             motion = KartMotionState(
@@ -298,29 +301,73 @@ struct ImmersiveBoxView: View {
         }
     }
 
+    /// 트랙 그리드 전체를 실제 타일 3D 모델(`tile_straight`/`tile_curve`/`tile_start`/`tile_grass`)로
+    /// 깐다 — 디자인 결정 36-4로 타일 에셋이 도착해서, 점열 placeholder(이전 구현)를 대체한다.
+    /// `tiles`에 없는 칸은 전부 잔디로 채운다.
     @MainActor
-    private func buildTrackVisual(definition: TrackDefinition, path: TrackPath) -> Entity {
-        let root = Entity()
-        // 트랙 경로·출발점 색(`Design/style-guide.md` 1-1·1-4장, 디자인 결정 20-11).
-        let pathMaterial = UnlitMaterial(color: .style(StylePalette.edgeLine))
-        let startMaterial = UnlitMaterial(color: .style(StylePalette.mmFinish))
-        let markerSize: Float = 0.006
+    private func buildTrackTiles(definition: TrackDefinition, into parent: Entity) async {
+        guard !definition.tiles.isEmpty else { return }
         let floorY = -boxSize.y / 2 + 0.011
+        var occupied = Set<Int>()
 
-        for point in path.points {
-            let display = worldToDisplay(SIMD2(point.x, point.y))
-            let marker = ModelEntity(mesh: .generateBox(size: markerSize), materials: [pathMaterial])
-            marker.position = SIMD3(display.x, floorY, display.y)
-            root.addChild(marker)
+        func cellKey(_ col: Int, _ row: Int) -> Int { row * definition.grid.cols + col }
+
+        // 잔디는 실제 트랙 타일이 차지하는 칸의 바운딩 사각형만 채운다 — `grid.cols`×`grid.rows`
+        // 전체(생성 시 여백 포함)를 채우면 `trackDisplayScale`(트랙 경로 바운딩 박스 기준)보다
+        // 커져서 박스 밖으로 넘친다. `gen_track.py`의 타일 중심 공식과 맞춰 보면 타일 바운딩 사각형이
+        // 정확히 `path`의 바운딩 박스와 일치한다(둘 다 같은 타일 중심들에서 나왔으니까).
+        let cols = definition.tiles.map(\.col)
+        let rows = definition.tiles.map(\.row)
+        let colRange = cols.min()!...cols.max()!
+        let rowRange = rows.min()!...rows.max()!
+
+        for tile in definition.tiles {
+            occupied.insert(cellKey(tile.col, tile.row))
+            // `rot`은 gen_track.py의 시계방향(컴퍼스) 각도인데, 우리 쪽 Y축 회전(simd_quatf)은
+            // 반시계 방향이 양수라 부호를 뒤집는다 — 타일끼리 이음새가 안 맞으면 여기부터 의심한다.
+            await placeTile(
+                type: tile.type,
+                col: tile.col,
+                row: tile.row,
+                rotationDegrees: -Float(tile.rot),
+                tileSize: definition.tileSize,
+                floorY: floorY,
+                into: parent
+            )
         }
 
-        let startPoint = path.points[definition.start.pathIndex]
-        let startDisplay = worldToDisplay(SIMD2(startPoint.x, startPoint.y))
-        let startMarker = ModelEntity(mesh: .generateSphere(radius: markerSize), materials: [startMaterial])
-        startMarker.position = SIMD3(startDisplay.x, floorY + 0.003, startDisplay.y)
-        root.addChild(startMarker)
+        for row in rowRange {
+            for col in colRange where !occupied.contains(cellKey(col, row)) {
+                await placeTile(
+                    type: "grass",
+                    col: col,
+                    row: row,
+                    rotationDegrees: 0,
+                    tileSize: definition.tileSize,
+                    floorY: floorY,
+                    into: parent
+                )
+            }
+        }
+    }
 
-        return root
+    @MainActor
+    private func placeTile(
+        type: String,
+        col: Int,
+        row: Int,
+        rotationDegrees: Float,
+        tileSize: Float,
+        floorY: Float,
+        into parent: Entity
+    ) async {
+        guard let entity = await tileLibrary.makeTile(type: type) else { return }
+        let worldCenter = SIMD2(Float(col) * tileSize + tileSize / 2, -(Float(row) * tileSize + tileSize / 2))
+        let display = worldToDisplay(worldCenter)
+        entity.scale = SIMD3(repeating: trackDisplayScale)
+        entity.position = SIMD3(display.x, floorY, display.y)
+        entity.orientation = simd_quatf(angle: rotationDegrees * .pi / 180, axis: [0, 1, 0])
+        parent.addChild(entity)
     }
 
     /// 트랙 월드 좌표(XZ, 미터)를 박스 바닥의 표시 좌표로 변환한다.
@@ -375,7 +422,7 @@ struct ImmersiveBoxView: View {
         motion = motion.advancing(drive: drive, tuning: tuning, deltaTime: deltaTime)
 
         let positionXZ = SIMD2(motion.position.x, motion.position.z)
-        let (pathIndex, distanceFromCenterline) = trackPath.closestSegment(to: positionXZ)
+        let (pathIndex, distanceFromCenterline, projectedOnCenterline) = trackPath.closestSegment(to: positionXZ)
         let previousProgress = lapTracker.progress
         lapTracker.update(pathIndex: pathIndex)
         let newProgress = lapTracker.progress
@@ -388,6 +435,26 @@ struct ImmersiveBoxView: View {
             sfxPlayer?.play(.lapComplete)
         } else if newProgress.checkpointsPassedThisLap > previousProgress.checkpointsPassedThisLap {
             sfxPlayer?.play(.checkpoint)
+        }
+
+        // 벽 콜리전: 타일 가장자리(중심선에서 tileSize/2)를 벽으로 보고 그 안쪽으로 밀어낸다 — 타일
+        // 메시로 레이캐스트하는 대신, 이미 매 프레임 계산하는 중심선 거리를 그대로 재사용한 단순 모델.
+        // 실제로는 커브 타일 안쪽 모서리엔 벽이 없다(이슈 #9)지만, 좌우를 구분 안 하는 이 모델은
+        // 양쪽을 다 막는다 — 실기기에서 커브 안쪽이 막혀 어색하면 다시 손봐야 한다.
+        let wallDistance = track.tileSize / 2
+        if distanceFromCenterline > wallDistance {
+            let outward = positionXZ - projectedOnCenterline
+            let outwardLength = simd_length(outward)
+            let direction = outwardLength > 0.0001 ? outward / outwardLength : SIMD2<Float>(1, 0)
+            let clamped = projectedOnCenterline + direction * wallDistance
+            motion.position.x = clamped.x
+            motion.position.z = clamped.y
+            if !wasAgainstWall {
+                sfxPlayer?.play(.wallBump)
+            }
+            wasAgainstWall = true
+        } else {
+            wasAgainstWall = false
         }
 
         let isOffTrack = distanceFromCenterline > (track.width / 2 + 0.5)
@@ -557,11 +624,117 @@ private struct RaceHUDOverlay: View {
                         .foregroundStyle(Color.style(StylePalette.uiWarn))
                 }
             }
+            PinchStatusView(drive: hud.drive, left: hud.left, right: hud.right)
             Button("박스 닫기", action: onClose)
                 .buttonStyle(.bordered)
         }
         .padding(12)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+/// 핀치 상태 6상태 + 페달 게이지 (디자인 PRD 7장, 결정 36-1). 왼손/오른손 핀치 여부, 가운데
+/// 동작 아이콘, 전진(`ui-cyan` ↑)·후진(`ui-magenta` ↓) 세기를 색+모양+방향 세 가지로 함께 보여준다.
+/// 아이콘은 디자인 SVG 세트(`Design/icons/`) 대신 SF Symbols로 자리만 잡아 둔 상태.
+private struct PinchStatusView: View {
+    let drive: DriveState
+    let left: HandStatus
+    let right: HandStatus
+
+    private var pedalValue: Float {
+        if case .pedal(let value) = drive { return value }
+        return 0
+    }
+
+    /// `waiting`(거리 계산 전 과도기)도 `pedal(0)`과 같은 중립 행으로 취급해 게이지를 그대로 보여준다
+    /// (디자인 PRD 7장 표에서 두 상태를 한 줄로 묶어 둠).
+    private var showsGauge: Bool {
+        switch drive {
+        case .pedal, .waiting: return true
+        default: return false
+        }
+    }
+
+    private var gaugeLabel: String {
+        if pedalValue > 0.02 { return "전진 \(Int((pedalValue * 100).rounded()))%" }
+        if pedalValue < -0.02 { return "후진 \(Int((-pedalValue * 100).rounded()))%" }
+        return "중립"
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            handDot(pinching: left.pinching)
+            centerIcon
+            if showsGauge {
+                VStack(spacing: 2) {
+                    PedalGaugeBar(value: pedalValue)
+                    Text(gaugeLabel)
+                        .font(.caption2)
+                        .foregroundStyle(Color.style(StylePalette.uiInk).opacity(0.8))
+                }
+            }
+            handDot(pinching: right.pinching)
+        }
+    }
+
+    @ViewBuilder
+    private var centerIcon: some View {
+        switch drive {
+        case .stopped:
+            Image(systemName: "stop.fill")
+                .foregroundStyle(Color.style(StylePalette.uiInk).opacity(0.4))
+        case .turnLeft:
+            Image(systemName: "arrowshape.turn.up.left.fill")
+                .foregroundStyle(Color.style(StylePalette.uiInk))
+        case .turnRight:
+            Image(systemName: "arrowshape.turn.up.right.fill")
+                .foregroundStyle(Color.style(StylePalette.uiInk))
+        case .waiting:
+            EmptyView()
+        case .pedal(let value) where value > 0.02:
+            Image(systemName: "arrow.up")
+                .foregroundStyle(Color.style(StylePalette.uiCyan))
+        case .pedal(let value) where value < -0.02:
+            Image(systemName: "arrow.down")
+                .foregroundStyle(Color.style(StylePalette.uiMagenta))
+        case .pedal:
+            EmptyView()
+        }
+    }
+
+    private func handDot(pinching: Bool) -> some View {
+        Circle()
+            .fill(pinching ? Color.style(StylePalette.uiCyan) : Color.style(StylePalette.uiInk).opacity(0.4))
+            .frame(width: 10, height: 10)
+    }
+}
+
+/// 세로 페달 게이지: 가운데 눈금이 중립, 위쪽은 전진(`ui-cyan`), 아래쪽은 후진(`ui-magenta`)
+/// 세기를 `abs(pedal)`(0~1)만큼 채운다 (디자인 PRD 7장 "페달 게이지").
+private struct PedalGaugeBar: View {
+    let value: Float
+
+    var body: some View {
+        GeometryReader { geo in
+            let width = geo.size.width
+            let half = geo.size.height / 2
+            let fillHeight = CGFloat(min(max(abs(value), 0), 1)) * half
+            ZStack {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(Color.style(StylePalette.uiRim))
+                Rectangle()
+                    .fill(Color.style(StylePalette.uiInk).opacity(0.6))
+                    .frame(width: width, height: 1)
+                    .position(x: width / 2, y: half)
+                if fillHeight > 0 {
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(Color.style(value >= 0 ? StylePalette.uiCyan : StylePalette.uiMagenta))
+                        .frame(width: width, height: fillHeight)
+                        .position(x: width / 2, y: value >= 0 ? half - fillHeight / 2 : half + fillHeight / 2)
+                }
+            }
+        }
+        .frame(width: 10, height: 42)
     }
 }
 #endif
