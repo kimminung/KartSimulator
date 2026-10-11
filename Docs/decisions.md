@@ -269,3 +269,23 @@
 - **반영 안 함(검토 후 판단)**: 이슈 #9의 "풍경 텍스처가 필요하면 `Design/textures/tex_*.png` 사용"은 조건부 항목이다. 잔디 타일(`tile_grass.usdz`)이 이미 원본 `tiles.png` 텍스처를 그대로 갖고 있어 트랙 바운딩 박스 안쪽은 전부 덮이고, 그 바깥의 박스 바닥판은 결정 35번에서 이미 스타일 가이드 색(`StylePalette.road`)으로 의도적으로 깔아 둔 부분이라 추가 텍스처가 필요 없다고 판단했다.
 - **확인**: 두 변경 모두 visionOS 시뮬레이터 destination으로 전체 빌드 통과(`BuildProject`), `KartCoreTests` 37개 중 35개 통과 — 실패한 5개(`EngineSoundMachineTests`, 엔진 사운드 상태 전환)는 오늘 건드린 파일과 무관한 기존 결함으로 별도 기록. 실기기(진짜 Vision Pro)는 사용자 지시에 따라 건드리지 않았다.
 - **영향받는 절**: `Docs/TechTask.md` M3·M5, `KartCore/TrackPath.swift`(반환 튜플에 `projected` 추가), `ImmersiveBoxView.swift`, `ContentView.swift`, `Assets.xcassets/Onboarding/`(신규), GitHub 이슈 #9·#12, PR #14
+
+## 40. [디자인] 운전 모드 3종 온보딩 그림 — 디오라마 캡션 개정, 1인칭 2장·3인칭 4장 신규
+
+- **날짜**: 2026-10-11
+- **결정자**: 디자인
+- **배경**: 테크 결정 39(운전 모드 3종, `Dev` 브랜치 — 이 PR 시점에는 아직 `main`에 없다)로 조작법 화면이 디오라마·1인칭·3인칭 세그먼트로 나뉘었는데, 그림은 디오라마용 5장뿐이라 테크가 1인칭·3인칭 칸에 SF Symbols로 자리만 잡아 둔 상태였다. 요청대로 디오라마 5장은 캡션 중심으로 손보고, 1인칭 2장·3인칭 4장을 새로 만들었다. 파일명은 테크가 제안한 이름 그대로다.
+- **1. 디오라마 5장**
+  - `gesture_01_forward`: 전진의 뜻이 "모을수록"에서 "핀치 시작 자리를 유지"로 바뀌어(결정 39의 상대 드래그) 안쪽 화살표를 지웠다. 손을 03~05와 같은 자리(x 8/136)로 옮기고, 두 핀치 점을 잇는 `ui-cyan` 점선(dash 4/6, 70 %)으로 "그 자리에 둔다"를 표현했다.
+  - `gesture_02_reverse`: 그림 그대로(넓게 벌린 양손 + `ui-magenta` 바깥 화살표가 "핀치한 채로 벌리면"과 맞다). `gesture_03_left`·`04_right`·`05_stop`: 그림 변경 없음, 캡션만 테크 `OnboardingView`와 맞췄다.
+- **2. 1인칭 2장**
+  - `gesture_fp_01_steer`: 손 대신 **위에서 본 머리(헤드셋)**를 그렸다 — 머리 `ui-ink`, 바이저·스트랩 `black 0`(#252934), 바이저 앞선에 `ui-cyan` 유리선(어두운 배경에서도 앞뒤가 보이게), 바이저에서 머리 방향으로 나가는 `ui-cyan` 화살표. 머리 전체를 28° 돌리고 카트도 같은 각도로 돌린 뒤, 카트 코 앞에서 꺾이는 `ui-cyan` 점선 호(dash 8/6)로 "서서히"를 표현했다. 눈이 아니라 헤드셋인 이유는 결정 39 기술 노트(visionOS는 앱에 눈동자 방향을 안 준다 → 실제로는 머리 방향 조향).
+  - `gesture_fp_02_throttle`: 왼손 핀치(활성) + `ui-cyan` ↑(가속), 오른손 펼침은 `ui-ink` 40 %(스타일 가이드 3장의 비활성 색) + 40 % ↓(감속), 카트는 전진 ↑. "한쪽 손이라도 핀치하면 가속, 떼면 감속"을 한 장에 담았다.
+- **3. 3인칭 4장**
+  - `gesture_tp_01_forward`: 양손 핀치 + 카트 전진 ↑ + 카트 오른쪽에 **후진 없음 배지**(`icon_arrow_reverse`를 `ui-magenta` 2배로 + `ui-ink` 사선). 디오라마 01과 달리 점선(자리 유지)도 간격 화살표도 없다 — 거리와 무관하게 항상 전진.
+  - `gesture_tp_02_left`·`03_right`·`04_stop`: 디오라마 03·04·05와 같은 구성(같은 손 모양이 같은 뜻이라 일부러 같게). 테크가 모드별로 이름으로 연결하도록 파일만 따로 뒀다.
+- **공통 규격**: 디자인 PRD 9장 그대로 — 240×240, 투명 배경, 1인칭 손등 시점, 핀치 점 `ui-cyan` r 7, 카트 48×48 위에서 본 픽셀 실루엣. 모든 장에서 손 자리를 x 8/136으로 통일해 장마다 바뀐 것만 눈에 들어오게 했다(예외: 02 넓게 벌림, fp 01 손 없음). 초판 PRD의 `hud-ink`/`accent-blue`는 RetireX 팔레트(결정 20-11)의 `ui-ink`/`ui-cyan`이다.
+- **만든 방법**: `Design/tools/icons.mjs`를 확장했다(여러 색 픽셀 마스크용 `pix()`, 헤드셋 마스크 `HEAD_TOP`, `holdLine`/`noReverse`/`gentleArc`/`arrowV`). 모든 SVG가 여전히 `<rect>`·`<line>`·`<path>`·`<polygon>`과 `fill-opacity`만 쓰고(점선도 `stroke-dasharray` 대신 짧은 조각으로 그려서 Xcode SVG 수입기가 떨어뜨릴 요소가 없다), 결정 38에서 확인한 경로로 Xcode 벡터 에셋에 바로 들어간다. 미리보기 `Design/onboarding/_sheet.png`는 모드별 3줄로 다시 그렸다.
+- **보류**: 목업 `Design/mockups/02_howto.png`는 모드 세그먼트가 생겨 화면 구성 자체가 바뀌어야 해서 이번엔 다시 그리지 않았다(PRD 8장 메뉴 4화면 리디자인 때 함께). HUD 24×24용 "머리 조향" 상태 아이콘은 테크가 `PinchStatusView`에 SF Symbol로 넣어 둔 상태라 요청이 오면 아이콘 세트에 추가한다.
+- **테크에 넘기는 것**: `Assets.xcassets/Onboarding/`에 새 6장을 `preserves-vector-representation` imageset으로 추가하고, `ContentView.swift`의 `FirstPersonOnboardingContent`·`ThirdPersonOnboardingContent`에서 `SymbolInstructionCard`를 그림 카드로 교체. 캡션은 `_sheet.png`와 PRD 9장 표 그대로. 디오라마 중립 안내 문구도 "핀치를 시작한 자리에 두면 제자리(중립)"로.
+- **영향받는 절**: 디자인 PRD 9·12·15장, `Design/onboarding/`(11장 + `_sheet.png`), `Design/tools/icons.mjs`, 테크 `ContentView.swift` `OnboardingView`

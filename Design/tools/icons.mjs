@@ -139,14 +139,92 @@ const turnArrow = (x, y, dir) => dir === "l"
   ? `<path d="M${x + 14} ${y + 26} V${y + 8} H${x}" fill="none" stroke="${PAL.cyan}" stroke-width="4"/><polygon points="${x - 6},${y + 8} ${x + 2},${y} ${x + 2},${y + 16}" fill="${PAL.cyan}"/>`
   : `<path d="M${x} ${y + 26} V${y + 8} H${x + 14}" fill="none" stroke="${PAL.cyan}" stroke-width="4"/><polygon points="${x + 20},${y + 8} ${x + 12},${y} ${x + 12},${y + 16}" fill="${PAL.cyan}"/>`;
 const kartUp = `<polygon points="120,160 112,172 128,172" fill="${PAL.cyan}"/>`, kartDown = `<polygon points="120,238 112,226 128,226" fill="${PAL.magenta}"/>`;
-// pinch in (hands close, arrows point inward) = forward; pinch out (hands wide, arrows outward) = reverse
+// dotted line joining the two pinch points: "keep the pinch where it started" (decision 39 diorama forward)
+// (dashes are plain rects, not stroke-dasharray, so Xcode's SVG importer cannot drop them)
+const holdLine = (x1, x2, y) => { let s = ""; for (let x = x1; x + 4 <= x2; x += 10) s += `<rect x="${x}" y="${y - 1}" width="4" height="3" fill="${PAL.cyan}" fill-opacity="0.7"/>`; return s; };
+// "no reverse" badge (3rd person forward, PRD 9 / decision 39): small ui-magenta down arrow with a hud-ink slash
+const noReverse = (x, y) => `<g transform="translate(${x} ${y}) scale(2)" color="${PAL.magenta}" style="color:${PAL.magenta}">${ICON.arrow_reverse}</g>` + `<line x1="${x + 6}" y1="${y + 42}" x2="${x + 42}" y2="${y + 6}" stroke="${PAL.ink}" stroke-width="5"/>`;
+// gradual turn: dashed arc from the kart's nose bending to the side, arrow head along the tangent
+const gentleArc = (dir) => {
+  const m = dir === "r" ? 1 : -1, ex = 120 + m * 34, ey = 126, P0 = [120, 168], P1 = [120, 136], P2 = [ex, ey];
+  const q = (t) => [0, 1].map((i) => (1 - t) ** 2 * P0[i] + 2 * (1 - t) * t * P1[i] + t * t * P2[i]);
+  // the quadratic curve is sampled into short stroked pieces (dash 8 / gap 6 in parameter space ~ 56 px long)
+  let s = "", n = 14;
+  for (let k = 0; k < n; k += 2) { const a = q(k / n), b = q(Math.min((k + 1.15) / n, 1)); s += `<path d="M${a[0].toFixed(1)} ${a[1].toFixed(1)} L${b[0].toFixed(1)} ${b[1].toFixed(1)}" fill="none" stroke="${PAL.cyan}" stroke-width="4"/>`; }
+  const ang = (Math.atan2(-10, m * 34) * 180) / Math.PI;
+  return s + `<polygon transform="translate(${ex} ${ey}) rotate(${ang})" points="10,0 -2,-8 -2,8" fill="${PAL.cyan}"/>`;
+};
+// multi-colour pixel mask: each char maps to a fill
+function pix(mask, map, s, ox, oy, opacity = 1) {
+  let out = "";
+  mask.forEach((row, y) => {
+    for (let x = 0; x < row.length;) {
+      const c = row[x]; if (!map[c]) { x++; continue; }
+      let x1 = x; while (x1 < row.length && row[x1] === c) x1++;
+      // the hairline stroke hides anti-aliasing seams between rows once the group is rotated
+      out += `<rect x="${ox + x * s}" y="${oy + y * s}" width="${(x1 - x) * s}" height="${s}" fill="${map[c]}" stroke="${map[c]}" stroke-width="0.6"${opacity < 1 ? ` opacity="${opacity}"` : ""}/>`;
+      x = x1;
+    }
+  });
+  return out;
+}
+// head seen from above wearing the headset, nose up: H = head (hud-ink), V = visor + strap (black 0), 24 x 24
+const HEAD_TOP = [
+  "........................",
+  "........................",
+  "......VVVVVVVVVVVV......",
+  ".....VVVVVVVVVVVVVV.....",
+  ".....VVVVVVVVVVVVVV.....",
+  ".....VVVVVVVVVVVVVV.....",
+  ".....VVHHHHHHHHHHVV.....",
+  "......VHHHHHHHHHHV......",
+  "......VHHHHHHHHHHV......",
+  "....HHHHHHHHHHHHHHHH....",
+  "....HHHHHHHHHHHHHHHH....",
+  "....HHHHHHHHHHHHHHHH....",
+  "....HHHHHHHHHHHHHHHH....",
+  "......HHHHHHHHHHHH......",
+  "......HHHHHHHHHHHH......",
+  "......HHHHHHHHHHHH......",
+  ".......HHHHHHHHHH.......",
+  "........HHHHHHHH........",
+  ".........VVVVVV.........",
+  "........................",
+];
+const HEAD_COL = { H: PAL.ink, V: PAL.dark };
+// head group: head at scale 3 (72 px) + ui-cyan arrow out of the visor, the whole thing rotated by `rot` around the head centre
+// the visor's front edge gets a ui-cyan glass line so the facing direction reads on dark and light backgrounds alike
+const headSvg = (cx, cy, rot) => `<g transform="rotate(${rot} ${cx} ${cy})">${pix(HEAD_TOP, HEAD_COL, 3, cx - 36, cy - 30)}` +
+  `<rect x="${cx - 18}" y="${cy - 24}" width="36" height="3" fill="${PAL.cyan}"/>` +
+  `<rect x="${cx - 2}" y="${cy - 60}" width="4" height="36" fill="${PAL.cyan}"/><polygon points="${cx},${cy - 72} ${cx - 10},${cy - 58} ${cx + 10},${cy - 58}" fill="${PAL.cyan}"/></g>`;
+// small vertical arrows for throttle (ui-cyan up = accelerate, hud-ink 40 % down = coast)
+const arrowV = (x, y, h, dir, col, op = 1) => `<g fill-opacity="${op}"><rect x="${x - 2}" y="${y}" width="4" height="${h}" fill="${col}"/>` +
+  (dir === "u" ? `<polygon points="${x},${y - 10} ${x - 9},${y + 2} ${x + 9},${y + 2}" fill="${col}"/>` : `<polygon points="${x},${y + h + 10} ${x - 9},${y + h - 2} ${x + 9},${y + h - 2}" fill="${col}"/>`) + "</g>";
+const stopBlock = `<rect x="152" y="188" width="24" height="24" fill="${PAL.ink}"/>`;
+
+// Three driving modes (decision 39). Hands sit at the same resting spots (x 8 / 136) in every card so the eye only
+// has to read what changed: pinch dot, spacing, arrows.
 const G = {
-  gesture_01_forward: hand(HAND_PINCH_L, 36, 20, [13, 3]) + hand(mirror(HAND_PINCH_L), 108, 20, [10, 3]) + arrowH(48, 132, 48, "r") + arrowH(144, 132, 48, "l") + kartSvg(96, 176, 0) + kartUp,
+  // -- diorama: both hands pinched and held = forward; still pinched but spread apart = reverse; one hand only = turn
+  gesture_01_forward: hand(HAND_PINCH_L, 8, 20, [13, 3]) + hand(mirror(HAND_PINCH_L), 136, 20, [10, 3]) + holdLine(76, 168, 36) + kartSvg(96, 176, 0) + kartUp,
   gesture_02_reverse: hand(HAND_PINCH_L, -12, 20, [13, 3]) + hand(mirror(HAND_PINCH_L), 156, 20, [10, 3]) + arrowH(76, 132, 30, "l").replaceAll(PAL.cyan, PAL.magenta) + arrowH(134, 132, 30, "r").replaceAll(PAL.cyan, PAL.magenta) + kartSvg(96, 172, 0) + kartDown,
   gesture_03_left: hand(HAND_PINCH_L, 8, 20, [13, 3]) + hand(mirror(HAND_OPEN_L), 136, 20) + kartSvg(96, 176, -30) + turnArrow(56, 150, "l"),
   gesture_04_right: hand(HAND_OPEN_L, 8, 20) + hand(mirror(HAND_PINCH_L), 136, 20, [10, 3]) + kartSvg(96, 176, 30) + turnArrow(166, 150, "r"),
-  gesture_05_stop: hand(HAND_OPEN_L, 8, 20) + hand(mirror(HAND_OPEN_L), 136, 20) + kartSvg(96, 176, 0) + `<rect x="152" y="188" width="24" height="24" fill="${PAL.ink}"/>`,
+  gesture_05_stop: hand(HAND_OPEN_L, 8, 20) + hand(mirror(HAND_OPEN_L), 136, 20) + kartSvg(96, 176, 0) + stopBlock,
+  // -- first person: the head (not the eyes: visionOS gives apps the device pose only) steers slowly; any pinch = throttle
+  gesture_fp_01_steer: headSvg(120, 84, 28) + kartSvg(96, 176, 28) + gentleArc("r"),
+  gesture_fp_02_throttle: hand(HAND_PINCH_L, 8, 20, [13, 3]) + arrowV(56, 136, 24, "u", PAL.cyan) + hand(mirror(HAND_OPEN_L), 136, 20).replace("<g fill", `<g fill-opacity="0.4" fill`) + arrowV(184, 128, 24, "d", PAL.ink, 0.4) + kartSvg(96, 176, 0) + kartUp,
+  // -- third person: same hand shapes as the diorama, but both hands pinched is always forward (no reverse, no spacing)
+  gesture_tp_01_forward: hand(HAND_PINCH_L, 8, 20, [13, 3]) + hand(mirror(HAND_PINCH_L), 136, 20, [10, 3]) + kartSvg(96, 176, 0) + kartUp + noReverse(156, 176),
+  gesture_tp_02_left: hand(HAND_PINCH_L, 8, 20, [13, 3]) + hand(mirror(HAND_OPEN_L), 136, 20) + kartSvg(96, 176, -30) + turnArrow(56, 150, "l"),
+  gesture_tp_03_right: hand(HAND_OPEN_L, 8, 20) + hand(mirror(HAND_PINCH_L), 136, 20, [10, 3]) + kartSvg(96, 176, 30) + turnArrow(166, 150, "r"),
+  gesture_tp_04_stop: hand(HAND_OPEN_L, 8, 20) + hand(mirror(HAND_OPEN_L), 136, 20) + kartSvg(96, 176, 0) + stopBlock,
 };
+const G_ROWS = [ // preview sheet rows: [names, captions] per mode (captions = ContentView OnboardingView, decision 39)
+  [["gesture_01_forward", "gesture_02_reverse", "gesture_03_left", "gesture_04_right", "gesture_05_stop"], ["양손을 핀치한 채로 있으면 전진", "핀치한 채로 양손을 벌리면 후진", "오른손을 떼면(왼손만 핀치) 좌회전", "왼손을 떼면(오른손만 핀치) 우회전", "양손을 떼면 멈춤"], "디오라마"],
+  [["gesture_fp_01_steer", "gesture_fp_02_throttle"], ["머리가 향하는 쪽으로 서서히 회전", "한쪽 손이라도 핀치하면 가속, 떼면 감속"], "1인칭"],
+  [["gesture_tp_01_forward", "gesture_tp_02_left", "gesture_tp_03_right", "gesture_tp_04_stop"], ["양손을 핀치하면 전진 (후진 없음)", "왼손만 핀치하면 좌회전", "오른손만 핀치하면 우회전", "양손을 떼면 멈춤"], "3인칭"],
+];
 for (const old of ["gesture_02_left", "gesture_03_right", "gesture_04_stop"]) fs.rmSync(path.join(ONB, old + ".svg"), { force: true });
 fs.rmSync(path.join(ICONS, "icon_arrow_forward_full.svg"), { force: true });
 for (const [name, body] of Object.entries(G)) fs.writeFileSync(path.join(ONB, `${name}.svg`), `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240" shape-rendering="crispEdges"><title>${name}</title>${body}</svg>\n`);
@@ -166,10 +244,19 @@ if (sharp) {
   });
   sheet += "</svg>";
   await sharp(Buffer.from(sheet)).png().toFile(path.join(ICONS, "_sheet.png"));
-  const g = Object.keys(G);
-  let gs = `<svg xmlns="http://www.w3.org/2000/svg" width="${g.length * 260}" height="300"><rect width="100%" height="100%" fill="#010B1A"/>`;
-  const caption = ["양손을 모을수록 빨리 전진", "양손을 벌릴수록 빨리 후진", "왼손만 핀치하면 좌회전", "오른손만 핀치하면 우회전", "양손을 떼면 멈춤"];
-  g.forEach((n, i) => { const inner = fs.readFileSync(path.join(ONB, n + ".svg"), "utf8").replace(/<svg[^>]*>/, "").replace("</svg>", "").replace(/<title>.*?<\/title>/, ""); gs += `<g transform="translate(${i * 260 + 10} 10)">${inner}</g><text x="${i * 260 + 130}" y="280" font-family="Malgun Gothic" font-size="15" fill="#e6edf3" text-anchor="middle">${caption[i]}</text>`; });
+  // one row per driving mode, mode name on the left margin
+  const rowH = 330, left = 120, gcols = Math.max(...G_ROWS.map(([n]) => n.length));
+  let gs = `<svg xmlns="http://www.w3.org/2000/svg" width="${left + gcols * 260}" height="${G_ROWS.length * rowH}"><rect width="100%" height="100%" fill="#010B1A"/>`;
+  G_ROWS.forEach(([names, caption, mode], r) => {
+    const y0 = r * rowH + 20;
+    gs += `<text x="24" y="${y0 + 130}" font-family="Malgun Gothic, Apple SD Gothic Neo, sans-serif" font-size="20" font-weight="700" fill="${PAL.cyan}">${mode}</text>`;
+    if (r) gs += `<rect x="24" y="${r * rowH - 1}" width="${left + gcols * 260 - 48}" height="1" fill="#223A60"/>`;
+    names.forEach((n, i) => {
+      const inner = fs.readFileSync(path.join(ONB, n + ".svg"), "utf8").replace(/<svg[^>]*>/, "").replace("</svg>", "").replace(/<title>.*?<\/title>/, "");
+      const x = left + i * 260;
+      gs += `<g transform="translate(${x + 10} ${y0})">${inner}</g><text x="${x + 130}" y="${y0 + 272}" font-family="Malgun Gothic, Apple SD Gothic Neo, sans-serif" font-size="15" fill="#e6edf3" text-anchor="middle">${caption[i]}</text><text x="${x + 130}" y="${y0 + 294}" font-family="Consolas, Menlo, monospace" font-size="11" fill="#8a97a6" text-anchor="middle">${n}</text>`;
+    });
+  });
   gs += "</svg>";
   await sharp(Buffer.from(gs)).png().toFile(path.join(ONB, "_sheet.png"));
 }
