@@ -5,6 +5,12 @@
 **Apple Vision Pro에서 양손 핀치만으로 조종하는 책상 위 복셀 카트 레이싱.**
 컨트롤러 없이, 눈앞에 열린 작은 박스 안의 트랙(또는 실제 크기 트랙)을 손가락 핀치로 달립니다.
 
+### 앱 소개 영상 (30초)
+
+https://github.com/kimminung/KartSimulator/releases/download/v0.3.0/PinchRover_Opening_README_720p.mp4
+
+영상 파일은 릴리스 [v0.3.0](https://github.com/kimminung/KartSimulator/releases/tag/v0.3.0)의 첨부 자산입니다(1280×720, H.264). 재생이 안 보이면 위 링크로 내려받아 볼 수 있습니다.
+
 | | | |
 | --- | --- | --- |
 | ![카트 선택 메뉴](Docs/review/pr14-device-screenshots/03-kart-select-menu.png) | ![박스 디오라마](Docs/review/pr14-device-screenshots/01-box-overview-wide.png) | ![주행](Docs/review/pr14-device-screenshots/06-driving-close.png) |
