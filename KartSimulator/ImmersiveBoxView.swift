@@ -28,6 +28,11 @@ struct ImmersiveBoxView: View {
     @State private var trackWorldCenter: SIMD2<Float> = .zero
     @State private var raceModel = RaceModel()
 
+    // 엔진음 + 효과음 (`Assets/sfx/ENGINE.md` 스펙대로, 디자인 결정 20-6).
+    @State private var engineMachine = EngineSoundMachine()
+    @State private var engineAudioPlayer: EngineAudioPlayer?
+    @State private var sfxPlayer: SFXPlayer?
+
     // RealityKit의 매 프레임 콜백에서 안전하게 쓸 수 있는 평범한 스냅샷. `raceModel`은 HUD가
     // 직접 읽으므로, 프레임 콜백에서 바로 건드리면 "Modifying state during view update"가 난다.
     // 대신 여기 적어두고, 별도 폴링 루프(`runHUDUpdateLoop`)에서 raceModel로 옮긴다.
@@ -77,7 +82,8 @@ struct ImmersiveBoxView: View {
 
             let floor = ModelEntity(
                 mesh: .generateBox(width: boxSize.x * 0.96, height: 0.01, depth: boxSize.z * 0.96),
-                materials: [SimpleMaterial(color: .init(white: 0.22, alpha: 1), roughness: 0.6, isMetallic: false)]
+                // 트랙 노면 색(`Design/style-guide.md` 1-1장, 디자인 결정 20-11).
+                materials: [SimpleMaterial(color: .style(StylePalette.road), roughness: 0.6, isMetallic: false)]
             )
             floor.position.y = -boxSize.y / 2 + 0.005
             rootEntity.addChild(floor)
@@ -85,6 +91,15 @@ struct ImmersiveBoxView: View {
             kartSlot.name = "kartSlot"
             kartSlot.position.y = -boxSize.y / 2 + 0.01
             rootEntity.addChild(kartSlot)
+
+            // 엔진음·효과음을 kartSlot에 붙인다(카트 모델 자체가 아니라 — 카트는 색상/모델이
+            // 바뀔 때마다 통째로 교체되지만 kartSlot은 그대로라, 여기 붙이면 다시 로드할 필요가 없다).
+            do {
+                engineAudioPlayer = try EngineAudioPlayer(kart: kartSlot)
+            } catch {
+                print("엔진음 로드 실패: \(error)")
+            }
+            sfxPlayer = SFXPlayer(entity: kartSlot)
 
             // 디버그: 카트가 실제로 지나간 경로를 빨간 선으로 남긴다. rootEntity 로컬 좌표(박스 기준)에 쌓는다.
             rootEntity.addChild(trailRoot)
@@ -264,16 +279,31 @@ struct ImmersiveBoxView: View {
                 position: SIMD3(startPoint.x, 0, startPoint.y)
             )
             raceModel.start(totalLaps: definition.laps)
+            startCountdown()
         } catch {
             print("트랙 로드 실패: \(error)")
+        }
+    }
+
+    /// `Assets/sfx/ENGINE.md` 3-4장: 카운트다운 시작(`countdownTick` 3회) → GO. 시동(`engineIgnition`)은
+    /// 카운트다운과 동시에 시작해 2.2초 뒤 공회전으로 넘어간다 — 별도 타이밍이라 병렬로 돈다.
+    private func startCountdown() {
+        engineAudioPlayer?.run(engineMachine.countdownStarted())
+        Task {
+            for _ in 0..<3 {
+                sfxPlayer?.play(.countdownTick)
+                try? await Task.sleep(for: .seconds(1))
+            }
+            sfxPlayer?.play(.go)
         }
     }
 
     @MainActor
     private func buildTrackVisual(definition: TrackDefinition, path: TrackPath) -> Entity {
         let root = Entity()
-        let pathMaterial = UnlitMaterial(color: .init(white: 0.7, alpha: 1))
-        let startMaterial = UnlitMaterial(color: .systemBlue)
+        // 트랙 경로·출발점 색(`Design/style-guide.md` 1-1·1-4장, 디자인 결정 20-11).
+        let pathMaterial = UnlitMaterial(color: .style(StylePalette.edgeLine))
+        let startMaterial = UnlitMaterial(color: .style(StylePalette.mmFinish))
         let markerSize: Float = 0.006
         let floorY = -boxSize.y / 2 + 0.011
 
@@ -346,7 +376,19 @@ struct ImmersiveBoxView: View {
 
         let positionXZ = SIMD2(motion.position.x, motion.position.z)
         let (pathIndex, distanceFromCenterline) = trackPath.closestSegment(to: positionXZ)
+        let previousProgress = lapTracker.progress
         lapTracker.update(pathIndex: pathIndex)
+        let newProgress = lapTracker.progress
+
+        // 효과음: 완주 > 랩 완료 > 체크포인트 순으로 우선순위를 둔다(동시에 일어나면 완주가 제일 중요하다).
+        if !previousProgress.isFinished && newProgress.isFinished {
+            sfxPlayer?.play(.finish)
+            engineAudioPlayer?.run(engineMachine.finished())
+        } else if newProgress.currentLap != previousProgress.currentLap {
+            sfxPlayer?.play(.lapComplete)
+        } else if newProgress.checkpointsPassedThisLap > previousProgress.checkpointsPassedThisLap {
+            sfxPlayer?.play(.checkpoint)
+        }
 
         let isOffTrack = distanceFromCenterline > (track.width / 2 + 0.5)
         offTrackMonitor.update(isOffTrack: isOffTrack, deltaTime: TimeInterval(deltaTime), threshold: tuning.offTrackRespawn)
@@ -355,9 +397,33 @@ struct ImmersiveBoxView: View {
         latestLeftStatus = leftStatus
         latestRightStatus = rightStatus
         latestSpeed = motion.speed
-        latestLapProgress = lapTracker.progress
+        latestLapProgress = newProgress
         latestCheckpointCount = track.checkpoints.count
         latestIsOffTrack = isOffTrack
+
+        // 엔진음: DriveState → 페달 크기(방향 무관)·회전 중 유지 여부로 바꿔 상태 기계에 먹인다
+        // (ENGINE.md는 forwardHalf/forwardFull 2단계 기준이었는데, 지금은 연속 페달이라 크기를 그대로 쓴다).
+        let pedalMagnitude: Double
+        let isHolding: Bool
+        switch drive {
+        case .pedal(let value):
+            pedalMagnitude = Double(abs(value))
+            isHolding = false
+        case .turnLeft, .turnRight:
+            pedalMagnitude = 0
+            isHolding = true
+        case .stopped, .waiting:
+            pedalMagnitude = 0
+            isHolding = false
+        }
+        let engineCommands = engineMachine.update(
+            dt: Double(deltaTime),
+            pedal: pedalMagnitude,
+            isHolding: isHolding,
+            speed: Double(motion.speed),
+            maxSpeed: Double(tuning.maxSpeed)
+        )
+        engineAudioPlayer?.run(engineCommands)
 
         if offTrackMonitor.shouldRespawn {
             let startPoint = trackPath.points[track.start.pathIndex]
@@ -368,6 +434,8 @@ struct ImmersiveBoxView: View {
             )
             lapTracker.resetPosition(pathIndex: track.start.pathIndex)
             offTrackMonitor.acknowledgeRespawn()
+            sfxPlayer?.play(.respawn)
+            engineAudioPlayer?.run(engineMachine.respawned())
         }
 
         let display = worldToDisplay(positionXZ)
@@ -476,14 +544,17 @@ private struct RaceHUDOverlay: View {
             VStack(spacing: 4) {
                 Text("LAP \(hud.lap) / \(hud.totalLaps)")
                     .font(.headline)
+                    .foregroundStyle(Color.style(StylePalette.uiInk))
                 Text(String(format: "%.1f s", hud.lapTime))
                     .font(.title2.monospacedDigit())
+                    .foregroundStyle(Color.style(StylePalette.uiInk))
                 Text(String(format: "%.0f km/h", hud.speedKmh))
                     .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(Color.style(StylePalette.uiInk))
                 if hud.respawning {
                     Text("트랙 이탈")
                         .font(.caption.bold())
-                        .foregroundStyle(.red)
+                        .foregroundStyle(Color.style(StylePalette.uiWarn))
                 }
             }
             Button("박스 닫기", action: onClose)

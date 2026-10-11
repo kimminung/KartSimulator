@@ -57,10 +57,8 @@ Vision Pro에서 캡처한 현재 메뉴 화면입니다. 아직 `Docs/design-pr
 
 | 역할 | 담당 |
 | --- | --- |
-| Tech | @coulson (본인) |
-| Design | 협업 예정 (초대 예정) |
-
-> 디자이너 협업자가 합류하면 이 표를 업데이트할 예정입니다.
+| Tech | [@kimminung](https://github.com/kimminung) |
+| Design | [@iMasterProX](https://github.com/iMasterProX) |
 
 ## 시작하기
 

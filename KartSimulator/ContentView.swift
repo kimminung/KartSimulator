@@ -17,7 +17,8 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 24) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("핀치 카트")
-                        .font(.largeTitle.bold())
+                        // 제목에만 픽셀 폰트(Galmuri) 적용 — 본문/숫자/라벨은 시스템 폰트 유지 (디자인 결정 20-3·20-5).
+                        .font(.custom("Galmuri11-Bold", size: 40, relativeTo: .largeTitle))
                     Text("카트를 고르고 박스 안에서 확인해 보세요.")
                         .foregroundStyle(.secondary)
                 }
