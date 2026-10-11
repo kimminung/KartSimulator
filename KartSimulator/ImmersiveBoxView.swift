@@ -19,7 +19,7 @@ struct ImmersiveBoxView: View {
     @State private var motion = KartMotionState()
     @State private var inputResolver = HandInputResolver()
     @State private var updateSubscription: Any?
-    /// 디오라마(기본) / 1인칭(머리 방향 조향) / 3인칭(한손 핀치 좌우회전) — 결정 39.
+    /// 디오라마(기본) / 3인칭(추적 카메라) — 결정 39·47·49. 두 모드의 손 조작은 같다.
     @State private var mode: ExperienceMode = .diorama
 
     @State private var track: TrackDefinition?
@@ -33,8 +33,8 @@ struct ImmersiveBoxView: View {
     // MARK: - 씬 루트 (Phase 2, 결정 44)
     // 트랙 타일·카트·트레일은 전부 `sceneRoot` 아래에 **트랙 좌표계(미터, 노면 y = 0) 실제 크기**로 둔다.
     // 모드에 따라 `sceneRoot`의 변환(`world = position + scale · R_y(yaw) · local`)만 바꾼다:
-    // 디오라마 = 박스 맞춤 배율 + 180° 회전(결정 43) + 박스 바닥, 1인칭·3인칭 = 배율 1 + 매 프레임
-    // 카트가 사용자 머리 아래(또는 앞)로 오도록 평행이동(월드는 돌지 않는다 — 멀미 요인 최소화).
+    // 디오라마 = 박스 맞춤 배율 + 180° 회전(결정 43) + 박스 바닥, 3인칭 = 배율 1 + 매 프레임 카트가 기준 방향
+    // 2.5 m 앞으로 오도록 평행이동 + 카트 뒤에서 앞을 보도록 평활 회전(결정 44~47·49).
     @State private var sceneRoot = Entity()
     @State private var boxFrame = Entity()
     @State private var boxFloor = Entity()
@@ -53,8 +53,8 @@ struct ImmersiveBoxView: View {
     @State private var sceneYaw: Float = .pi
     /// 콕핏 모드에 들어온 순간의 머리 위치(월드). 이후 카트는 매 프레임 이 점 기준으로 따라붙는다.
     @State private var cockpitAnchor: SIMD3<Float> = [0, 1.2, 0]
-    /// 3인칭: 평활된 머리 yaw(씬 좌표계). 카트를 이 방향 앞에 두어 고개를 돌려도 시야 중앙에 있게 한다(결정 45).
-    @State private var smoothedHeadYaw: Float = 0
+    /// 3인칭 카메라 기준 방향(모드 진입 순간 머리 yaw, ±60°를 2초 넘게 벗어나면 리센터 — Issue #25, 결정 49).
+    @State private var chaseReference = ChaseCameraReference(forwardYaw: 0)
     private let cockpitTuning = CockpitTuning()
     /// 디오라마: 트랙 JSON의 출발 방향은 랩·체크포인트 판정 기준이라 건드리지 않고, 박스 안의 트랙 전체를
     /// 180° 돌려 사용자 쪽에서 볼 때 카트가 반대쪽을 보고 출발하게 한다(결정 43번).
@@ -206,8 +206,8 @@ struct ImmersiveBoxView: View {
             }
 
             updateSubscription = content.subscribe(to: SceneEvents.Update.self) { event in
-                let desiredHeading = updateHeadDebugGizmo()
-                tickMotion(deltaTime: Float(event.deltaTime), desiredHeading: desiredHeading)
+                let headYaw = updateHeadDebugGizmo()
+                tickMotion(deltaTime: Float(event.deltaTime), headYaw: headYaw)
             }
         } update: { _, _ in
             guard !isLoading,
@@ -268,8 +268,9 @@ struct ImmersiveBoxView: View {
             // 모드에 들어온 순간의 머리 위치·방향을 기준으로 잡는다(시뮬레이터처럼 못 읽으면 기본값).
             let head = currentHeadPose() ?? (position: SIMD3<Float>(0, 1.2, 0), yaw: Float(0))
             cockpitAnchor = head.position
-            smoothedHeadYaw = head.yaw
-            sceneYaw = ScenePlacement.sceneYaw(startHeading: track?.start.heading ?? 0, headYaw: head.yaw)
+            // 기준 방향 = 진입 순간 머리 yaw. 들어오자마자 카트 뒤에서 앞을 보도록 씬 yaw를 바로 맞춘다.
+            chaseReference = ChaseCameraReference(forwardYaw: head.yaw)
+            sceneYaw = ScenePlacement.chaseSceneYaw(kartHeading: motion.heading, referenceYaw: head.yaw)
             sceneRoot.scale = SIMD3(repeating: 1)
             sceneRoot.orientation = simd_quatf(angle: sceneYaw, axis: [0, 1, 0])
             followKart(headYaw: head.yaw, deltaTime: 0)
@@ -314,31 +315,21 @@ struct ImmersiveBoxView: View {
         }
     }
 
-    /// 콕핏 모드: 카트의 트랙 좌표가 콕핏 목표점(머리 아래 / 바라보는 방향 앞)에 오도록 씬 루트를 평행이동한다.
-    /// 3인칭은 현재 머리 yaw(평활)를 써서 고개를 돌려도 카트가 시야 중앙에 머물고(결정 45), 추가로 씬 yaw를
-    /// "카트 뒤에서 앞을 보는" 목표로 천천히 돌려 항상 카트 진행 방향을 보게 한다(결정 46, 추적 카메라).
-    /// 1인칭은 씬 yaw를 모드 진입 때 값으로 고정한다(월드 회전 없음).
+    /// 3인칭 추적 카메라(결정 44~47·49, Issue #25): 기준 방향(`chaseReference.forwardYaw`, 진입 순간 머리 yaw)으로
+    /// 2.5 m 앞·1.8 m 아래에 카트가 오도록 씬 루트를 평행이동하고, 씬 yaw는 "카트 heading이 기준 방향을 향하게"
+    /// 2.5/s로 평활 회전한다(카트 뒤에서 앞을 본다). 머리 yaw는 카메라에 쓰지 않고 리센터 판정에만 쓴다 —
+    /// 고개를 ±45° 돌려도 아무것도 따라오지 않고, ±60°를 2초 넘게 벗어나 있으면 기준이 머리 쪽으로 1.0/s로 옮겨 간다.
     @MainActor
     private func followKart(headYaw: Float?, deltaTime: Float) {
-        guard mode != .diorama else { return }
-        if let headYaw {
-            smoothedHeadYaw = ScenePlacement.approachAngle(
-                from: smoothedHeadYaw, to: headYaw,
-                rate: cockpitTuning.thirdPersonHeadYawSmoothingRate, deltaTime: deltaTime
-            )
-            if mode == .thirdPerson {
-                let chaseYaw = ScenePlacement.chaseSceneYaw(kartHeading: motion.heading, headYaw: smoothedHeadYaw)
-                sceneYaw = ScenePlacement.approachAngle(
-                    from: sceneYaw, to: chaseYaw, rate: cockpitTuning.thirdPersonChaseYawRate, deltaTime: deltaTime
-                )
-                sceneRoot.orientation = simd_quatf(angle: sceneYaw, axis: [0, 1, 0])
-            }
-        }
-        let target = ScenePlacement.cockpitTarget(
-            anchor: cockpitAnchor, mode: mode, kartHeading: motion.heading, sceneYaw: sceneYaw,
-            headYaw: headYaw == nil ? nil : smoothedHeadYaw, tuning: cockpitTuning
-        )
-        sceneRoot.position = ScenePlacement.rootPosition(placing: motion.position, at: target, yaw: sceneYaw, scale: 1)
+        guard mode == .thirdPerson, let track else { return }
+        chaseReference.update(headYaw: headYaw, deltaTime: deltaTime, tuning: cockpitTuning)
+        let reference = chaseReference.forwardYaw
+        let chaseYaw = ScenePlacement.chaseSceneYaw(kartHeading: motion.heading, referenceYaw: reference)
+        sceneYaw = ScenePlacement.approachAngle(from: sceneYaw, to: chaseYaw, rate: cockpitTuning.thirdPersonChaseYawRate, deltaTime: deltaTime)
+        sceneRoot.orientation = simd_quatf(angle: sceneYaw, axis: [0, 1, 0])
+        let target = ScenePlacement.cockpitTarget(anchor: cockpitAnchor, mode: mode, referenceYaw: reference, tuning: cockpitTuning)
+        let kartLocal = SIMD3(motion.position.x, track.roadSurfaceHeight, motion.position.z)
+        sceneRoot.position = ScenePlacement.rootPosition(placing: kartLocal, at: target, yaw: sceneYaw, scale: 1)
     }
 
     /// 카트 모델 크기: 디오라마는 박스 배율과 무관한 고정 시각 크기(`kartVisualLength`), 실제 크기 모드는 전장 1.5 m.
@@ -478,7 +469,8 @@ struct ImmersiveBoxView: View {
     @MainActor
     private func buildTrackTiles(definition: TrackDefinition, into parent: Entity) async {
         guard !definition.tiles.isEmpty else { return }
-        // 씬 루트는 트랙 좌표계(노면 y = 0)다. 박스 바닥 높이·배율은 `applyModeLayout()`이 씬 루트 변환으로 준다.
+        // 씬 루트는 트랙 좌표계다: 타일 바닥이 y = 0, 노면 윗면은 `track.roadSurfaceHeight`(4 m 타일에서 0.25 m).
+        // 박스 바닥 높이·배율은 `applyModeLayout()`이 씬 루트 변환으로 준다.
         let floorY: Float = 0
         var occupied = Set<Int>()
 
@@ -545,7 +537,7 @@ struct ImmersiveBoxView: View {
     /// 디오라마에서는 배율만큼 작아지고(약 2 mm), 실제 크기 모드에서는 6 cm 폭으로 노면에 깔린다.
     @MainActor
     private func addTrailSegment(from a: SIMD2<Float>, to b: SIMD2<Float>) {
-        let floorY: Float = 0.03
+        let floorY: Float = (track?.roadSurfaceHeight ?? 0) + 0.03
         let start = SIMD3<Float>(a.x, floorY, a.y)
         let end = SIMD3<Float>(b.x, floorY, b.y)
         let delta = end - start
@@ -562,10 +554,9 @@ struct ImmersiveBoxView: View {
         trailRoot.addChild(segment)
     }
 
-    /// 헤드 앵커 위치에 구슬을, 기기 정면 방향으로 막대를 띄운다(디버그 시각화, 결정 21번).
-    /// 1인칭 모드에서는 여기서 구한 정면 방향이 그대로 조향 입력(`desiredHeading`)이 된다 —
-    /// "아이트래킹"이라고 불러왔지만 실제로는 머리(기기) 방향이다(결정 39 기술 노트). 여기서 돌려주는 값은
-    /// **씬(월드) 좌표계** heading이다 — 트랙 좌표계로 쓰려면 `tickMotion`에서 `sceneYaw`를 빼야 한다(결정 43·44번).
+    /// 헤드 앵커 위치에 구슬을, 기기 정면 방향으로 막대를 띄운다(디버그 시각화, 결정 21번). 돌려주는 값은
+    /// **씬(월드) 좌표계** 머리 yaw다 — 3인칭 카메라 기준 리센터 판정(`ChaseCameraReference`)에만 쓰고, 조향에는
+    /// 쓰지 않는다(1인칭 머리 조향은 결정 47·49로 폐기).
     @MainActor
     @discardableResult
     private func updateHeadDebugGizmo() -> Float? {
@@ -584,7 +575,7 @@ struct ImmersiveBoxView: View {
     }
 
     @MainActor
-    private func tickMotion(deltaTime: Float, desiredHeading: Float?) {
+    private func tickMotion(deltaTime: Float, headYaw: Float?) {
         guard deltaTime > 0, let track, let trackPath, let lapTracker else { return }
 
         // `ingest()`에서 찍는 시계(CACurrentMediaTime)와 반드시 같은 기준이어야 한다. 섞어 쓰면
@@ -592,9 +583,7 @@ struct ImmersiveBoxView: View {
         let now = CACurrentMediaTime()
         let (drive, leftStatus, rightStatus) = inputResolver.resolve(now: now, mode: mode)
         let tuning = MotionTuning().applying(track.tuning)
-        // 머리 방향은 씬(월드) 좌표계 기준이라, 씬 루트 회전 `sceneYaw`를 빼서 트랙 좌표계 heading으로 되돌린다.
-        let trackSpaceDesiredHeading = desiredHeading.map { $0 - sceneYaw }
-        motion = motion.advancing(drive: drive, desiredHeading: mode == .firstPerson ? trackSpaceDesiredHeading : nil, tuning: tuning, deltaTime: deltaTime)
+        motion = motion.advancing(drive: drive, tuning: tuning, deltaTime: deltaTime)
 
         let positionXZ = SIMD2(motion.position.x, motion.position.z)
         let (pathIndex, distanceFromCenterline, projectedOnCenterline) = trackPath.closestSegment(to: positionXZ)
@@ -657,9 +646,6 @@ struct ImmersiveBoxView: View {
         case .stopped, .waiting:
             pedalMagnitude = 0
             isHolding = false
-        case .headSteered(let accelerating):
-            pedalMagnitude = accelerating ? 1.0 : 0.0
-            isHolding = false
         }
         let engineCommands = engineMachine.update(
             dt: Double(deltaTime),
@@ -684,10 +670,11 @@ struct ImmersiveBoxView: View {
         }
 
         // 카트는 씬 루트(트랙 좌표계) 안에서 트랙 좌표 그대로 움직인다. 표시 배율·회전·콕핏 따라붙기는 씬 루트 몫.
+        // 높이는 노면 윗면(타일 바닥 + 0.25 m, Issue #23) — 전에는 0이라 모든 카트가 노면에 파묻혔다.
         let kartTrackPosition = SIMD2(motion.position.x, motion.position.z)
-        kartSlot.position = SIMD3(kartTrackPosition.x, 0, kartTrackPosition.y)
+        kartSlot.position = SIMD3(kartTrackPosition.x, track.roadSurfaceHeight, kartTrackPosition.y)
         kartSlot.orientation = simd_quatf(angle: motion.heading, axis: [0, 1, 0])
-        followKart(headYaw: desiredHeading, deltaTime: deltaTime)
+        followKart(headYaw: headYaw, deltaTime: deltaTime)
 
         // 미니맵 동기화(테크 PRD 9장 `MinimapSyncSystem` 역할): 마커 위치·회전, 체크포인트 라벨 색, 랩 텍스트.
         if let minimap {
@@ -722,8 +709,10 @@ struct ImmersiveBoxView: View {
     /// 실제로 후진하던 것을 모델이 뒤집힌 것으로 오인한 수정이었다. 실기기에서 "뒷부분부터 전진"으로
     /// 다시 보고되어 -Z로 되돌렸다(결정 42번). 공식은 `KartCoreTests`가 세 축으로 고정한다.
     private func frontCorrectionAngle(for entity: Entity, fallbackDegrees: Float) -> Float {
-        guard let front = findDescendant(in: entity, nameContains: "front") else {
-            print("DEBUG-FRONT 'front' 이름의 자식을 못 찾음 — fallback \(fallbackDegrees)도 사용")
+        // 이름 **정확 일치**만 쓴다(Issue #23): 부분 일치 "front"는 razr에서 `front_l`(앞왼 바퀴 묶음, 약 35°)·
+        // `front_blade_l`이 먼저 걸려 카트가 옆으로 비틀려 보였다. 후보는 RetireX 원본에서 차 앞을 뜻하는 이름들.
+        guard let front = findDescendant(in: entity, namedOneOf: Self.frontMarkerNames) else {
+            print("DEBUG-FRONT 정면 마커(\(Self.frontMarkerNames))를 못 찾음 — fallback \(fallbackDegrees)도 사용")
             return fallbackDegrees * .pi / 180
         }
         let nose = front.position(relativeTo: entity)
@@ -736,14 +725,20 @@ struct ImmersiveBoxView: View {
         return angle
     }
 
-    private func findDescendant(in entity: Entity, nameContains substring: String) -> Entity? {
-        if entity.name.lowercased().contains(substring) {
-            return entity
+    /// 차 앞을 뜻하는 노드 이름(RetireX 원본 그대로, 소문자 비교). 앞에 있는 이름을 우선한다.
+    private static let frontMarkerNames = ["front_aero", "race_nose", "nose", "front"]
+
+    private func findDescendant(in entity: Entity, namedOneOf names: [String]) -> Entity? {
+        for name in names {
+            if let found = findDescendant(in: entity, namedExactly: name) { return found }
         }
+        return nil
+    }
+
+    private func findDescendant(in entity: Entity, namedExactly name: String) -> Entity? {
+        if entity.name.lowercased() == name { return entity }
         for child in entity.children {
-            if let found = findDescendant(in: child, nameContains: substring) {
-                return found
-            }
+            if let found = findDescendant(in: child, namedExactly: name) { return found }
         }
         return nil
     }
@@ -831,7 +826,6 @@ private struct ModeSwitchView: View {
 
     private let labels: [ExperienceMode: String] = [
         .diorama: "디오라마",
-        .firstPerson: "1인칭",
         .thirdPerson: "3인칭",
     ]
 
@@ -924,9 +918,6 @@ private struct PinchStatusView: View {
                 .foregroundStyle(Color.style(StylePalette.uiMagenta))
         case .pedal:
             EmptyView()
-        case .headSteered(let accelerating):
-            Image(systemName: accelerating ? "arrow.up" : "stop.fill")
-                .foregroundStyle(accelerating ? Color.style(StylePalette.uiCyan) : Color.style(StylePalette.uiInk).opacity(0.4))
         }
     }
 

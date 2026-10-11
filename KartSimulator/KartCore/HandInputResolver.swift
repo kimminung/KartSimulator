@@ -39,7 +39,7 @@ public final class HandInputResolver {
     private var left = HandState()
     private var right = HandState()
     private var smoothedDistance: Float?
-    /// 디오라마 모드 전용: 양손이 핀치를 시작한 순간의 거리(상대 거리 기준점). 둘 중 하나라도
+    /// 양손이 핀치를 시작한 순간의 거리(상대 거리 기준점, 두 모드 공통). 둘 중 하나라도
     /// 떼면 지운다 — 다시 양손을 모으면 그 새 순간이 새 기준점이 된다.
     private var bothPinchBaselineDistance: Float?
 
@@ -63,11 +63,9 @@ public final class HandInputResolver {
         if sample.chirality == .left { left = state } else { right = state }
     }
 
-    /// `mode`에 따라 완전히 다른 의미로 손 상태를 해석한다(결정 39):
-    /// - `.diorama`: 양손 핀치 = 전·후진(상대 거리 드래그), 한손만 = 회전, 아무도 안 = 정지.
-    /// - `.thirdPerson`: 디오라마와 같은 손 모양이지만 후진이 없다 — 양손 핀치는 항상 전진 최대치.
-    /// - `.firstPerson`: 손은 가속 여부만 맡는다(한쪽이라도 핀치하면 가속) — 조향은 머리 방향으로
-    ///   따로 들어온다(`ImmersiveBoxView`가 `desiredHeading`을 계산해 `KartMotionState`에 넘김).
+    /// 디오라마·3인칭 두 모드가 **같은 규칙**으로 손 상태를 해석한다(결정 49, 디자인 Issue #24 제안 수용):
+    /// 양손 핀치 = 전·후진(핀치 시작 간격 대비 상대 드래그), 한손만 = 그 반대쪽으로 회전, 아무도 안 = 정지.
+    /// 1인칭(머리 조향)은 결정 47·49로 폐기됐다. `mode`는 앞으로 모드별 차이가 생길 때를 위해 남겨 둔다.
     @discardableResult
     public func resolve(now: TimeInterval, mode: ExperienceMode) -> (drive: DriveState, left: HandStatus, right: HandStatus) {
         let leftStatus = status(for: left, now: now)
@@ -75,25 +73,10 @@ public final class HandInputResolver {
 
         let drive: DriveState
         switch mode {
-        case .diorama:
+        case .diorama, .thirdPerson:
             drive = resolveDiorama(leftStatus: leftStatus, rightStatus: rightStatus)
-        case .thirdPerson:
-            bothPinchBaselineDistance = nil
-            drive = resolveThirdPerson(leftStatus: leftStatus, rightStatus: rightStatus)
-        case .firstPerson:
-            bothPinchBaselineDistance = nil
-            drive = .headSteered(accelerating: leftStatus.pinching || rightStatus.pinching)
         }
         return (drive, leftStatus, rightStatus)
-    }
-
-    private func resolveThirdPerson(leftStatus: HandStatus, rightStatus: HandStatus) -> DriveState {
-        switch (leftStatus.pinching, rightStatus.pinching) {
-        case (false, false): return .stopped
-        case (true, false): return .turnLeft
-        case (false, true): return .turnRight
-        case (true, true): return .pedal(1.0)
-        }
     }
 
     private func resolveDiorama(leftStatus: HandStatus, rightStatus: HandStatus) -> DriveState {

@@ -189,7 +189,6 @@ private struct OnboardingView: View {
 
             Picker("모드", selection: $selectedMode) {
                 Text("디오라마").tag(ExperienceMode.diorama)
-                Text("1인칭").tag(ExperienceMode.firstPerson)
                 Text("3인칭").tag(ExperienceMode.thirdPerson)
             }
             .pickerStyle(.segmented)
@@ -218,40 +217,22 @@ private struct GestureInstruction: Identifiable {
     let caption: String
     var id: String { image }
 
+    /// 두 모드의 손 조작은 완전히 같다(결정 49, Issue #24): 그림 한 벌(디오라마 5장)을 같이 쓴다.
     static func gestures(for mode: ExperienceMode) -> [GestureInstruction] {
-        switch mode {
-        case .diorama:
-            // 박스를 밖에서 보며 직접 조종. 전/후진은 핀치를 시작한 손 간격 대비 상대 드래그(결정 39)
-            return [
-                GestureInstruction(image: "gesture_01_forward", title: "전진", caption: "양손을 핀치한 채로 있으면 전진"),
-                GestureInstruction(image: "gesture_02_reverse", title: "후진", caption: "핀치한 채로 양손을 벌리면 후진"),
-                GestureInstruction(image: "gesture_03_left", title: "좌회전", caption: "오른손을 떼면(왼손만 핀치) 좌회전"),
-                GestureInstruction(image: "gesture_04_right", title: "우회전", caption: "왼손을 떼면(오른손만 핀치) 우회전"),
-                GestureInstruction(image: "gesture_05_stop", title: "정지", caption: "양손을 떼면 멈춤"),
-            ]
-        case .firstPerson:
-            // 머리(기기) 방향으로 서서히 조향, 손은 가속만. 그림도 눈이 아니라 헤드셋이다(결정 39 기술 노트)
-            return [
-                GestureInstruction(image: "gesture_fp_01_steer", title: "조향", caption: "머리가 향하는 쪽으로 서서히 회전"),
-                GestureInstruction(image: "gesture_fp_02_throttle", title: "가속", caption: "한쪽 손이라도 핀치하면 가속, 떼면 감속"),
-            ]
-        case .thirdPerson:
-            // 1인칭과 같은 시점, 조향은 한손 핀치. 양손 핀치는 간격과 무관하게 항상 전진(후진 없음)
-            return [
-                GestureInstruction(image: "gesture_tp_01_forward", title: "전진", caption: "양손을 핀치하면 전진 (후진 없음)"),
-                GestureInstruction(image: "gesture_tp_02_left", title: "좌회전", caption: "왼손만 핀치하면 좌회전"),
-                GestureInstruction(image: "gesture_tp_03_right", title: "우회전", caption: "오른손만 핀치하면 우회전"),
-                GestureInstruction(image: "gesture_tp_04_stop", title: "정지", caption: "양손을 떼면 멈춤"),
-            ]
-        }
+        [
+            GestureInstruction(image: "gesture_01_forward", title: "전진", caption: "양손을 핀치한 채로 있으면 전진"),
+            GestureInstruction(image: "gesture_02_reverse", title: "후진", caption: "핀치한 채로 양손을 벌리면 후진"),
+            GestureInstruction(image: "gesture_03_left", title: "좌회전", caption: "오른손을 떼면(왼손만 핀치) 좌회전"),
+            GestureInstruction(image: "gesture_04_right", title: "우회전", caption: "왼손을 떼면(오른손만 핀치) 우회전"),
+            GestureInstruction(image: "gesture_05_stop", title: "정지", caption: "양손을 떼면 멈춤"),
+        ]
     }
 
-    /// 그림 아래 한 줄 안내. 디오라마의 옛 "양손 사이 약 40 cm = 중립"은 결정 39에서 없어졌다.
+    /// 그림 아래 한 줄 안내. 옛 "양손 사이 약 40 cm = 중립"은 결정 39에서 없어졌다.
     static func footnote(for mode: ExperienceMode) -> String {
         switch mode {
         case .diorama: return "기준은 핀치를 시작한 순간의 손 간격입니다. 그 자리에 두면 전진, 벌리면 후진."
-        case .firstPerson: return "조향은 눈동자가 아니라 머리 방향을 따릅니다. 손 간격과 좌우 구분은 쓰지 않습니다."
-        case .thirdPerson: return "후진은 없습니다. 양손을 벌려도 계속 전진합니다."
+        case .thirdPerson: return "조작은 디오라마와 같습니다. 시점은 카트 뒤에서 카트가 가는 쪽을 보고, 고개는 자유롭게 돌려도 됩니다."
         }
     }
 }

@@ -55,6 +55,11 @@ public struct TrackDefinition: Codable, Sendable {
     public let checkpoints: [Int]
     public let walls: Bool
     public let tuning: TrackTuningOverride?
+
+    /// 타일 바닥(y = 0)에서 노면 윗면까지의 높이. 타일은 64유닛 = `tileSize`이고 노면 윗면은 4유닛
+    /// (`Design/tools/tiles.mjs`: base 0~2, road 2~4)이라 `tileSize / 16` = 4 m 타일에서 0.25 m.
+    /// 카트는 이 높이에 둔다(결정 49, Issue #23 — 전에는 0으로 두어 모든 카트가 0.25 m 가라앉았다).
+    public var roadSurfaceHeight: Float { tileSize / 16 }
 }
 
 extension MotionTuning {

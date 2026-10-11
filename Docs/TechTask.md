@@ -55,6 +55,16 @@ Oct 10, 2026 · @Coulson 기준, `Docs/tech-prd.md`에서 파생. 마일스톤 �
 - [x] 실기기 3차(2026-10-11): 추적 카메라 만족, 회전 2.5/s 멀미 없음 (PR #21 머지)
 - [ ] 보류: 콕핏 내부 모델(핸들·대시보드), 사용자가 걸어 다닐 때 anchor 갱신, 디버그 전용 코드(헤드 기즈모·트레일·DEBUG 로그) 정리
 
+## 리뷰 회의 반영 (2026-10-11, 결정 47 → 48·49)
+
+- [x] Issue #24 1인칭 폐기, 조작 통일(3인칭 = 디오라마 규칙, 후진 포함) — 결정 49
+- [x] Issue #25 3인칭 카메라 기준 = 진입 순간 머리 yaw 고정, ±45° 자유, 60°·2초 리센터(1.0/s) — `ChaseCameraReference`
+- [x] Issue #23 ①정면 마커 정확 일치 ②카트 높이 노면 윗면 0.25 m — 결정 49
+- [ ] Issue #23 ③바퀴 바닥 접지, Issue #26 바퀴 굴림·조향·핸들·기울기 — **USDZ에 바퀴 그룹 이름(A~D)이 없음**. 바퀴 이름이 보존된 재내보내기 필요(디자인에 요청)
+- [x] Issue #31 `EngineSoundMachineTests` 5개 수정(시동 2.2초 부동소수점, 빠를 때 가속→루프 조기 전환)
+- [ ] Issue #27 창 배치, #28 속도계(리소스 대기), #29 운전자(에셋 대기), #30 앱 이름(상표 확인), #31 나머지 검수 항목
+- [ ] 실기기: razr 정면, 5종 노면 위, 3인칭 고개 자유·리센터, 3인칭 후진 체감
+
 ## M3 — 트랙 + 주행 로직 (2026-10-10 트랙 생성·검증 스크립트 완료)
 
 - [x] 트랙 타일 4종 에셋 확보 + 배치 — `Assets/export/glb/tile_*.glb`(디자인 전달, 결정 36-4)를 헤드리스 Blender(`wm.usd_export`, Y-up/-Z-forward 변환)로 `.usdz` 변환해 `KartSimulator/Resources/Tiles/`에 넣고, `TrackTileLibrary` + `ImmersiveBoxView.buildTrackTiles(definition:into:)`로 그리드 전체(타일 바운딩 사각형 + 빈 칸은 `grass`)를 실제 3D로 깐다. 점열 placeholder(`buildTrackVisual`)는 제거.
