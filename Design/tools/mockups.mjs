@@ -13,7 +13,7 @@ fs.mkdirSync(OUT, { recursive: true });
 const req = createRequire(import.meta.url);
 let sharp; try { sharp = req("C:/Users/minsi/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/sharp"); } catch { sharp = req("sharp"); }
 // Design/style-guide.md (RetireX colour system): UI 1-2, kart colours 1-3, minimap 1-4
-const C = { night: "#000918", panel: "#010B1A", well: "#0D1729", rim: "#223A60", cyan: "#00F6F9", sky: "#1DB8E6", gold: "#FEDA34", ink: "#F2F9FF", warn: "#FF3236",
+const C = { magenta: "#FF5CD6", night: "#000918", panel: "#010B1A", well: "#0D1729", rim: "#223A60", cyan: "#00F6F9", sky: "#1DB8E6", gold: "#FEDA34", ink: "#F2F9FF", warn: "#FF3236",
   kart: "#EE4949", white: "#F1F2EE", mmRoad: "#F4F7EC", mmEdge: "#142737", finish: "#22B4DD" };
 const W = 1200, H = 960; // 600 x 480 pt @2x
 const FONT = "Segoe UI, Malgun Gothic, sans-serif", KR = "Malgun Gothic, Segoe UI, sans-serif";
@@ -45,6 +45,9 @@ const dots = (x, y, n) => [0, 1, 2, 3, 4].map((i) => `<circle cx="${x + i * 20}"
 const volume = fs.readFileSync(path.join(REPO, "Design/reference/tiles_preview_track01.png")).toString("base64");
 const volBg = (dim = 1) => `<image href="data:image/png;base64,${volume}" x="0" y="80" width="${W}" height="${H * 0.82}" opacity="${dim}"/>`;
 
+// pedal gauge (design PRD 7): vertical bar, centre = neutral, up = forward (ui-cyan), down = reverse (ui-magenta)
+const pedalGauge = (x, y, v, h = 104) => `<rect x="${x}" y="${y}" width="16" height="${h}" rx="4" fill="#ffffff" fill-opacity="0.14"/><rect x="${x - 3}" y="${y + h / 2 - 1}" width="22" height="2" fill="${C.ink}" fill-opacity="0.7"/>` +
+  (v >= 0 ? `<rect x="${x}" y="${y + h / 2 - v * h / 2}" width="16" height="${v * h / 2}" fill="${C.cyan}"/>` : `<rect x="${x}" y="${y + h / 2}" width="16" height="${-v * h / 2}" fill="${C.magenta}"/>`);
 const SCREENS = {
   "01_start": bg(
     pixelTitle(W / 2, 140, "핀치 카트", 92) + text(W / 2, 192, "책상 위 복셀 트랙 타임어택", 26, { anchor: "middle", op: 0.75 }) +
@@ -55,10 +58,10 @@ const SCREENS = {
     button(360, 790, 300, "시작", true) + button(690, 790, 200, "조작법", false)),
   "02_howto": bg(
     text(W / 2, 110, "조작법", 48, { anchor: "middle", weight: 800 }) +
-    [["gesture_01_forward", "양손을 핀치하고 벌리면 전진"], ["gesture_02_left", "왼손만 핀치하면 좌회전"], ["gesture_03_right", "오른손만 핀치하면 우회전"], ["gesture_04_stop", "양손을 떼면 멈춤"]].map(([g, cap], i) => {
-      const x = 60 + (i % 2) * 550, y = 150 + Math.floor(i / 2) * 330;
-      return glass(x, y, 520, 300) + gesture(g, x + 20, y + 30, 240) + text(x + 280, y + 160, cap, 26, { weight: 600 });
-    }).join("") + button(450, 830, 300, "알겠어요", true) + text(W / 2, 930, "앉아서 플레이하면 편해요", 22, { anchor: "middle", op: 0.6 })),
+    [["gesture_01_forward", "양손을 모을수록 빨리 전진"], ["gesture_02_reverse", "양손을 벌릴수록 빨리 후진"], ["gesture_03_left", "왼손만 핀치하면 좌회전"], ["gesture_04_right", "오른손만 핀치하면 우회전"], ["gesture_05_stop", "양손을 떼면 멈춤"]].map(([g, cap], i) => {
+      const row = i < 3 ? 0 : 1, col = row ? i - 3 : i, x = (row ? 232 : 45) + col * 375, y = 140 + row * 320;
+      return glass(x, y, 360, 300) + gesture(g, x + 80, y + 14, 200) + text(x + 180, y + 270, cap, 24, { anchor: "middle", weight: 600 });
+    }).join("") + text(W / 2, 800, "양손 사이 약 40 cm에서는 제자리(중립)", 22, { anchor: "middle", op: 0.7 }) + button(450, 830, 300, "알겠어요", true) + text(W / 2, 930, "앉아서 플레이하면 편해요", 22, { anchor: "middle", op: 0.6 })),
   "03_ready": bg(volBg(0.95) + glass(300, 40, 600, 150) + icon("hand_left_pinch", 360, 70, 72, C.cyan) + icon("hand_right_open", 768, 70, 72, C.warn) +
     `<rect x="764" y="66" width="80" height="80" rx="8" fill="none" stroke="${C.warn}" stroke-width="3" stroke-dasharray="8 6"/>` +
     text(W / 2, 112, "양손을 핀치하면 출발합니다", 30, { anchor: "middle", weight: 700 }) + text(W / 2, 156, "오른손이 보이지 않아요", 22, { anchor: "middle", fill: C.warn })),
@@ -68,7 +71,7 @@ const SCREENS = {
     glass(300, 30, 600, 130, 24) + text(340, 80, "LAP", 20, { op: 0.7, font: FONT }) + text(340, 130, "2 / 3", 56, { weight: 700, font: FONT }) +
     text(560, 80, "TIME", 20, { op: 0.7, font: FONT }) + text(560, 130, "0:12.48", 68, { weight: 700, font: FONT, mono: true }) + icon("flag_checkpoint", 832, 96, 36, C.cyan) +
     text(560, 152, "총 0:38.20 · BEST 0:12.10", 20, { op: 0.8, font: FONT }) + glass(910, 30, 200, 130, 24) + text(1010, 108, "18", 60, { anchor: "middle", weight: 700, font: FONT }) + text(1010, 144, "km/h", 20, { anchor: "middle", op: 0.7, font: FONT }) +
-    glass(40, 770, 330, 150) + icon("hand_left_pinch", 70, 800, 72, C.cyan) + icon("arrow_forward_full", 168, 800, 72, C.cyan) + icon("hand_right_pinch", 266, 800, 72, C.cyan) + text(205, 905, "최대 전진", 20, { anchor: "middle", op: 0.8 }) +
+    glass(40, 770, 330, 150) + icon("hand_left_pinch", 70, 800, 72, C.cyan) + icon("arrow_forward", 156, 808, 56, C.cyan) + pedalGauge(226, 790, 0.7, 84) + icon("hand_right_pinch", 266, 800, 72, C.cyan) + text(205, 905, "전진 70 %", 20, { anchor: "middle", op: 0.8 }) +
     `<image href="minimap.png" x="900" y="660" width="280" height="280"/>`),
   "06_pause": bg(volBg(0.45) + `<rect width="${W}" height="${H}" fill="#000" fill-opacity="0.35"/>` + glass(350, 220, 500, 540) + text(W / 2, 300, "일시정지", 42, { anchor: "middle", weight: 800 }) +
     button(420, 350, 360, "재개", true) + button(420, 440, 360, "다시 시작", false) + button(420, 530, 360, "트랙 선택", false) + button(420, 620, 360, "종료", false)),

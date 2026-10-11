@@ -233,3 +233,17 @@
 - **4. README 팀 표**: Tech/Design 담당을 각각 `kimminung`/`iMasterProX` GitHub 프로필 링크로 교체.
 - **참고**: 스타일 가이드 1-3장은 색상 스와치 지름/간격을 28pt/10pt로 적어 두었는데, 이는 결정 20-2(실기기 확인 후 "너무 작다"는 피드백)로 이미 40pt/14pt로 키운 값과 다르다. 오늘은 "색"만 교체 대상이라 크기는 40pt/14pt를 유지했다 — 필요하면 다시 논의.
 - **영향받는 절**: `ContentView.swift`, `KartCatalog.swift`, `ImmersiveBoxView.swift`, `KartCore/EngineSoundMachine.swift`(신규), `RealityKit/EngineAudioPlayer.swift`·`SFXPlayer.swift`(신규), `Utilities/StylePalette.swift`(신규), `Utilities/Color+Hex.swift`(`UIColor(hex:)` 추가), `README.md`, `KartCoreTests`, 결정 34번(보류 목록 대부분 해소)
+
+## 36. [디자인] 새 조작 방식에 맞춘 온보딩·HUD 개정, 카트 카드 표시, 스와치 크기, 타일 전달 확인
+
+- **날짜**: 2026-10-11
+- **결정자**: 디자인
+- **1. 온보딩·HUD를 연속 페달 조작으로 개정** (테크 결정 30·31 반영)
+  - 온보딩 그림을 5장으로 바꿨다: `gesture_01_forward`(양손을 모을수록 전진), `gesture_02_reverse`(벌릴수록 후진, 새로 추가), `gesture_03_left`, `gesture_04_right`, `gesture_05_stop`. 예전 `gesture_02_left`·`gesture_03_right`·`gesture_04_stop`은 지웠다.
+  - HUD 핀치 상태는 `stopped`·중립(`waiting`/`pedal(0)`)·전진(`pedal(+)`)·후진(`pedal(-)`)·좌·우 6상태와 세로 **페달 게이지**로 보여 준다. 전진은 `ui-cyan` ↑, 후진은 `ui-magenta` ↓로 색과 모양을 함께 구분한다(디자인 PRD 7장).
+  - 아이콘: `arrow_reverse`, `pinch_in` 추가, `arrow_forward_full` 삭제. `ui-magenta`를 후진 전용 색으로 정했다(스타일 가이드 1-2).
+  - 목업 `02_howto`, `05_racing`을 다시 그렸다.
+- **2. 메뉴 카트 카드**: 테크 결정 34의 라이브 3D 모델 카드를 실기기 영상으로 확인했다. 기본은 **3D 렌더 썸네일을 작게** 보여 주고, **시선 포커스·호버일 때만 크게(약 1.4배) 확대**하면서 그때만 라이브 3D 모델과 360° 드래그 회전을 쓴다. 상세 규칙은 디자인 PRD 8장 "카트 선택 카드".
+- **3. 색상 스와치 크기**: 테크가 실기기에 맞춰 키운 40 pt / 간격 14 pt를 정식 값으로 한다. 스타일 가이드 1-3의 28 pt / 10 pt를 고쳤다.
+- **4. 트랙 타일 전달 확인**: 타일 4종은 이미 `main`에 있다 — 원본 `Assets/blockbench/tiles/tile_{straight,curve,start,grass}.bbmodel` + `tiles.png`, 내보내기 `Assets/export/glb/tile_*.glb`, 미리보기 `Design/reference/tiles_preview.png`·`tiles_preview_track01.png`. 디자인 PRD 12장대로 glb → USDZ 변환은 테크 몫이다. `Docs/TechTask.md` M3 "트랙 타일 4종 에셋 확보"와 결정 21 보류 항목은 이 파일들로 진행하면 된다.
+- **영향받는 절**: 디자인 PRD 1·7·8·9·12·15장, `Design/style-guide.md` 1-2·1-3·3장, 테크 `HandInputResolver`/HUD(`RaceHUDOverlay`) 표시, `ContentView`의 `KartCard`
