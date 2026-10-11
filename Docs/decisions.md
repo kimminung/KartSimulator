@@ -2,6 +2,12 @@
 
 번호 · 결정 · 날짜 · 이유 순으로 적는다. PRD의 표에 번호가 있는 결정은 같은 번호를 쓴다.
 
+> **번호 20·21이 두 번 나온다**: Dev(테크)와 main/design(디자인)이 각자 결정 19번 다음부터 독립적으로
+> 번호를 매기다 보니 둘 다 20·21을 썼다. 먼저 나오는 20·21은 테크 결정(제스처 버그, 디버그 도구)이고,
+> 나중에 다시 나오는 20·21(각 항목에 "결정자: 디자인"이 적혀 있다)은 디자인 결정 묶음·바닐라 텍스처
+> 금지다. "디자인 결정 20-11" 같은 하위 항목 참조가 `Design/`·`Docs/`·코드 주석에 이미 많이 퍼져
+> 있어서 번호를 다시 매기지 않고 그대로 둔다.
+
 ## 13. 공간 구성: ImmersiveSpace + 박스 프레임 다이오라마
 
 - **날짜**: 2026-10-10
@@ -56,7 +62,7 @@
 - **타협점**: 트랙 타일 3D 에셋이 아직 없어서, 타일을 깔지 않고 `path`를 작은 점(큐브) 점열로만 시각화한다. 벽도 아직 없어 `CollisionResolveSystem`에 해당하는 벽 충돌 로직은 구현하지 않았다(테크 PRD 12장 "벽에 정면으로 박았을 때 미끄러진다" 체크리스트는 타일 에셋 확보 후).
 - **영향받는 절**: 테크 PRD 7장(트랙 데이터), 9장(배율 — 기존 0.04 고정값 대신 트랙마다 자동 계산), `Docs/TechTask.md` M3
 
-## 20. 버그 수정: 박스 연 뒤 핀치 제스처가 완전히 무반응이던 문제
+## 20. [테크] 버그 수정: 박스 연 뒤 핀치 제스처가 완전히 무반응이던 문제
 
 - **날짜**: 2026-10-10
 - **증상**: 실기기에서 "박스 열기" 후 양손 핀치를 해도 카트가 전혀 반응하지 않았다(완전 무반응).
@@ -65,7 +71,7 @@
 - **수정**: `inputCatcher`라는 보이지 않는 엔티티를 박스 위치에 두고 박스보다 넉넉한 크기(`boxSize * 3`)의 `CollisionComponent` + `InputTargetComponent`를 부여, `driveGesture`를 `SpatialEventGesture().targetedToEntity(inputCatcher)`로 바꿨다. 시뮬레이터에서 빌드·실행·유닛 테스트 23개 재확인 완료 — 다만 실제 손 핀치 인식 자체는 시뮬레이터로 검증 불가하므로 실기기 확인이 필요하다.
 - **영향받는 절**: 테크 PRD 5장("InputCatcher" 설계를 실제로 구현), `Docs/TechTask.md` M2
 
-## 21. 실기기 제스처 디버그 도구 추가 (임시)
+## 21. [테크] 실기기 제스처 디버그 도구 추가 (임시)
 
 - **날짜**: 2026-10-10
 - **결정**: `ImmersiveBoxView`에 실기기 전용 디버그 시각화를 임시로 추가했다. `ARKitSession` + `WorldTrackingProvider`로 헤드 앵커를 매 프레임 조회해, 머리 위치에 노란 구슬을, 기기 정면(로컬 -Z) 방향으로 초록 막대(3m)를 띄운다. 또한 `ingest()`에 `DEBUG-GESTURE` 태그를 붙인 `print`를 추가해, 들어오는 모든 핀치 이벤트의 `chirality`(LEFT/RIGHT)·`phase`·`pinching`·위치를 로그로 남긴다.
@@ -184,7 +190,7 @@
 - **보류(자산 전달 대기)**: 20-1 일부(HUD/미니맵용 픽셀 실루엣), 20-3·20-5(Galmuri 폰트 파일), 20-6(엔진음 루프 사운드 파일), 20-11~13(RetireX 팔레트/`Design/style-guide.md`, 리소스 파일명 규칙), 21(바닐라 텍스처 교체) — 전부 디자이너가 전달할 파일/문서가 필요해서 리포지토리에 자료가 도착하면 바로 연결한다.
 - **영향받는 절**: `KartCatalog.swift`, `ContentView.swift`, `README.md`(디자인 피드백 반영 결과 추가), `Docs/TechTask.md`(열린 질문 정리), 디자인 결정 20·21번
 
-## 34. 디자인 결정 묶음 (메뉴 피드백·디자인 PRD 열린 질문 답변)
+## 20. [디자인] 디자인 결정 묶음 (메뉴 피드백·디자인 PRD 열린 질문 답변)
 
 - **날짜**: 2026-10-10
 - **결정자**: 디자인
@@ -209,10 +215,21 @@
 - **보류**: 앱 이름(결정 7번)은 추후 테크·디자인이 함께 상의한다.
 - **영향받는 절**: 디자인 PRD 3·4·10·15장, 테크 PRD 10장(효과음 — 엔진음 루프 추가), `Docs/TechTask.md` 열린 질문, `KartSimulator/Models/KartCatalog.swift`(mms 제외는 테크가 반영)
 
-## 21. 마인크래프트 바닐라 텍스처 사용 금지
+## 21. [디자인] 마인크래프트 바닐라 텍스처 사용 금지
 
 - **날짜**: 2026-10-10
 - **결정자**: 디자인
 - **결정**: RetireX 리소스에 섞여 있는 마인크래프트 바닐라(Mojang) 텍스처·사운드는 이 앱에 쓰지 않는다. 발견되면 디자인 쪽에서 16×16 **임시 대체 텍스처**를 새로 그려 넣고, 이후 정식 텍스처로 교체한다.
 - **이유**: Mojang EULA상 바닐라 리소스를 별도 앱에 재배포할 수 없다.
 - **영향**: 트랙 타일 등 복셀 텍스처. 임시 텍스처는 PRD 파일명을 그대로 써서 교체 시 코드 변경이 없게 한다.
+
+## 35. [테크] 디자인 자산 1차 드롭 반영: 제목 폰트·엔진음/효과음·HUD·트랙 팔레트·팀 표
+
+- **날짜**: 2026-10-11
+- **배경**: `main`에 `design` 브랜치가 머지되며(PR #6, 결정 34번 "보류" 목록) Galmuri 폰트, 효과음 12종(`Assets/sfx/`, `ENGINE.md` 재생 규칙 포함), 대체 텍스처 15종, `Design/style-guide.md`가 한꺼번에 도착했다. `origin/main`을 `Dev`로 머지해 받아왔다(머지 중 이 파일에 "## 34. 디자인 결정 묶음"으로 잘못 붙은 섹션을 "## 20. [디자인]"으로 바로잡음 — 위 안내문과 20·21번 항목 참고).
+- **1. 제목 폰트(20-3·20-5)**: `Galmuri11-Bold.ttf`/`Galmuri14.ttf`를 `KartSimulator/Resources/Fonts/`에 복사하고 `AddInfoPlist` 도구로 `UIAppFonts`를 등록했다(`GENERATE_INFOPLIST_FILE=YES`와 병합되는 부분 `KartSimulator/Info.plist`가 새로 생겼다 — 배열 값은 `INFOPLIST_KEY_*` 빌드 설정으로 못 넣는다). `ContentView`의 "핀치 카트" 제목에 `Font.custom("Galmuri11-Bold", size: 40, relativeTo: .largeTitle)` 적용(TTF `name` 테이블의 PostScript 이름을 직접 읽어서 확인). 본문·HUD는 시스템 폰트 그대로(결정 20-3).
+- **2. 엔진음 + 효과음 7종(20-6)**: `Assets/sfx/ENGINE.md`의 상태 기계·재생 규칙을 거의 그대로 옮겼다. `KartCore/EngineSoundMachine.swift`(순수 값 타입, RealityKit 의존 없음 — 문서 원문은 `forwardHalf`/`forwardFull` 2단계 `DriveState` 기준이었는데, 지금은 연속 페달(`DriveState.pedal(Float)`)이라 크기(`abs(value)`, 방향 무관)를 그대로 목표 속도비로 쓰도록만 바꿨다) + `RealityKit/EngineAudioPlayer.swift`(`AudioFileResource`/`AudioPlaybackController` 어댑터) + `RealityKit/SFXPlayer.swift`(한 발성 7종: checkpoint/countdownTick/finish/go/lapComplete/respawn/wallBump). `ImmersiveBoxView`에 연결: 트랙 로드 시 카운트다운(틱 3회+go, `engineIgnition`과 병렬) 시작, 매 프레임 `tickMotion`에서 엔진 상태 기계 갱신, 체크포인트/랩/완주/리스폰 시점에 각 효과음 재생. `wallBump`는 벽 콜리전이 아직 없어(M3) 로드만 해 두고 트리거는 없음. `KartCoreTests`에 상태 기계 핵심 전환 5개 추가.
+- **3. HUD/트랙 팔레트(20-11)**: `Design/style-guide.md` 1장 색표를 `Utilities/StylePalette.swift`에 그대로 옮기고(트랙 7색 + UI 11색 + 미니맵 3색), `ImmersiveBoxView`의 트랙 바닥(`road`)·경로점(`edgeLine`)·출발점(`mmFinish`)과 HUD 글자(`uiInk`)·경고(`uiWarn`)에 적용했다. 카드·버튼 배경은 글래스 재질 유지(결정 20-4, 안 건드림). `KartCatalog.standardColors`도 스타일 가이드 1-3장 "카트 도색 17색" 표의 정확한 hex·순서로 교체했다(이전엔 임의로 고른 hex였다).
+- **4. README 팀 표**: Tech/Design 담당을 각각 `kimminung`/`iMasterProX` GitHub 프로필 링크로 교체.
+- **참고**: 스타일 가이드 1-3장은 색상 스와치 지름/간격을 28pt/10pt로 적어 두었는데, 이는 결정 20-2(실기기 확인 후 "너무 작다"는 피드백)로 이미 40pt/14pt로 키운 값과 다르다. 오늘은 "색"만 교체 대상이라 크기는 40pt/14pt를 유지했다 — 필요하면 다시 논의.
+- **영향받는 절**: `ContentView.swift`, `KartCatalog.swift`, `ImmersiveBoxView.swift`, `KartCore/EngineSoundMachine.swift`(신규), `RealityKit/EngineAudioPlayer.swift`·`SFXPlayer.swift`(신규), `Utilities/StylePalette.swift`(신규), `Utilities/Color+Hex.swift`(`UIColor(hex:)` 추가), `README.md`, `KartCoreTests`, 결정 34번(보류 목록 대부분 해소)

@@ -231,6 +231,88 @@ struct KartMotionStateTests {
     }
 }
 
+/// `Assets/sfx/ENGINE.md` 5장의 시험 목록 중 핵심 전환만 추린 것. `forwardHalf`/`forwardFull`
+/// 대신 연속 페달(`pedal: 1.0` 등)을 쓴다는 점만 문서와 다르다.
+struct EngineSoundMachineTests {
+    @Test func countdownEndsInIdleAfter2Point2Seconds() {
+        var machine = EngineSoundMachine()
+        _ = machine.countdownStarted()
+        #expect(machine.phase == .ignition)
+
+        var commands: [EngineCommand] = []
+        for _ in 0..<132 { // 2.2s / (1/60)
+            commands = machine.update(dt: 1.0 / 60.0, pedal: 0, isHolding: false, speed: 0, maxSpeed: 4.0)
+        }
+        #expect(machine.phase == .idle)
+        #expect(commands.contains { if case .play(.idle, _, _, _) = $0 { true } else { false } })
+    }
+
+    @Test func fullThrottleFromIdleHandsOffToLoopAfterAccelHandoff() {
+        var machine = EngineSoundMachine()
+        _ = machine.countdownStarted()
+        for _ in 0..<132 { _ = machine.update(dt: 1.0 / 60.0, pedal: 0, isHolding: false, speed: 0, maxSpeed: 4.0) }
+        #expect(machine.phase == .idle)
+
+        let startCommands = machine.update(dt: 1.0 / 60.0, pedal: 1.0, isHolding: false, speed: 0, maxSpeed: 4.0)
+        #expect(machine.phase == .accel)
+        #expect(startCommands.contains { if case .play(.accel, _, _, _) = $0 { true } else { false } })
+
+        var sawLoopStart = false
+        var speed: Double = 0
+        for _ in 0..<200 { // accelHandoff(2.6s)를 넉넉히 넘길 때까지
+            speed = min(4.0, speed + (1.0 / 60.0) * 3.0)
+            let commands = machine.update(dt: 1.0 / 60.0, pedal: 1.0, isHolding: false, speed: speed, maxSpeed: 4.0)
+            if commands.contains(where: { if case .play(.loop, _, _, _) = $0 { true } else { false } }) {
+                sawLoopStart = true
+                break
+            }
+        }
+        #expect(sawLoopStart, "accel 클립 시간이 accelHandoff(2.6초)를 넘으면 loop로 넘어가야 한다")
+        #expect(machine.phase == .going)
+    }
+
+    @Test func releasingThrottleWhileGoingStartsDecel() {
+        var machine = EngineSoundMachine()
+        _ = machine.countdownStarted()
+        for _ in 0..<132 { _ = machine.update(dt: 1.0 / 60.0, pedal: 0, isHolding: false, speed: 0, maxSpeed: 4.0) }
+        _ = machine.update(dt: 1.0 / 60.0, pedal: 1.0, isHolding: false, speed: 2.0, maxSpeed: 4.0)
+        // 이미 속도가 있는 상태로 시작했으니 clipTime이 금방 accelHandoff를 넘는다.
+        var commands: [EngineCommand] = []
+        for _ in 0..<60 { commands = machine.update(dt: 1.0 / 60.0, pedal: 1.0, isHolding: false, speed: 3.5, maxSpeed: 4.0) }
+        #expect(machine.phase == .going)
+
+        commands = machine.update(dt: 1.0 / 60.0, pedal: 0, isHolding: false, speed: 3.5, maxSpeed: 4.0)
+        #expect(machine.phase == .decel)
+        #expect(commands.contains { if case .stop(.loop, _) = $0 { true } else { false } })
+        #expect(commands.contains { if case .play(.decel, _, _, _) = $0 { true } else { false } })
+    }
+
+    @Test func holdingWhileTurningDoesNotTriggerDecel() {
+        var machine = EngineSoundMachine()
+        _ = machine.countdownStarted()
+        for _ in 0..<132 { _ = machine.update(dt: 1.0 / 60.0, pedal: 0, isHolding: false, speed: 0, maxSpeed: 4.0) }
+        _ = machine.update(dt: 1.0 / 60.0, pedal: 0, isHolding: true, speed: 2.0, maxSpeed: 4.0)
+        #expect(machine.phase == .going, "속도를 유지한 채 회전만 해도(hold) going을 유지해야 한다")
+
+        for _ in 0..<30 {
+            _ = machine.update(dt: 1.0 / 60.0, pedal: 0, isHolding: true, speed: 2.0, maxSpeed: 4.0)
+        }
+        #expect(machine.phase == .going, "회전 중에는 decel로 빠지면 안 된다")
+    }
+
+    @Test func respawnedResetsToIdleWithFadeIn() {
+        var machine = EngineSoundMachine()
+        _ = machine.countdownStarted()
+        for _ in 0..<132 { _ = machine.update(dt: 1.0 / 60.0, pedal: 0, isHolding: false, speed: 0, maxSpeed: 4.0) }
+        _ = machine.update(dt: 1.0 / 60.0, pedal: 1.0, isHolding: false, speed: 3.0, maxSpeed: 4.0)
+        #expect(machine.phase == .accel)
+
+        let commands = machine.respawned()
+        #expect(machine.phase == .idle)
+        #expect(commands.contains { if case .play(.idle, _, _, let fadeIn) = $0 { fadeIn == 0.4 } else { false } })
+    }
+}
+
 private func makeTestTrack(laps: Int = 2, checkpoints: [Int] = [2, 4, 6], pathCount: Int = 8) -> TrackDefinition {
     let path = (0..<pathCount).map { i -> TrackPathPoint in
         let angle = Float(i) / Float(pathCount) * 2 * Float.pi

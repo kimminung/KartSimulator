@@ -70,9 +70,11 @@ Oct 10, 2026 · @Coulson 기준, `Docs/tech-prd.md`에서 파생. 마일스톤 �
 - [x] `RaceHUDState`/`RaceModel` 필드 구현 (테크 PRD 10장) — `KartCore/RaceHUDState.swift`, `RaceModel.swift`. `kartMapPosition`/`kartHeading`(미니맵용)와 `RaceEvent`(효과음용)는 M4·효과음 연결 시점에 추가
 - [x] `ImmersiveBoxView`에 임시 HUD(`RaceHUDOverlay`, 2D `.overlay`)로 랩/타임/속도 표시, 센터라인 이탈 시 "트랙 이탈" 뱃지
 - [ ] **알려진 문제**: 이머시브 스페이스가 열려 있는 동안 RealityView가 계속 렌더링 중이라, `raceModel`(Observable)을 어떤 스케줄(프레임 콜백/GCD/Task)로 갱신해도 SwiftUI가 "Modifying state during view update"를 로그에 남긴다(크래시는 아니고 HUD 값은 정상 갱신됨). 갱신 주기를 250ms로 늦춰 로그 노이즈만 줄여둔 상태 — 정식 해결은 아래 항목과 함께
-- [ ] HUD를 2D `.overlay`에서 `RealityView`의 3D attachment(entity에 붙는 SwiftUI 뷰)로 교체 — 디자인 PRD 7장 배치(뒤쪽 패널/양 모서리)를 따르면서 위 경고도 같이 해결될 가능성이 큼
+- [x] HUD를 2D `.overlay`에서 `RealityView`의 3D attachment(entity에 붙는 SwiftUI 뷰)로 교체 (결정 25·26번)
 - [ ] 메뉴 4화면 + 볼륨 HUD 3상태 목업 반영
-- [ ] 효과음 7종 연결
+- [x] 효과음 7종 + 엔진음 5종 연결 — `Assets/sfx/ENGINE.md` 스펙대로 `EngineSoundMachine`/`EngineAudioPlayer`/`SFXPlayer` 구현 (결정 35번). `wallBump`만 벽 콜리전이 없어 트리거 미연결
+- [x] HUD/트랙 색을 `Design/style-guide.md` 팔레트로 교체 (결정 35번)
+- [x] 제목에 Galmuri 픽셀 폰트 적용 (결정 35번, 디자인 결정 20-3·20-5)
 
 ## M6 — 폴리시 · 출시 준비
 
@@ -88,4 +90,6 @@ Oct 10, 2026 · @Coulson 기준, `Docs/tech-prd.md`에서 파생. 마일스톤 �
 - [x] 메뉴 카트 360도 회전 — `Model3D` + 드래그 제스처로 구현 (결정 34번, 디자인 결정 20-9)
 - [ ] Digital Crown 몰입도 범위(현재 0.0~1.0 임시값)를 얼마로 둘지, 레이싱 중에도 조절 허용할지
 - [ ] M2 모션 튜닝 임시값(박스 스케일)을 M3에서 트랙 스케일로 복원할 때 느낌이 달라지는지 재검증 필요
-- [ ] Galmuri 폰트 파일, 엔진음 루프 사운드, RetireX 색 팔레트(`Design/style-guide.md`), 타일 대체 텍스처 — 디자인 자산 전달 대기 (디자인 결정 20-3·20-5·20-6·20-11~13·21)
+- [x] Galmuri 폰트 파일, 엔진음 루프 사운드, RetireX 색 팔레트 — 전달받아 반영 완료 (결정 35번)
+- [ ] 타일 대체 텍스처(`Design/textures/`, 결정 21번)는 받았지만 트랙 타일 3D 에셋 자체가 아직 없어 적용 보류 (M3 "트랙 타일 4종 에셋 확보" 항목과 함께)
+- [ ] 스타일 가이드의 색상 스와치 지름/간격(28pt/10pt)이 결정 20-2로 키운 값(40pt/14pt)과 다르다 — 그대로 둘지 디자인과 재확인 필요
