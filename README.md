@@ -21,7 +21,7 @@ Apple Vision Pro 실기기에서 플레이한 영상입니다. 썸네일을 누�
 
 | 플랫폼 | 언어·프레임워크 | 테스트 | 상태 |
 | --- | --- | --- | --- |
-| visionOS 27 (Apple Vision Pro) | Swift · SwiftUI · RealityKit · ARKit 손·머리 추적 | Swift Testing (`KartCoreTests` 56개) | Phase 2 실기기 확인 완료, M4 미니맵·M6 출시 준비 남음 |
+| visionOS 27 (Apple Vision Pro) | Swift · SwiftUI · RealityKit · ARKit 손·머리 추적 | Swift Testing (`KartCoreTests` 62개) | Phase 2 완료, M4 미니맵 1차 구현, M5 메뉴 4화면·M6 출시 준비 남음 |
 
 ---
 
@@ -62,6 +62,7 @@ Apple Vision Pro 실기기에서 플레이한 영상입니다. 썸네일을 누�
 | HUD | 랩·타임·속도 패널, 양손 핀치 상태 + 세로 페달 게이지, 모드 전환 버튼 (RealityView attachment) |
 | 소리 | 효과음 7종(자체 합성) + 엔진음 5종(시동·가속·루프·감속·공회전) 상태 기계 |
 | 온보딩 | 첫 실행 시 조작법 시트. 모드별 세그먼트에 디자인 그림 11장 연결 |
+| 미니맵 | Diorama 테이블 위에 트랙 JSON에서 만든 노면·궤적·출발 깃발·체크포인트 라벨·카트 마커·랩 텍스트. 디오라마는 박스 모서리, 콕핏은 HUD 옆 (M4 1차) |
 
 ## 시작하기
 
@@ -206,10 +207,10 @@ sequenceDiagram
 | 폴더 | 역할 |
 | --- | --- |
 | `KartSimulator/KartCore/` | 입력 해석, 주행 물리, 트랙 경로, 랩·HUD 상태, 엔진음 상태 기계, 카트 정면 보정, 씬 배치(콕핏) |
-| `KartSimulator/RealityKit/` | 박스 프레임, 타일 라이브러리, 카트 맞춤·도색, 오디오 재생 |
+| `KartSimulator/RealityKit/` | 박스 프레임, 타일 라이브러리, 카트 맞춤·도색, 오디오 재생, 미니맵 빌더 |
 | `KartSimulator/Models/` | 카트 카탈로그·선택 상태, 이머시브 세션 상태 |
 | `KartSimulator/Resources/` | 카트 USDZ·텍스처, 타일 USDZ, 효과음·엔진음, Galmuri 폰트 |
-| `KartCoreTests/` | Swift Testing 56개 (입력 해석·조향·정면 보정·씬 배치·트랙 경로·랩) |
+| `KartCoreTests/` | Swift Testing 62개 (입력 해석·조향·정면 보정·씬 배치·미니맵 투영·트랙 경로·랩) |
 | `Tracks/`, `Tools/` | 트랙 JSON 2개 + 생성·검증 스크립트, glb→USDZ 변환 |
 
 ## 디자인 산출물 (디자인)
@@ -293,7 +294,7 @@ flowchart TB
 | M2 | 핀치 입력 프로토타입 → 연속 페달 → 운전 모드 3종 Phase 1 | ✅ |
 | Phase 2 | 1인칭·3인칭 콕핏: 실제 크기 트랙 + 머리 위치 따라붙기 (`ScenePlacement`) | ✅ 실기기 확인 완료 · 3인칭 추적 카메라(결정 46) 확인 대기 |
 | M3 | 트랙 타일 3D 배치, 주행 로직, 벽 콜리전, 트랙 생성·검증 스크립트 | ✅ |
-| M4 | 미니맵(Diorama 테이블, 궤적, 마커) | ⬜ |
+| M4 | 미니맵(Diorama 테이블, 궤적, 마커) | 🟨 1차 구현(결정 47), 실기기·디자인 피드백 대기 |
 | M5 | HUD·효과음·엔진음·팔레트·폰트·조작법 화면 | 🟨 메뉴 4화면(시작/대기/카운트다운/결과) 남음 |
 | M6 | 성능 예산, 앱 이름 확정, 출시 준비 | ⬜ |
 
@@ -368,3 +369,4 @@ KartSimulator/
 | 엔진음 5개 (`engine*.wav`) | CC0 기반 녹음 변환, 출처는 `Assets/sfx/LICENSES.md` |
 | RetireX Online 참고 자료 (`Design/reference/retirex/`) | 참고용. 마인크래프트 요소는 Mojang/Microsoft 소유, 앱·홍보에 쓰지 않음 |
 | Apple SDK·시스템 폰트 | Apple 개발자 라이선스 (저장소에 미포함) |
+| 미니맵 받침 `Diorama_Base.usdz` (`KartSimulator/Resources/Minimap/`) | Apple Diorama 샘플 코드 라이선스 (전문은 같은 폴더 `LICENSE-Apple-Diorama-Sample.txt`) |

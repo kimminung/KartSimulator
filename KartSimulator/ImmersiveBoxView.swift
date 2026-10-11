@@ -40,6 +40,15 @@ struct ImmersiveBoxView: View {
     @State private var boxFloor = Entity()
     @State private var hudEntity: Entity?
     @State private var loadedKartEntity: Entity?
+    /// 월드 좌표에 그대로 두는 것들(미니맵)의 부모. `rootEntity`는 박스 위치로 옮겨져 있어 기준이 다르다.
+    @State private var worldAnchor = Entity()
+    /// M4 미니맵(결정 47). 트랙을 읽은 뒤 비동기로 만들어진다.
+    @State private var minimap: Minimap?
+    /// 디오라마에서는 박스 앞오른쪽 모서리 위에 작게(지름 0.16 m), 콕핏에서는 HUD 옆에 원래 크기(0.24 m).
+    private let minimapTableDiameter: Float = 0.24
+    private let minimapDioramaDiameter: Float = 0.16
+    @State private var latestMapPosition: SIMD2<Float> = .zero
+    @State private var latestHeading: Float = 0
     /// 현재 씬 루트의 Y축 회전. 디오라마는 `dioramaYaw`, 콕핏 모드는 모드에 들어온 순간 머리 방향으로 계산.
     @State private var sceneYaw: Float = .pi
     /// 콕핏 모드에 들어온 순간의 머리 위치(월드). 이후 카트는 매 프레임 이 점 기준으로 따라붙는다.
@@ -144,9 +153,19 @@ struct ImmersiveBoxView: View {
             content.add(inputCatcher)
 
             content.add(rootEntity)
+            content.add(worldAnchor)
             loadTrack()
             if let track {
                 await buildTrackTiles(definition: track, into: sceneRoot)
+            }
+            if let track, let trackPath {
+                let built = await MinimapBuilder.make(track: track, path: trackPath, tableDiameter: minimapTableDiameter)
+                worldAnchor.addChild(built.root)
+                minimap = built
+                if let kart = loadedKartEntity {
+                    built.setMarker(cloneOf: kart, markerLength: minimapMarkerLength)
+                }
+                layoutMinimap()
             }
 
             // 디버그: 헤드 위치 구슬 + 시선 방향 막대. world 좌표계에 바로 두므로 rootEntity가 아니라
@@ -265,7 +284,34 @@ struct ImmersiveBoxView: View {
         if let kart = loadedKartEntity {
             fitKart(kart)
         }
+        layoutMinimap()
         print("DEBUG-LAYOUT mode=\(mode) sceneYaw=\(sceneYaw * 180 / .pi)도 scale=\(sceneRoot.scale.x) anchor=\(cockpitAnchor)")
+    }
+
+    /// 미니맵 마커(카트 복제본)의 가장 긴 변. 디자인 PRD 6장 "약 1.5 cm"(지름 0.24 m 테이블 기준 미니맵 로컬).
+    private var minimapMarkerLength: Float { 0.015 }
+
+    /// 미니맵 배치(결정 47): 디오라마 = 박스 앞오른쪽 모서리 위에 작게(테크 PRD 9장의 "우측 하단 모서리 안쪽, 트랙 위에
+    /// 떠 있게"를 0.7 m 박스에 맞춘 값), 콕핏 = 모드에 들어온 순간 머리 기준 HUD 오른쪽 아래에 사용자 쪽으로 35° 기울여.
+    /// 지도 내용(`mapRoot`)은 씬 yaw만큼 돌려 박스/콕핏에서 보이는 트랙 방향과 맞춘다(3인칭은 진입 시점 값 고정 — 북쪽 고정식).
+    @MainActor
+    private func layoutMinimap() {
+        guard let minimap else { return }
+        minimap.mapRoot.orientation = simd_quatf(angle: sceneYaw, axis: [0, 1, 0])
+        if mode == .diorama {
+            let s = minimapDioramaDiameter / minimapTableDiameter
+            minimap.root.scale = SIMD3(repeating: s)
+            minimap.root.position = boxPosition + SIMD3(boxSize.x / 2 - minimapDioramaDiameter / 2 - 0.02, -boxSize.y / 2 + 0.07, boxSize.z / 2 - minimapDioramaDiameter / 2 - 0.02)
+            minimap.root.orientation = simd_quatf(angle: 0, axis: [0, 1, 0])
+        } else {
+            let head = currentHeadPose() ?? (position: cockpitAnchor, yaw: Float(0))
+            let forward = ScenePlacement.forward(heading: head.yaw)
+            let right = SIMD3<Float>(cos(head.yaw), 0, -sin(head.yaw))
+            minimap.root.scale = .one
+            minimap.root.position = head.position + forward * 1.2 + right * 0.45 + SIMD3(0, -0.45, 0)
+            // 로컬 +Z(랩 텍스트 쪽)가 사용자를 향하도록 yaw를 맞추고, 상판을 사용자 쪽으로 35° 기울인다.
+            minimap.root.orientation = simd_quatf(angle: head.yaw, axis: [0, 1, 0]) * simd_quatf(angle: 35 * .pi / 180, axis: [1, 0, 0])
+        }
     }
 
     /// 콕핏 모드: 카트의 트랙 좌표가 콕핏 목표점(머리 아래 / 바라보는 방향 앞)에 오도록 씬 루트를 평행이동한다.
@@ -330,6 +376,7 @@ struct ImmersiveBoxView: View {
             raceModel.updateMotion(speedMetersPerSecond: latestSpeed, deltaTime: 0.25)
             raceModel.updateLap(latestLapProgress, totalCheckpoints: latestCheckpointCount)
             raceModel.setRespawning(latestIsOffTrack)
+            raceModel.updateMap(position: latestMapPosition, heading: latestHeading)
         }
     }
 
@@ -642,6 +689,13 @@ struct ImmersiveBoxView: View {
         kartSlot.orientation = simd_quatf(angle: motion.heading, axis: [0, 1, 0])
         followKart(headYaw: desiredHeading, deltaTime: deltaTime)
 
+        // 미니맵 동기화(테크 PRD 9장 `MinimapSyncSystem` 역할): 마커 위치·회전, 체크포인트 라벨 색, 랩 텍스트.
+        if let minimap {
+            minimap.update(kartWorldXZ: kartTrackPosition, heading: motion.heading, progress: newProgress, totalLaps: track.laps)
+            latestMapPosition = minimap.projection.mapPosition(kartTrackPosition)
+        }
+        latestHeading = motion.heading
+
         // 디버그: 실제로 이동한 거리를 빨간 선으로 쌓고, 콘솔에도 주기적으로 남긴다.
         if let last = lastTrailDisplayPoint {
             if simd_distance(last, kartTrackPosition) >= trailMinSegmentLength {
@@ -723,6 +777,7 @@ struct ImmersiveBoxView: View {
             kartSlot.children.removeAll()
             kartSlot.addChild(entity)
             loadedKartEntity = entity
+            minimap?.setMarker(cloneOf: entity, markerLength: minimapMarkerLength)
 
             loadedKartID = kart.id
             loadedColorID = colorID

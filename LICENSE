@@ -48,6 +48,10 @@ All rights reserved. 모든 권리 보유.
      그 허락 범위를 넘어서는 이용은 이 라이선스로도 허용되지 않는다.
    - Apple 플랫폼 SDK·프레임워크(SwiftUI, RealityKit, ARKit 등)와 SF Pro 계열 시스템 폰트:
      Apple의 개발자 라이선스 조건을 따른다. 저장소에 포함되어 있지 않다.
+   - 미니맵 받침 모델 `KartSimulator/Resources/Minimap/Diorama_Base.usdz`:
+     Apple "Diorama" 샘플 코드에서 가져온 것으로 Apple 샘플 코드 라이선스를 따른다(전문은 같은 폴더의
+     `LICENSE-Apple-Diorama-Sample.txt`). 이 앱의 일부로만 쓰며 단독 재배포·재포장하지 않고, Apple의 이름·상표로
+     이 저작물을 홍보하지 않는다.
 
 6. 보증 부인
    저작물은 "있는 그대로" 제공되며, 상품성·특정 목적 적합성·비침해를 포함한 어떠한 명시적·묵시적 보증도
@@ -106,6 +110,10 @@ English (informational translation; the Korean text governs)
      permission.
    - Apple platform SDKs and frameworks and the SF Pro system fonts — Apple developer license terms;
      not included in this repository.
+   - Minimap base model `KartSimulator/Resources/Minimap/Diorama_Base.usdz` — from Apple's "Diorama" sample
+     code, under the Apple Sample Code License (`LICENSE-Apple-Diorama-Sample.txt` in the same folder). Used
+     only as part of this app; not redistributed standalone or repackaged; Apple's names and trademarks are not
+     used to promote this Work.
 
 6. Disclaimer
    THE WORK IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT

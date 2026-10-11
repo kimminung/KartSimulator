@@ -368,3 +368,20 @@
 - **테스트**: `ScenePlacementTests.chaseSceneYawPutsViewerBehindKart` — chase yaw 적용 시 카트 월드 정면 = 머리 방향, 90° 코너 후 평활 수렴 시간.
 - **확인**: visionOS 시뮬레이터 빌드·테스트 통과. **실기기 확인 필요**: 코너 뒤 카트가 앞을 향해 트랙이 보이는지, 회전 속도 2.5/s가 어지럽지 않은지.
 - **영향받는 절**: `KartCore/ScenePlacement.swift`(`chaseSceneYaw`, `CockpitTuning.thirdPersonChaseYawRate`), `ImmersiveBoxView.followKart`, README 3인칭 설명, `Docs/TechTask.md` Phase 2
+
+## 47. [테크] M4 미니맵 1차: Diorama 테이블 + 트랙 JSON에서 바로 만든 지도, 모드별 배치
+
+- **날짜**: 2026-10-11
+- **배경**: Phase 2 종료 후 다음 마일스톤. 사용자가 Apple Diorama 샘플(`~/Downloads/Diorama`)을 전달해 M4를 시작했다. 디자인 쪽 추가 피드백과 실기기 피드백이 뒤따를 예정이라 1차는 "보이고 동기화되는 것"에 집중했다.
+- **테크 PRD 9장과 다르게 한 것**: PRD는 Diorama의 Shader Graph 지형 재질 + 높이맵/궤적 **이미지**(`minimap_images.py`)를 쓰기로 했는데, 1차에서는 **트랙 JSON 중심선에서 바로 기하(납작한 상자 리본)를 생성**했다. 이유: (1) 이미지 파이프라인·Shader Graph 복사 없이 같은 원본(JSON)에서 나오므로 "주행 트랙과 항상 같다"는 목적은 동일하게 달성, (2) 디자인 PRD 6장의 요소(노면·테두리·궤적·깃발·라벨·마커·랩 텍스트)를 전부 코드로 색만 바꿔 조정할 수 있어 디자인 피드백 반영이 빠르다, (3) 미니맵 지형의 픽셀 룩은 어차피 Shader Graph에서 보간을 허용하기로 했던 부분(테크 PRD 12장). 높이맵 변위·등고선은 보류.
+- **Diorama 샘플에서 가져온 것**: 받침 모델 `Diorama_Base.usdz`만. `KartSimulator/Resources/Minimap/`에 Apple 샘플 라이선스 전문(`LICENSE-Apple-Diorama-Sample.txt`)과 함께 넣고 LICENSE 5조에 고지했다(앱 안 포함은 허용, 단독 재배포·Apple 상표 사용 금지). 샘플의 뷰모델·새·구름·슬라이더·지역 투명도·`RealityKitContent` 패키지는 가져오지 않았다(테크 PRD 9장 "제거할 것"과 같고, 패키지 분리는 M0 보류 항목 그대로).
+- **구성** (`RealityKit/MinimapBuilder.swift`, 모두 미니맵 로컬 m, 지름 0.24 기준):
+  - 받침: `Diorama_Base`를 지름 0.24에 맞춰 상판이 y = 0에 오게 배치, 재질은 `ui-rim`으로 통일(디자인 PRD 6장 "이 부분만 매끈한 재질 허용"). 못 읽으면 원기둥 받침으로 대체.
+  - 지형 원판 `ui-panel` → 노면 리본 3층(테두리 `mm-edge` 1.25배 폭, 노면 `mm-road`, 궤적 `ui-sky` 40 % 1/3 폭) → 출발 깃발(`ui-ink` 기둥 + `mm-finish` 깃발, 체커 무늬 보류) → 체크포인트 라벨(디스크 + 숫자 `generateText`, 미통과 `ui-ink` 40 % / 통과 `ui-cyan`) → 카트 마커(로드된 카트 복제본 1.5 cm + `ui-cyan` 그림자) → 랩 텍스트("1 / 3", 앞 가장자리 60° 기울임).
+  - 투영은 `KartCore/MinimapProjection.swift`: 트랙 바운딩 박스(노면 반폭 포함)를 원에 내접하는 정사각형의 90 %에 등방 배율로 맞추고 중심을 원점에. 축은 트랙 좌표계 그대로라 heading을 그대로 쓴다. `MinimapProjectionTests` 4개.
+  - 동기화(테크 PRD `MinimapSyncSystem` 역할)는 `ImmersiveBoxView.tickMotion`에서 `Minimap.update` 직접 호출(ECS 분리는 여전히 보류). `RaceHUDState`에 `kartMapPosition`·`kartHeading` 추가, `RaceModel.updateMap`으로 채운다.
+  - 상호작용 없음: `InputTargetComponent`를 붙이지 않아 핀치는 그대로 `inputCatcher`로 간다.
+- **배치**: 디오라마 = 박스 앞오른쪽 모서리 위(테크 PRD "우측 하단 모서리 안쪽, 트랙 위에 떠 있게"를 0.7 m 박스에 맞춤), 지름 0.16으로 축소, 바닥에서 7 cm 위. 콕핏 = 모드 진입 순간 머리 기준 앞 1.2 m·오른쪽 0.45 m·아래 0.45 m(HUD 오른쪽 아래), 지름 0.24, 상판을 사용자 쪽으로 35° 기울임, 랩 텍스트가 사용자를 향함. 지도 내용(`mapRoot`)은 `sceneYaw`만큼 돌려 박스/콕핏에서 보이는 트랙 방향과 맞춘다 — 3인칭은 진입 시점 값으로 고정(북쪽 고정식, 세계가 돌아도 지도는 안 돈다).
+- **확인**: visionOS 시뮬레이터 빌드, `KartCoreTests` 12개(미니맵 4 + 씬 배치 8) 통과, `Diorama_Base.usdz`·라이선스 파일이 앱 번들에 들어감을 확인. **시각 확인은 못 했다** — 디바이스 인터랙션 도구가 visionOS 시뮬레이터를 지원하지 않아 박스를 열 수 없었다. 실기기에서 확인할 것: 미니맵이 박스 모서리에 보이는지·크기 0.16이 적당한지, 노면 리본 꺾임이 매끈한지, 라벨 숫자·랩 텍스트가 읽히는지, 마커가 카트를 따라 도는지, 콕핏에서 HUD 옆 위치·35° 기울기가 적절한지.
+- **보류**: 체커 무늬 깃발, 지형 높이맵·등고선, `minimap_images.py`, 통과 색 전환 0.2초 애니메이션, 미니맵 Shader Graph.
+- **영향받는 절**: `Docs/TechTask.md` M4, 테크 PRD 9장(이미지 → 기하로 대체), `KartCore/MinimapProjection.swift`(신규), `RealityKit/MinimapBuilder.swift`(신규), `Resources/Minimap/`(신규), `RaceHUDState`/`RaceModel`, `ImmersiveBoxView`, LICENSE 5조, README

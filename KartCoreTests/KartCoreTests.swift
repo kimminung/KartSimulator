@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import simd
 @testable import KartSimulator
 
 struct HandInputResolverTests {
@@ -705,5 +706,42 @@ struct ScenePlacementTests {
         let step = ScenePlacement.approachAngle(from: from, to: to, rate: 1000, deltaTime: 1)
         #expect(abs(atan2(sin(step - to), cos(step - to))) < 1e-3)
         #expect(step > from)
+    }
+}
+
+// MARK: - 미니맵 투영 (M4, 결정 47)
+
+struct MinimapProjectionTests {
+    /// track_01과 비슷한 20 × 12 m 직사각 루프 + 노면 폭 3 m가 지름 0.24 m 테이블에 들어가고 중심이 원점에 온다.
+    @Test func fitsTrackInsideTableAndCentersIt() {
+        let pts: [SIMD2<Float>] = [SIMD2(6, -6), SIMD2(26, -6), SIMD2(26, -18), SIMD2(6, -18)]
+        let p = MinimapProjection(points: pts, trackWidth: 3, tableDiameter: 0.24)
+        #expect(abs(p.center.x - 16) < 1e-4 && abs(p.center.y + 12) < 1e-4)
+        // 가장 긴 변 20 + 3 = 23 m → 내접 정사각형 0.24/√2 · 0.9
+        let expectedScale = Float(0.24) / Float(2).squareRoot() * 0.9 / 23
+        #expect(abs(p.scale - expectedScale) < 1e-6)
+        for pt in pts {
+            let m = p.mapPosition(pt)
+            #expect(simd_length(m) + p.mapLength(1.5) <= 0.12 + 1e-5) // 노면 반폭까지 포함해도 원 안
+        }
+        #expect(simd_length(p.mapPosition(p.center)) < 1e-6)
+    }
+
+    @Test func mapLengthUsesSameScale() {
+        let p = MinimapProjection(points: [SIMD2(0, 0), SIMD2(10, 0)], trackWidth: 2, tableDiameter: 0.24)
+        #expect(abs(p.mapLength(4) - 4 * p.scale) < 1e-7)
+    }
+
+    @Test func emptyPathIsIdentity() {
+        let p = MinimapProjection(points: [], trackWidth: 3, tableDiameter: 0.24)
+        #expect(p.scale == 1 && p.center == .zero)
+    }
+
+    /// LapTracker는 순서대로만 통과시키므로 앞에서부터 passedCount개가 통과.
+    @Test func checkpointPassedOrdinals() {
+        #expect(MinimapProjection.isCheckpointPassed(ordinal: 0, passedCount: 1))
+        #expect(!MinimapProjection.isCheckpointPassed(ordinal: 1, passedCount: 1))
+        #expect(!MinimapProjection.isCheckpointPassed(ordinal: 0, passedCount: 0))
+        #expect(MinimapProjection.isCheckpointPassed(ordinal: 2, passedCount: 3))
     }
 }

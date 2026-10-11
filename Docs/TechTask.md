@@ -80,9 +80,11 @@ Oct 10, 2026 · @Coulson 기준, `Docs/tech-prd.md`에서 파생. 마일스톤 �
 
 ## M4 — 미니맵
 
-- [ ] Diorama 샘플 이식, 트랙 JSON → 높이맵/궤적 이미지 생성 스크립트
-- [ ] `MinimapSyncSystem` 구현
-- [ ] 박스 다이오라마 안에서의 미니맵 배치 좌표 재계산 (볼륨 좌표계 → 이머시브 박스 좌표계로 변환 필요, 신규 항목)
+- [x] Diorama 샘플에서 받침 모델(`Diorama_Base.usdz`)만 이식, 트랙 JSON 중심선에서 지도 기하를 직접 생성(이미지 스크립트 대신 — 결정 47) — `RealityKit/MinimapBuilder.swift`, `KartCore/MinimapProjection.swift`
+- [x] 동기화: `Minimap.update`(마커 위치·회전, 체크포인트 라벨 색, 랩 텍스트)를 `tickMotion`에서 호출. `RaceHUDState.kartMapPosition/kartHeading` 추가
+- [x] 배치: 디오라마는 박스 앞오른쪽 모서리 위 지름 0.16, 콕핏은 HUD 오른쪽 아래 지름 0.24·35° 기울임 (결정 47)
+- [ ] 실기기 확인: 위치·크기·가독성·마커 추종·콕핏 배치 (시뮬레이터 시각 확인 못 함)
+- [ ] 보류: 체커 깃발, 높이맵·등고선, 통과 색 전환 애니메이션, 디자인 피드백 반영
 
 ## M5 — HUD·화면 흐름·효과음 (2026-10-10 RaceModel 1차 데이터 플러밍)
 
