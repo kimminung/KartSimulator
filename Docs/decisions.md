@@ -269,3 +269,18 @@
 - **반영 안 함(검토 후 판단)**: 이슈 #9의 "풍경 텍스처가 필요하면 `Design/textures/tex_*.png` 사용"은 조건부 항목이다. 잔디 타일(`tile_grass.usdz`)이 이미 원본 `tiles.png` 텍스처를 그대로 갖고 있어 트랙 바운딩 박스 안쪽은 전부 덮이고, 그 바깥의 박스 바닥판은 결정 35번에서 이미 스타일 가이드 색(`StylePalette.road`)으로 의도적으로 깔아 둔 부분이라 추가 텍스처가 필요 없다고 판단했다.
 - **확인**: 두 변경 모두 visionOS 시뮬레이터 destination으로 전체 빌드 통과(`BuildProject`), `KartCoreTests` 37개 중 35개 통과 — 실패한 5개(`EngineSoundMachineTests`, 엔진 사운드 상태 전환)는 오늘 건드린 파일과 무관한 기존 결함으로 별도 기록. 실기기(진짜 Vision Pro)는 사용자 지시에 따라 건드리지 않았다.
 - **영향받는 절**: `Docs/TechTask.md` M3·M5, `KartCore/TrackPath.swift`(반환 튜플에 `projected` 추가), `ImmersiveBoxView.swift`, `ContentView.swift`, `Assets.xcassets/Onboarding/`(신규), GitHub 이슈 #9·#12, PR #14
+
+## 39. [테크] 운전 모드 3종(디오라마·1인칭·3인칭) 도입 — Phase 1
+
+- **날짜**: 2026-10-11
+- **배경**: 1인칭 시뮬레이션이 어지러움증을 유발할 수 있어, 몰입도가 다른 선택지를 두기로 했다. 지금까지의 기본 모습(박스를 밖에서 보며 카트를 조종)을 **디오라마 모드**라는 이름으로 못박고, 그 옆에 **1인칭**(머리 방향으로 서서히 조향, 손은 가속만)과 **3인칭**(1인칭과 같은 시점이지만 조향은 이 프로젝트가 맨 처음 썼던 한손 핀치 좌/우회전 방식)을 추가했다. 디오라마 모드에는 박스 밖에서 카트를 직접 조종하는 새 조작법(양손 핀치 유지=전진, 핀치한 채로 벌리기=후진, 한쪽 손만 남으면 그 반대쪽으로 회전)을 넣었다.
+- **기술 노트 — "아이트래킹" 정정**: visionOS는 서드파티 앱에 실제 눈동자 방향(raw gaze vector)을 주지 않는다(개인정보 보호). 이 프로젝트가 "시선"이라고 불러온 `worldTracking.queryDeviceAnchor` 값도 사실은 **헤드(기기) 방향**이다. 그래서 "아이트래킹으로 모드 전환"은 실제로는 **시스템 표준 시선+핀치 버튼 선택**(`ModeSwitchView`의 평범한 SwiftUI `Button` 3개, HUD attachment 안이라 시스템이 자동으로 호버+핀치 선택을 처리)으로 구현했다. 1인칭의 "시선 조향"도 정확히는 "머리 방향 조향"이다.
+- **범위(Phase 1)**: 모드 전환 프레임워크 + 세 모드의 입력/조향 로직만 이번에 구현했다. 1인칭도 아직 디오라마와 같은 작은 박스 스케일로 시험한다 — 트랙을 실제 크기로 키우고 유저 머리 위치에 카트를 "고정"시키는 콕핏 기법(Phase 2)은 다음으로 미뤘다. 스트리밍/컬링(반경만 렌더링)은 트랙이 보통 16~64 타일이라 처음부터 만들지 않고, 실기기로 무거운지 먼저 재본 뒤에만 추가하기로 했다(과설계 방지).
+- **구현**:
+  - `ExperienceMode`(신규, `KartCore`): `.diorama`/`.firstPerson`/`.thirdPerson`.
+  - `DriveState`에 `.headSteered(accelerating:)` 케이스 추가(기존 `.stopped`/`.waiting`/`.turnLeft`/`.turnRight`/`.pedal`는 그대로 유지 — 디오라마·3인칭이 계속 쓴다). `KartMotionState.advancing`에 `desiredHeading: Float? = nil` 파라미터를 추가해, `.headSteered`일 때만 머리 방향으로 최단 경로(±π 랩어라운드 처리)·`steerRateDegrees`(신규 튜닝값, 기본 120°/s)만큼씩 heading을 돌린다. 기존 손 회전 로직(`turnRateLow`/`turnRateHigh`/`minTurnSpeed`)은 그대로 둬서 디오라마·3인칭에 계속 쓴다.
+  - `HandInputResolver.resolve(now:mode:)`가 모드별로 완전히 다르게 해석한다: 디오라마는 양손 핀치 시작 지점(순간 거리) 대비 **상대 드래그**로 전·후진을 가른다(`InputTuning.reverseDragDeadband`/`reverseDragSpan`로 절대 40cm 피벗을 대체) + 한손만 핀치=회전. 3인칭은 같은 손 모양이지만 양손 핀치면 거리와 무관하게 항상 `pedal(1.0)`(후진 없음). 1인칭은 한쪽이라도 핀치하면 `.headSteered(accelerating: true)`.
+  - `ImmersiveBoxView`: 기존 디버그 전용 헤드 기즈모(`updateHeadDebugGizmo`)가 이제 `desiredHeading`(`atan2(-forward.x, -forward.z)`)도 같이 반환해서 1인칭 조향에 쓴다(`rootEntity`가 회전 없이 평행이동만 해서 씬 좌표축이 트랙 좌표축과 그대로 일치 — 별도 변환 불필요). HUD에 `ModeSwitchView`(모드 전환 버튼 3개) 추가, `PinchStatusView`에 `.headSteered` 아이콘 추가.
+  - `ContentView`의 `OnboardingView`를 모드 선택 세그먼트로 바꿔 모드별 설명을 보여준다. 디오라마는 기존 SVG 그림(캡션만 새 제스처에 맞게 수정), 1인칭·3인칭은 디자인이 아직 전용 그림을 안 만들어서 SF Symbols로 자리만 잡아 뒀다.
+- **확인**: visionOS 시뮬레이터로 전체 빌드 통과, `KartCoreTests` 45개 중 39개 통과(새로 쓴 디오라마/3인칭/1인칭 테스트 전부 포함) — 실패 5개는 전부 기존의 무관한 `EngineSoundMachineTests` 결함. 실기기는 건드리지 않았다.
+- **영향받는 절**: `Docs/TechTask.md` M2, `KartCore/ExperienceMode.swift`(신규), `DriveState.swift`, `HandInputResolver.swift`, `InputTuning.swift`, `MotionTuning.swift`, `KartMotionState.swift`, `ImmersiveBoxView.swift`, `ContentView.swift`, `KartCoreTests`
