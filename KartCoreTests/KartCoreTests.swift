@@ -3,107 +3,135 @@ import Foundation
 @testable import KartSimulator
 
 struct HandInputResolverTests {
-    @Test func bothHandsReleasedIsStopped() {
+    // MARK: - 디오라마(기본): 양손 핀치 = 전·후진(상대 거리), 한손만 = 회전 (결정 39)
+
+    @Test func dioramaBothHandsReleasedIsStopped() {
         let resolver = HandInputResolver()
         resolver.ingest(HandSample(chirality: .left, isPinching: false, position: nil, timestamp: 0))
         resolver.ingest(HandSample(chirality: .right, isPinching: false, position: nil, timestamp: 0))
-        let result = resolver.resolve(now: 0)
+        let result = resolver.resolve(now: 0, mode: .diorama)
         #expect(result.drive == .stopped)
     }
 
-    @Test func leftOnlyPinchIsTurnLeft() {
+    @Test func dioramaLeftOnlyPinchIsTurnLeft() {
         let resolver = HandInputResolver()
         feedPinch(resolver, .left, at: 0, debounced: true)
         resolver.ingest(HandSample(chirality: .right, isPinching: false, position: nil, timestamp: 0.1))
-        let result = resolver.resolve(now: 0.1)
+        let result = resolver.resolve(now: 0.1, mode: .diorama)
         #expect(result.drive == .turnLeft)
     }
 
-    @Test func rightOnlyPinchIsTurnRight() {
+    @Test func dioramaRightOnlyPinchIsTurnRight() {
         let resolver = HandInputResolver()
         feedPinch(resolver, .right, at: 0, debounced: true)
         resolver.ingest(HandSample(chirality: .left, isPinching: false, position: nil, timestamp: 0.1))
-        let result = resolver.resolve(now: 0.1)
+        let result = resolver.resolve(now: 0.1, mode: .diorama)
         #expect(result.drive == .turnRight)
     }
 
-    // 핀치인(좁힐수록)하면 전진, 핀치아웃(벌릴수록)하면 후진. 기준점(40cm, `pivotDistance`)이 중립이고,
-    // 손을 완전히 모으면(거리 0) 최대 전진, `pivotDistance + reverseSpan`만큼 벌리면 최대 후진이다.
+    // 전진은 "양손 핀치 유지"(핀치 시작 지점 대비 상대 거리가 기준), 후진은 "핀치한 채로 벌리기"다.
+    // 절대 거리(예전의 40cm 피벗)가 아니라 핀치를 시작한 순간의 거리를 기준점으로 삼는다(결정 39).
 
-    @Test func handsFullyTogetherIsFullForward() {
+    @Test func holdingAtPinchStartDistanceIsForward() {
         let resolver = HandInputResolver()
-        feedBothHands(resolver, distance: 0.0)
-        let result = resolver.resolve(now: 0.1)
-        #expect(abs((pedalValue(result.drive) ?? 0) - 1.0) < 0.001)
+        feedBothHands(resolver, distance: 0.30)
+        let first = resolver.resolve(now: 0.1, mode: .diorama)
+        #expect(pedalValue(first.drive) == 1.0)
+        // 같은 거리를 계속 유지해도 전진이 유지돼야 한다.
+        feedBothHands(resolver, distance: 0.30, timestamp: 0.1)
+        let second = resolver.resolve(now: 0.2, mode: .diorama)
+        #expect(pedalValue(second.drive) == 1.0)
     }
 
-    @Test func narrowerThanPivotIsForward() {
+    @Test func movingHandsCloserAfterPinchIsStillForward() {
         let resolver = HandInputResolver()
-        feedBothHands(resolver, distance: 0.19) // pivotDistance(0.40)의 절반 근처
-        let result = resolver.resolve(now: 0.1)
-        #expect((pedalValue(result.drive) ?? 0) > 0, "40cm보다 좁히면(핀치인) 전진(양수)이어야 한다")
+        feedBothHands(resolver, distance: 0.30)
+        _ = resolver.resolve(now: 0.1, mode: .diorama) // 기준점 = 0.30
+        feedBothHands(resolver, distance: 0.10, timestamp: 0.1) // 기준점보다 더 좁힘
+        let result = resolver.resolve(now: 0.2, mode: .diorama)
+        #expect(pedalValue(result.drive) == 1.0, "기준점보다 더 좁히는 것도 전진이어야 한다")
     }
 
-    @Test func pinchingInFurtherAcceleratesForwardMore() {
-        let narrower = resolverPedal(distance: 0.10)
-        let wider = resolverPedal(distance: 0.30)
-        #expect(narrower > 0 && wider > 0)
-        #expect(narrower > wider, "더 좁힐수록(핀치인) 전진이 더 강해져야 한다")
-    }
-
-    @Test func atPivotLowerEdgeIsNeutral() {
+    @Test func draggingApartPastDeadbandEventuallyReverses() {
         let resolver = HandInputResolver()
-        feedBothHands(resolver, distance: 0.38) // pivotDistance - pivotDeadband
-        let result = resolver.resolve(now: 0.1)
-        #expect(pedalValue(result.drive) == 0)
+        feedBothHands(resolver, distance: 0.30)
+        _ = resolver.resolve(now: 0.1, mode: .diorama) // 기준점 = 0.30
+        var lastPedal: Float = 1.0
+        for frame in 1...40 {
+            let t = 0.1 + Double(frame) * (1.0 / 60.0)
+            feedBothHands(resolver, distance: 0.30 + 0.04 + 0.20, timestamp: t) // 기준점 + 데드밴드 + 0.20 드래그
+            lastPedal = pedalValue(resolver.resolve(now: t + 0.001, mode: .diorama).drive) ?? 0
+        }
+        #expect(lastPedal < -0.5, "충분히 벌리고 시간이 지나면 후진이 걸려야 한다")
     }
 
-    @Test func widerThanPivotIsReverse() {
+    @Test func draggingFurtherApartIncreasesReverseMagnitude() {
+        func pedalAfterDrag(_ drag: Float) -> Float {
+            let resolver = HandInputResolver()
+            feedBothHands(resolver, distance: 0.30)
+            _ = resolver.resolve(now: 0.1, mode: .diorama)
+            var pedal: Float = 1.0
+            for frame in 1...40 {
+                let t = 0.1 + Double(frame) * (1.0 / 60.0)
+                feedBothHands(resolver, distance: 0.30 + drag, timestamp: t)
+                pedal = pedalValue(resolver.resolve(now: t + 0.001, mode: .diorama).drive) ?? 0
+            }
+            return pedal
+        }
+        let smallDrag = pedalAfterDrag(0.04 + 0.05)
+        let bigDrag = pedalAfterDrag(0.04 + 0.20)
+        #expect(smallDrag < 0 && bigDrag < 0)
+        #expect(bigDrag < smallDrag, "더 많이 벌릴수록 후진이 더 세야 한다")
+    }
+
+    @Test func dragAtFullReverseSpanIsMaxReverse() {
         let resolver = HandInputResolver()
-        feedBothHands(resolver, distance: 0.60)
-        let result = resolver.resolve(now: 0.1)
-        #expect((pedalValue(result.drive) ?? 0) < 0, "40cm보다 벌리면(핀치아웃) 후진(음수)이어야 한다")
+        feedBothHands(resolver, distance: 0.30)
+        _ = resolver.resolve(now: 0.1, mode: .diorama)
+        var pedal: Float = 1.0
+        for frame in 1...60 {
+            let t = 0.1 + Double(frame) * (1.0 / 60.0)
+            feedBothHands(resolver, distance: 0.30 + 0.04 + 0.25, timestamp: t) // 데드밴드 + reverseDragSpan 정확히
+            pedal = pedalValue(resolver.resolve(now: t + 0.001, mode: .diorama).drive) ?? 0
+        }
+        #expect(abs(pedal - (-1.0)) < 0.01)
     }
 
-    @Test func pinchingOutFurtherAcceleratesReverseMore() {
-        let narrower = resolverPedal(distance: 0.50)
-        let wider = resolverPedal(distance: 0.70)
-        #expect(narrower < 0 && wider < 0)
-        #expect(wider < narrower, "더 벌릴수록(핀치아웃) 후진이 더 강해져야 한다")
-    }
-
-    @Test func atPivotUpperEdgeIsNeutral() {
+    @Test func dragBeyondReverseSpanClampsInsteadOfOvershooting() {
         let resolver = HandInputResolver()
-        feedBothHands(resolver, distance: 0.42) // pivotDistance + pivotDeadband
-        let result = resolver.resolve(now: 0.1)
-        #expect(pedalValue(result.drive) == 0)
+        feedBothHands(resolver, distance: 0.30)
+        _ = resolver.resolve(now: 0.1, mode: .diorama)
+        var pedal: Float = 1.0
+        for frame in 1...60 {
+            let t = 0.1 + Double(frame) * (1.0 / 60.0)
+            feedBothHands(resolver, distance: 0.30 + 1.0, timestamp: t) // 범위를 한참 넘김
+            pedal = pedalValue(resolver.resolve(now: t + 0.001, mode: .diorama).drive) ?? 0
+        }
+        #expect(abs(pedal - (-1.0)) < 0.01, "-1보다 더 내려가지(overshoot) 않아야 한다")
     }
 
-    @Test func exactlyAtPivotIsNeutral() {
+    @Test func releasingAndRepinchingResetsBaseline() {
         let resolver = HandInputResolver()
-        feedBothHands(resolver, distance: 0.40)
-        let result = resolver.resolve(now: 0.1)
-        #expect(pedalValue(result.drive) == 0, "기준점 바로 근처는 데드밴드라 중립이어야 한다")
+        feedBothHands(resolver, distance: 0.30)
+        _ = resolver.resolve(now: 0.1, mode: .diorama) // 기준점 0.30
+        resolver.ingest(HandSample(chirality: .left, isPinching: false, position: nil, timestamp: 0.2))
+        resolver.ingest(HandSample(chirality: .right, isPinching: false, position: nil, timestamp: 0.2))
+        // releaseGrace(120ms)가 지난 뒤에 확인해야 실제로 "뗀" 상태로 판정된다 — 그래야 기준점이 지워진다.
+        let releasedResult = resolver.resolve(now: 0.35, mode: .diorama)
+        #expect(releasedResult.drive == .stopped)
+        // 새 거리(0.60)에서 다시 양손을 핀치 — 이 지점이 새 기준점이 돼야 한다.
+        feedBothHands(resolver, distance: 0.60, timestamp: 0.4)
+        let result = resolver.resolve(now: 0.5, mode: .diorama)
+        #expect(pedalValue(result.drive) == 1.0, "다시 핀치한 지점이 새 기준점이라 전진이어야 한다")
     }
 
-    @Test func atMaxReverseSpanIsFullReverse() {
+    @Test func distanceSmoothingDelaysReachingFullReverse() {
         let resolver = HandInputResolver()
-        feedBothHands(resolver, distance: 0.82) // pivotDistance + pivotDeadband + reverseSpan
-        let result = resolver.resolve(now: 0.1)
-        #expect(abs((pedalValue(result.drive) ?? 0) - (-1.0)) < 0.001)
-    }
-
-    @Test func beyondMaxReverseSpanClampsInsteadOfOvershooting() {
-        let resolver = HandInputResolver()
-        feedBothHands(resolver, distance: 1.20) // reverseSpan 범위를 한참 넘김
-        let result = resolver.resolve(now: 0.1)
-        #expect(abs((pedalValue(result.drive) ?? 0) - (-1.0)) < 0.001, "-1보다 더 내려가지(overshoot) 않아야 한다")
-    }
-
-    private func resolverPedal(distance: Float) -> Float {
-        let resolver = HandInputResolver()
-        feedBothHands(resolver, distance: distance)
-        return pedalValue(resolver.resolve(now: 0.1).drive) ?? 0
+        feedBothHands(resolver, distance: 0.30)
+        _ = resolver.resolve(now: 0.1, mode: .diorama) // 기준점 0.30
+        feedBothHands(resolver, distance: 0.30 + 0.04 + 0.25, timestamp: 0.1) // 최대 후진 지점으로 점프
+        let justAfterJump = pedalValue(resolver.resolve(now: 0.15, mode: .diorama).drive) ?? 0
+        #expect(justAfterJump > -1.0, "EMA 스무딩 때문에 한 프레임만에 최대 후진까지 가지는 않아야 한다")
     }
 
     private func pedalValue(_ drive: DriveState) -> Float? {
@@ -111,12 +139,57 @@ struct HandInputResolverTests {
         return nil
     }
 
+    // MARK: - 3인칭: 디오라마와 같은 손 모양이지만 후진이 없다 — 양손 핀치는 항상 전진 최대치 (결정 39)
+
+    @Test func thirdPersonBothHandsIsForwardRegardlessOfDistance() {
+        let resolver = HandInputResolver()
+        feedBothHands(resolver, distance: 0.80) // 디오라마라면 후진일 큰 거리
+        let result = resolver.resolve(now: 0.1, mode: .thirdPerson)
+        #expect(result.drive == .pedal(1.0), "3인칭은 거리와 무관하게 항상 전진 최대치여야 한다(후진 없음)")
+    }
+
+    @Test func thirdPersonOneHandTurns() {
+        let resolver = HandInputResolver()
+        feedPinch(resolver, .left, at: 0, debounced: true)
+        resolver.ingest(HandSample(chirality: .right, isPinching: false, position: nil, timestamp: 0.1))
+        let result = resolver.resolve(now: 0.1, mode: .thirdPerson)
+        #expect(result.drive == .turnLeft)
+    }
+
+    @Test func thirdPersonNeitherHandIsStopped() {
+        let resolver = HandInputResolver()
+        resolver.ingest(HandSample(chirality: .left, isPinching: false, position: nil, timestamp: 0))
+        resolver.ingest(HandSample(chirality: .right, isPinching: false, position: nil, timestamp: 0))
+        let result = resolver.resolve(now: 0, mode: .thirdPerson)
+        #expect(result.drive == .stopped)
+    }
+
+    // MARK: - 1인칭: 손은 가속 여부만, 조향은 머리 방향(ImmersiveBoxView가 따로 계산) (결정 39)
+
+    @Test func firstPersonEitherHandPinchingAccelerates() {
+        let resolver = HandInputResolver()
+        feedPinch(resolver, .left, at: 0, debounced: true)
+        resolver.ingest(HandSample(chirality: .right, isPinching: false, position: nil, timestamp: 0.1))
+        let result = resolver.resolve(now: 0.1, mode: .firstPerson)
+        #expect(result.drive == .headSteered(accelerating: true))
+    }
+
+    @Test func firstPersonNoHandsStopsAccelerating() {
+        let resolver = HandInputResolver()
+        resolver.ingest(HandSample(chirality: .left, isPinching: false, position: nil, timestamp: 0))
+        resolver.ingest(HandSample(chirality: .right, isPinching: false, position: nil, timestamp: 0))
+        let result = resolver.resolve(now: 0, mode: .firstPerson)
+        #expect(result.drive == .headSteered(accelerating: false))
+    }
+
+    // MARK: - 손별 디바운스/그레이스/스테일 (모드와 무관한 공통 로직)
+
     @Test func pinchBelowDebounceDoesNotCountYet() {
         let resolver = HandInputResolver()
         resolver.ingest(HandSample(chirality: .left, isPinching: true, position: nil, timestamp: 0))
         resolver.ingest(HandSample(chirality: .right, isPinching: false, position: nil, timestamp: 0))
         // Only 10ms held, debounce requires 40ms by default.
-        let result = resolver.resolve(now: 0.010)
+        let result = resolver.resolve(now: 0.010, mode: .diorama)
         #expect(result.drive == .stopped)
     }
 
@@ -126,7 +199,7 @@ struct HandInputResolverTests {
         feedPinch(resolver, .right, at: 0, debounced: true)
         // Right hand releases, but within the 120ms grace window.
         resolver.ingest(HandSample(chirality: .right, isPinching: false, position: nil, timestamp: 0.1))
-        let result = resolver.resolve(now: 0.15)
+        let result = resolver.resolve(now: 0.15, mode: .diorama)
         #expect(result.drive != .turnLeft, "release grace should still count the right hand as pinching")
     }
 
@@ -136,27 +209,8 @@ struct HandInputResolverTests {
         resolver.ingest(HandSample(chirality: .right, isPinching: true, position: nil, timestamp: 0))
         // No further events for the right hand past staleTimeout (300ms default).
         resolver.ingest(HandSample(chirality: .left, isPinching: true, position: nil, timestamp: 0.5))
-        let result = resolver.resolve(now: 0.5)
+        let result = resolver.resolve(now: 0.5, mode: .diorama)
         #expect(result.right.tracked == false)
-    }
-
-    @Test func distanceSmoothingEasesSuddenJumps() {
-        let resolver = HandInputResolver()
-        feedBothHands(resolver, distance: 0.0, timestamp: 0) // 최대 전진 지점(손을 완전히 모음)
-        #expect(abs((pedalValue(resolver.resolve(now: 0.05).drive) ?? 0) - 1.0) < 0.001)
-
-        // 거리가 순간적으로 0.82(최대 후진 지점)로 뛰어도, EMA(alpha 0.25)가 바로 따라가지 않고 서서히 수렴한다.
-        feedBothHands(resolver, distance: 0.82, timestamp: 0.1)
-        let justAfterJump = pedalValue(resolver.resolve(now: 0.15).drive) ?? 0
-        #expect(justAfterJump > -1.0, "EMA 스무딩 때문에 한 프레임만에 최대 후진까지 가지는 않아야 한다")
-
-        var lastValue = justAfterJump
-        for frame in 1...20 {
-            let t = 0.1 + Double(frame) * (1.0 / 60.0)
-            feedBothHands(resolver, distance: 0.82, timestamp: t)
-            lastValue = pedalValue(resolver.resolve(now: t + 0.001).drive) ?? 0
-        }
-        #expect(lastValue < -0.9, "충분히 시간이 지나면 거리(0.82)에 맞는 값으로 수렴해야 한다")
     }
 
     private func feedPinch(_ resolver: HandInputResolver, _ chirality: HandChirality, at timestamp: TimeInterval, debounced: Bool) {
@@ -228,6 +282,63 @@ struct KartMotionStateTests {
         }
         #expect(state.speed < 0, "reverse should produce negative speed")
         #expect(state.position.z > 0, "forward is -Z, so reversing should move toward +Z")
+    }
+
+    // MARK: - 1인칭: 머리 방향으로 조향(`.headSteered`), 가속은 손 입력만 (결정 39)
+
+    @Test func headSteeredAcceleratingApproachesMaxSpeed() {
+        let tuning = MotionTuning()
+        var state = KartMotionState()
+        for _ in 0..<60 {
+            state = state.advancing(drive: .headSteered(accelerating: true), desiredHeading: 0, tuning: tuning, deltaTime: 1.0 / 60.0)
+        }
+        #expect(abs(state.speed - 3.0) < 0.05, "accel 3.0 m/s^2 over 1s from rest -> ~3.0 m/s")
+    }
+
+    @Test func headSteeredNotAcceleratingDecelerates() {
+        let tuning = MotionTuning()
+        var state = KartMotionState(speed: 3.0, heading: 0, position: .zero)
+        for _ in 0..<60 {
+            state = state.advancing(drive: .headSteered(accelerating: false), desiredHeading: 0, tuning: tuning, deltaTime: 1.0 / 60.0)
+        }
+        #expect(state.speed < 3.0, "손을 떼면 감속해야 한다")
+    }
+
+    @Test func headSteeredTurnsTowardDesiredHeadingAtFixedRate() {
+        let tuning = MotionTuning(steerRateDegrees: 90)
+        var state = KartMotionState(speed: 0, heading: 0, position: .zero)
+        // 목표 방향이 90도 떨어져 있고, steerRateDegrees=90°/s라 1초면 정확히 도달해야 한다.
+        let desired = Float.pi / 2
+        for _ in 0..<60 {
+            state = state.advancing(drive: .headSteered(accelerating: false), desiredHeading: desired, tuning: tuning, deltaTime: 1.0 / 60.0)
+        }
+        #expect(abs(state.heading - desired) < 0.01, "1초 동안 90°/s로 돌면 목표 방향에 도달해야 한다")
+    }
+
+    @Test func headSteeredDoesNotOvershootDesiredHeading() {
+        let tuning = MotionTuning(steerRateDegrees: 90)
+        var state = KartMotionState(speed: 0, heading: 0, position: .zero)
+        let desired: Float = 0.1 // steerRateDegrees 기준 한 프레임 최대 회전각보다 훨씬 작은 목표
+        state = state.advancing(drive: .headSteered(accelerating: false), desiredHeading: desired, tuning: tuning, deltaTime: 1.0 / 60.0)
+        #expect(state.heading <= desired + 0.0001, "목표보다 더 돌아가면(overshoot) 안 된다")
+    }
+
+    @Test func headSteeredTurnsShortestDirectionAcrossWrap() {
+        let tuning = MotionTuning(steerRateDegrees: 36000) // 한 프레임에 사실상 즉시 도달하도록 아주 크게
+        // heading이 +π - 0.01 근처에 있고 목표가 -π + 0.01 근처면, 실제로는 아주 가까운 방향(±π 경계를
+        // 넘어서)인데 단순히 desired - heading을 빼면 거의 2π짜리 "먼 길"로 계산된다 — 최단 경로로 가야 한다.
+        var state = KartMotionState(speed: 0, heading: .pi - 0.01, position: .zero)
+        let desired = -Float.pi + 0.01
+        state = state.advancing(drive: .headSteered(accelerating: false), desiredHeading: desired, tuning: tuning, deltaTime: 1.0 / 60.0)
+        let shortestDelta = atan2(sin(desired - state.heading), cos(desired - state.heading))
+        #expect(abs(shortestDelta) < 0.05, "±π 경계를 최단 방향으로 넘어가야 한다")
+    }
+
+    @Test func headSteeredWithNilDesiredHeadingKeepsHeadingUnchanged() {
+        let tuning = MotionTuning()
+        var state = KartMotionState(speed: 0, heading: 1.0, position: .zero)
+        state = state.advancing(drive: .headSteered(accelerating: true), desiredHeading: nil, tuning: tuning, deltaTime: 1.0 / 60.0)
+        #expect(state.heading == 1.0, "머리 방향을 못 구했으면(nil) 방향을 바꾸지 않아야 한다")
     }
 }
 

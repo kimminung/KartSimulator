@@ -175,49 +175,108 @@ private struct KartCard: View {
     }
 }
 
-/// 조작법 화면: 손 그림 5장(전진·후진·좌·우·정지) + 중립 안내 한 줄 + "알겠어요" 버튼
-/// (디자인 PRD 9장, 결정 36-1). 첫 실행 시 자동으로 뜨고, "조작법" 버튼으로 다시 볼 수 있다.
+/// 조작법 화면: 모드(디오라마/1인칭/3인칭)별로 다른 조작법을 보여준다(결정 39) — 세 모드가
+/// 손 제스처 자체를 다르게 쓰기 때문에 하나의 그림 세트로 설명할 수 없다. 첫 실행 시 자동으로
+/// 뜨고, "조작법" 버튼으로 다시 볼 수 있다.
 private struct OnboardingView: View {
     let onDismiss: () -> Void
-
-    private let gestures: [(image: String, title: String, caption: String)] = [
-        ("gesture_01_forward", "전진", "양손을 모을수록 빨리 전진"),
-        ("gesture_02_reverse", "후진", "양손을 벌릴수록 빨리 후진"),
-        ("gesture_03_left", "좌회전", "왼손만 핀치하면 좌회전"),
-        ("gesture_04_right", "우회전", "오른손만 핀치하면 우회전"),
-        ("gesture_05_stop", "정지", "양손을 떼면 멈춤"),
-    ]
+    @State private var selectedMode: ExperienceMode = .diorama
 
     var body: some View {
         VStack(spacing: 20) {
             Text("조작법")
                 .font(.title2.bold())
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 16)], spacing: 16) {
-                ForEach(gestures, id: \.image) { gesture in
-                    VStack(spacing: 8) {
-                        Image(gesture.image)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 120, height: 120)
-                        Text(gesture.title)
-                            .font(.headline)
-                        Text(gesture.caption)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-                }
+            Picker("모드", selection: $selectedMode) {
+                Text("디오라마").tag(ExperienceMode.diorama)
+                Text("1인칭").tag(ExperienceMode.firstPerson)
+                Text("3인칭").tag(ExperienceMode.thirdPerson)
             }
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 360)
 
-            Text("양손 사이 약 40 cm에서는 제자리(중립)")
+            GestureInstructionGrid(gestures: GestureInstruction.gestures(for: selectedMode))
+
+            Text(GestureInstruction.footnote(for: selectedMode))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
 
             Button("알겠어요", action: onDismiss)
                 .buttonStyle(.borderedProminent)
         }
         .padding(32)
+    }
+}
+
+/// 조작법 카드 한 장 = 디자인이 만든 240×240 벡터 그림(`Assets.xcassets/Onboarding/`) + 제목 + 캡션.
+/// 그림 파일명·캡션은 디자인 PRD 9장 표와 결정 40번(디자인) 그대로다 — 바꾸면 디자인 쪽
+/// `Design/onboarding/_sheet.png`와 어긋나니 같이 고친다.
+private struct GestureInstruction: Identifiable {
+    let image: String
+    let title: String
+    let caption: String
+    var id: String { image }
+
+    static func gestures(for mode: ExperienceMode) -> [GestureInstruction] {
+        switch mode {
+        case .diorama:
+            // 박스를 밖에서 보며 직접 조종. 전/후진은 핀치를 시작한 손 간격 대비 상대 드래그(결정 39)
+            return [
+                GestureInstruction(image: "gesture_01_forward", title: "전진", caption: "양손을 핀치한 채로 있으면 전진"),
+                GestureInstruction(image: "gesture_02_reverse", title: "후진", caption: "핀치한 채로 양손을 벌리면 후진"),
+                GestureInstruction(image: "gesture_03_left", title: "좌회전", caption: "오른손을 떼면(왼손만 핀치) 좌회전"),
+                GestureInstruction(image: "gesture_04_right", title: "우회전", caption: "왼손을 떼면(오른손만 핀치) 우회전"),
+                GestureInstruction(image: "gesture_05_stop", title: "정지", caption: "양손을 떼면 멈춤"),
+            ]
+        case .firstPerson:
+            // 머리(기기) 방향으로 서서히 조향, 손은 가속만. 그림도 눈이 아니라 헤드셋이다(결정 39 기술 노트)
+            return [
+                GestureInstruction(image: "gesture_fp_01_steer", title: "조향", caption: "머리가 향하는 쪽으로 서서히 회전"),
+                GestureInstruction(image: "gesture_fp_02_throttle", title: "가속", caption: "한쪽 손이라도 핀치하면 가속, 떼면 감속"),
+            ]
+        case .thirdPerson:
+            // 1인칭과 같은 시점, 조향은 한손 핀치. 양손 핀치는 간격과 무관하게 항상 전진(후진 없음)
+            return [
+                GestureInstruction(image: "gesture_tp_01_forward", title: "전진", caption: "양손을 핀치하면 전진 (후진 없음)"),
+                GestureInstruction(image: "gesture_tp_02_left", title: "좌회전", caption: "왼손만 핀치하면 좌회전"),
+                GestureInstruction(image: "gesture_tp_03_right", title: "우회전", caption: "오른손만 핀치하면 우회전"),
+                GestureInstruction(image: "gesture_tp_04_stop", title: "정지", caption: "양손을 떼면 멈춤"),
+            ]
+        }
+    }
+
+    /// 그림 아래 한 줄 안내. 디오라마의 옛 "양손 사이 약 40 cm = 중립"은 결정 39에서 없어졌다.
+    static func footnote(for mode: ExperienceMode) -> String {
+        switch mode {
+        case .diorama: return "기준은 핀치를 시작한 순간의 손 간격입니다. 그 자리에 두면 전진, 벌리면 후진."
+        case .firstPerson: return "조향은 눈동자가 아니라 머리 방향을 따릅니다. 손 간격과 좌우 구분은 쓰지 않습니다."
+        case .thirdPerson: return "후진은 없습니다. 양손을 벌려도 계속 전진합니다."
+        }
+    }
+}
+
+private struct GestureInstructionGrid: View {
+    let gestures: [GestureInstruction]
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 16)], spacing: 16) {
+            ForEach(gestures) { gesture in
+                VStack(spacing: 8) {
+                    Image(gesture.image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 120, height: 120)
+                        .accessibilityLabel(gesture.caption)
+                    Text(gesture.title)
+                        .font(.headline)
+                    Text(gesture.caption)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+            }
+        }
     }
 }
 

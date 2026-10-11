@@ -19,6 +19,8 @@ struct ImmersiveBoxView: View {
     @State private var motion = KartMotionState()
     @State private var inputResolver = HandInputResolver()
     @State private var updateSubscription: Any?
+    /// 디오라마(기본) / 1인칭(머리 방향 조향) / 3인칭(한손 핀치 좌우회전) — 결정 39.
+    @State private var mode: ExperienceMode = .diorama
 
     @State private var track: TrackDefinition?
     @State private var trackPath: TrackPath?
@@ -159,8 +161,8 @@ struct ImmersiveBoxView: View {
             }
 
             updateSubscription = content.subscribe(to: SceneEvents.Update.self) { event in
-                tickMotion(deltaTime: Float(event.deltaTime))
-                updateHeadDebugGizmo()
+                let desiredHeading = updateHeadDebugGizmo()
+                tickMotion(deltaTime: Float(event.deltaTime), desiredHeading: desiredHeading)
             }
         } update: { _, _ in
             guard !isLoading,
@@ -177,7 +179,7 @@ struct ImmersiveBoxView: View {
             // `inputCatcher`와 같은 공간을 공유해 호버가 불안정했는데(결정 26번), 박스 바로 위에
             // 떠 있는 이 패널은 겹치는 엔티티가 없어 바라보고 누르기 훨씬 쉽다.
             Attachment(id: "hud") {
-                RaceHUDOverlay(hud: raceModel.hud) {
+                RaceHUDOverlay(hud: raceModel.hud, mode: mode, onModeChange: { mode = $0 }) {
                     Task {
                         await dismissImmersiveSpace()
                         immersiveSession.isOpen = false
@@ -395,10 +397,15 @@ struct ImmersiveBoxView: View {
         trailRoot.addChild(segment)
     }
 
-    /// 디버그 전용: 헤드 앵커 위치에 구슬을, 기기 정면 방향으로 막대를 띄운다.
+    /// 헤드 앵커 위치에 구슬을, 기기 정면 방향으로 막대를 띄운다(디버그 시각화, 결정 21번).
+    /// 1인칭 모드에서는 여기서 구한 정면 방향이 그대로 조향 입력(`desiredHeading`)이 된다 —
+    /// "아이트래킹"이라고 불러왔지만 실제로는 머리(기기) 방향이다(결정 39 기술 노트). `rootEntity`가
+    /// 회전 없이 평행이동만 하므로 씬 좌표축이 트랙 좌표축과 그대로 일치해서, 변환 없이 바로
+    /// `motion.heading`과 같은 공식(`forward = (-sin(h), 0, -cos(h))`)으로 뒤집어 쓸 수 있다.
     @MainActor
-    private func updateHeadDebugGizmo() {
-        guard let anchor = worldTracking.queryDeviceAnchor(atTimestamp: CACurrentMediaTime()) else { return }
+    @discardableResult
+    private func updateHeadDebugGizmo() -> Float? {
+        guard let anchor = worldTracking.queryDeviceAnchor(atTimestamp: CACurrentMediaTime()) else { return nil }
         let transform = anchor.originFromAnchorTransform
         let position = SIMD3<Float>(transform.columns.3.x, transform.columns.3.y, transform.columns.3.z)
         // 디바이스 로컬 -Z가 정면이다(RealityKit/ARKit 공통 관례).
@@ -408,18 +415,20 @@ struct ImmersiveBoxView: View {
         headMarker.position = position
         gazeRay.position = position + direction * (gazeRayLength / 2)
         gazeRay.orientation = simd_quatf(from: SIMD3<Float>(0, 0, 1), to: direction)
+
+        return atan2(-direction.x, -direction.z)
     }
 
     @MainActor
-    private func tickMotion(deltaTime: Float) {
+    private func tickMotion(deltaTime: Float, desiredHeading: Float?) {
         guard deltaTime > 0, let track, let trackPath, let lapTracker else { return }
 
         // `ingest()`에서 찍는 시계(CACurrentMediaTime)와 반드시 같은 기준이어야 한다. 섞어 쓰면
         // HandInputResolver의 스테일 판정이 항상 틀어진다(결정 24번).
         let now = CACurrentMediaTime()
-        let (drive, leftStatus, rightStatus) = inputResolver.resolve(now: now)
+        let (drive, leftStatus, rightStatus) = inputResolver.resolve(now: now, mode: mode)
         let tuning = MotionTuning().applying(track.tuning)
-        motion = motion.advancing(drive: drive, tuning: tuning, deltaTime: deltaTime)
+        motion = motion.advancing(drive: drive, desiredHeading: mode == .firstPerson ? desiredHeading : nil, tuning: tuning, deltaTime: deltaTime)
 
         let positionXZ = SIMD2(motion.position.x, motion.position.z)
         let (pathIndex, distanceFromCenterline, projectedOnCenterline) = trackPath.closestSegment(to: positionXZ)
@@ -481,6 +490,9 @@ struct ImmersiveBoxView: View {
             isHolding = true
         case .stopped, .waiting:
             pedalMagnitude = 0
+            isHolding = false
+        case .headSteered(let accelerating):
+            pedalMagnitude = accelerating ? 1.0 : 0.0
             isHolding = false
         }
         let engineCommands = engineMachine.update(
@@ -604,10 +616,13 @@ struct ImmersiveBoxView: View {
 /// M5 HUD의 1차 데이터 플러밍 — 배치/스타일은 디자인 전달 후 다듬는다 (`Docs/TechTask.md` M5).
 private struct RaceHUDOverlay: View {
     let hud: RaceHUDState
+    let mode: ExperienceMode
+    let onModeChange: (ExperienceMode) -> Void
     let onClose: () -> Void
 
     var body: some View {
         VStack(spacing: 8) {
+            ModeSwitchView(mode: mode, onModeChange: onModeChange)
             VStack(spacing: 4) {
                 Text("LAP \(hud.lap) / \(hud.totalLaps)")
                     .font(.headline)
@@ -630,6 +645,42 @@ private struct RaceHUDOverlay: View {
         }
         .padding(12)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+/// 모드 전환 버튼 3개 — 평범한 SwiftUI `Button`이라 시스템이 표준 시선+핀치 선택을 그대로 처리한다
+/// ("아이트래킹으로 전환"의 실제 구현, 결정 39 기술 노트. visionOS는 서드파티 앱에 원시 눈동자
+/// 방향을 주지 않는다 — 버튼을 보면서 핀치하는 일반적인 선택 방식일 뿐이다).
+private struct ModeSwitchView: View {
+    let mode: ExperienceMode
+    let onModeChange: (ExperienceMode) -> Void
+
+    private let labels: [ExperienceMode: String] = [
+        .diorama: "디오라마",
+        .firstPerson: "1인칭",
+        .thirdPerson: "3인칭",
+    ]
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(ExperienceMode.allCases, id: \.self) { candidate in
+                modeButton(for: candidate)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func modeButton(for candidate: ExperienceMode) -> some View {
+        let title: String = labels[candidate] ?? candidate.rawValue
+        if candidate == mode {
+            Button(title) { onModeChange(candidate) }
+                .buttonStyle(.borderedProminent)
+                .font(.caption)
+        } else {
+            Button(title) { onModeChange(candidate) }
+                .buttonStyle(.bordered)
+                .font(.caption)
+        }
     }
 }
 
@@ -699,6 +750,9 @@ private struct PinchStatusView: View {
                 .foregroundStyle(Color.style(StylePalette.uiMagenta))
         case .pedal:
             EmptyView()
+        case .headSteered(let accelerating):
+            Image(systemName: accelerating ? "arrow.up" : "stop.fill")
+                .foregroundStyle(accelerating ? Color.style(StylePalette.uiCyan) : Color.style(StylePalette.uiInk).opacity(0.4))
         }
     }
 

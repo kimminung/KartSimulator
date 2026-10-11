@@ -11,7 +11,11 @@ public struct KartMotionState: Equatable, Sendable {
         self.position = position
     }
 
-    public func advancing(drive: DriveState, tuning: MotionTuning, deltaTime: Float) -> KartMotionState {
+    /// `desiredHeading`은 `drive == .headSteered`일 때만 쓰인다(1인칭의 머리 방향 조향).
+    /// 다른 모드는 손 입력(`turnLeft`/`turnRight`)만으로 회전한다 — 둘을 같은 파라미터로 억지로
+    /// 합치지 않고 나란히 둔 이유는 1인칭에서 조향(머리)과 가속(손)이 서로 독립된 입력이기
+    /// 때문이다(결정 39).
+    public func advancing(drive: DriveState, desiredHeading: Float? = nil, tuning: MotionTuning, deltaTime: Float) -> KartMotionState {
         var next = self
 
         let target = Self.target(for: drive, current: speed, tuning: tuning)
@@ -24,11 +28,23 @@ public struct KartMotionState: Equatable, Sendable {
             let turnRateDegrees = tuning.turnRateLow + (tuning.turnRateHigh - tuning.turnRateLow) * t
             let sign: Float = drive == .turnLeft ? 1 : -1
             next.heading += sign * turnRateDegrees * (.pi / 180) * deltaTime
+        } else if case .headSteered = drive, let desiredHeading {
+            next.heading = Self.steer(from: next.heading, toward: desiredHeading, maxDegreesPerSecond: tuning.steerRateDegrees, deltaTime: deltaTime)
         }
 
         let forward = SIMD3<Float>(-sin(next.heading), 0, -cos(next.heading))
         next.position += forward * next.speed * deltaTime
         return next
+    }
+
+    /// `heading`을 `desiredHeading` 쪽으로 최단 방향(±π 경계를 넘나들어도 더 짧은 쪽)으로,
+    /// 이번 프레임에 허용된 최대 각도(`maxDegreesPerSecond * deltaTime`)만큼만 돌린다.
+    private static func steer(from heading: Float, toward desiredHeading: Float, maxDegreesPerSecond: Float, deltaTime: Float) -> Float {
+        let rawDelta = desiredHeading - heading
+        let shortestDelta = atan2(sin(rawDelta), cos(rawDelta))
+        let maxStep = maxDegreesPerSecond * (.pi / 180) * deltaTime
+        let clampedDelta = min(max(shortestDelta, -maxStep), maxStep)
+        return heading + clampedDelta
     }
 
     private static func target(for drive: DriveState, current: Float, tuning: MotionTuning) -> Float {
@@ -38,6 +54,8 @@ public struct KartMotionState: Equatable, Sendable {
         case .pedal(let value):
             let clamped = min(max(value, -1), 1)
             return clamped >= 0 ? clamped * tuning.maxSpeed : clamped * tuning.maxSpeed * tuning.reverseSpeedFactor
+        case .headSteered(let accelerating):
+            return accelerating ? tuning.maxSpeed : 0
         }
     }
 
