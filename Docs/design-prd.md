@@ -14,7 +14,7 @@ Oct 10, 2026 · @Coulson
 | 미니맵은 볼륨 우측 하단 월드 고정, 테이블 지름 24cm | 미니맵은 Diorama 테이블 모양을 유지하고 색만 우리 팔레트로 |
 | ~~전진 2단계(절반·최대), 후진 없음~~ → **양손 핀치 거리 = 연속 페달**(모을수록 전진, 약 40cm 중립, 벌릴수록 후진), 한 손 핀치 = 회전(속도 유지) — 테크 결정 30·31 | 핀치 상태 HUD는 "정지·중립·전진·후진·좌·우" 6상태 + 페달 게이지 |
 | 3랩 타임어택, 효과음만 | 랩·타임이 HUD의 주인공. 배경음 없음 |
-| 앱 이름 가칭 "핀치 카트" → **디자인 제안 "핀치"**(결정 47, Issue #30에서 확정) | 14장에서 이름 후보 3개를 제안하고 결정 기록에 남김 |
+| 앱 이름 가칭 "핀치 카트" → **디자인 제안 "핀치 로버"(Pinch Rover)**(결정 47, Issue #30에서 확정) | 14장에서 이름 후보 3개를 제안하고 결정 기록에 남김 |
 | 운전 모드 **디오라마 + 3인칭 2종**(1인칭은 멀미로 폐기, 결정 47). 3인칭 카메라는 카트 진행 방향 기준 | 조작법 그림·HUD는 손 핀치 한 가지 조작만 그린다 |
 
 **테크 PRD와 공유하는 이름**: 카트 피벗 `A`(앞왼)·`C`(앞오)·`B`(뒤왼)·`D`(뒤오)·`steering_wheel`·`root`(4장 4-0, 결정 47. 초판의 `body`·`wheel_fl` 등은 쓰지 않음) · 타일 `straight`, `curve`, `start`, `grass` · HUD 필드 `lap`, `totalLaps`, `lapTime`, `totalTime`, `speedKmh`, `drive`, `left`, `right` · 효과음 `countdownTick`, `go`, `checkpoint`, `lapComplete`, `finish`, `wallBump`, `respawn`.
@@ -497,7 +497,7 @@ Design/onboarding/에 저장해 주세요. 손은 1인칭 시점, 핀치 지점�
 - [ ] 화면 목업 7장 — M5 전
 - [ ] 효과음 7개 + `LICENSES.md` — M5 전
 - [ ] 픽셀 폰트 파일 + 라이선스 확인 — M5 전
-- [ ] 앱 이름 확정 → `Docs/decisions.md` 7번 — M6 전 (디자인 제안 "핀치", Issue #30)
+- [ ] 앱 이름 확정 → `Docs/decisions.md` 7번 — M6 전 (디자인 제안 "핀치 로버", Issue #30)
 - [ ] HUD 속도계 리소스 `Design/hud/` (RetireX 계기판 재사용) — Issue #28
 - [ ] 운전자 캐릭터 `driver_01` + 카트별 좌석 표 `Design/karts/seats.md` — Issue #29
 - [ ] 1인칭 그림 `gesture_fp_*` 정리, 3인칭 조작 통일 확정 후 `gesture_tp_*` 정리 — Issue #24
