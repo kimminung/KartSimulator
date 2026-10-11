@@ -42,6 +42,15 @@ Oct 10, 2026 · @Coulson 기준, `Docs/tech-prd.md`에서 파생. 마일스톤 �
 - [ ] **Phase 2 (다음)**: 1인칭/3인칭 트랙을 실제 크기로 렌더링 + 유저 머리 위치에 카트를 맞추는 콕핏 기법. 스트리밍/컬링은 먼저 안 만들고 실기기에서 무거운지 확인 후 필요하면 추가
 - [ ] **실기기 확인 필요**: 디오라마 전후진(상대 드래그) 제스처가 실제로 자연스러운지, `steerRateDegrees`(기본 120°/s) 1인칭 조향감이 적절한지
 
+## Phase 2 — 1인칭·3인칭 콕핏 (2026-10-11 구현, 결정 44)
+
+- [x] 트랙·카트·트레일을 `sceneRoot`(트랙 좌표계 실제 크기) 아래로 옮기고 모드별로 씬 루트 변환만 바꾸기 — 디오라마는 기존 배율·180° 회전, 콕핏은 배율 1
+- [x] 콕핏 따라붙기(`followKart`): 매 프레임 카트 트랙 좌표 → 머리 기준 목표점(1인칭 아래 0.9 m / 3인칭 앞 2.5 m·아래 1.8 m), 월드는 평행이동만
+- [x] 모드 전환 시 박스 숨김, HUD 머리 앞 고정, 입력 캐처 40 m, 카트 실제 크기(1.5 m) 재맞춤, 출발 방향 = 머리 방향
+- [x] `ScenePlacement`/`CockpitTuning` + `ScenePlacementTests` 6개
+- [ ] 실기기: 눈높이·앞거리 튜닝, 실제 크기 트랙 프레임 측정(떨어지면 반경 컬링 착수 — 결정 39), 모드 전환 후 핀치 유지 확인
+- [ ] 보류: 콕핏 내부 모델(핸들·대시보드), 사용자가 걸어 다닐 때 anchor 갱신, 3인칭 추적 카메라(월드 회전은 멀미라 보류)
+
 ## M3 — 트랙 + 주행 로직 (2026-10-10 트랙 생성·검증 스크립트 완료)
 
 - [x] 트랙 타일 4종 에셋 확보 + 배치 — `Assets/export/glb/tile_*.glb`(디자인 전달, 결정 36-4)를 헤드리스 Blender(`wm.usd_export`, Y-up/-Z-forward 변환)로 `.usdz` 변환해 `KartSimulator/Resources/Tiles/`에 넣고, `TrackTileLibrary` + `ImmersiveBoxView.buildTrackTiles(definition:into:)`로 그리드 전체(타일 바운딩 사각형 + 빈 칸은 `grass`)를 실제 3D로 깐다. 점열 placeholder(`buildTrackVisual`)는 제거.

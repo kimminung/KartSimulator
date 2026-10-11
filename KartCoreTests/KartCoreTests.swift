@@ -593,3 +593,79 @@ struct KartForwardCorrectionTests {
         #expect(KartForwardCorrection.angle(noseX: 0, noseZ: 0) == nil)
     }
 }
+
+// MARK: - 씬 루트 배치 (Phase 2, 결정 44): world = position + scale · R_y(yaw) · local
+
+struct ScenePlacementTests {
+    private func world(_ local: SIMD3<Float>, position: SIMD3<Float>, yaw: Float, scale: Float) -> SIMD3<Float> {
+        position + ScenePlacement.rotateY(local, by: yaw) * scale
+    }
+
+    private func close(_ a: SIMD3<Float>, _ b: SIMD3<Float>, tol: Float = 1e-4) -> Bool {
+        abs(a.x - b.x) < tol && abs(a.y - b.y) < tol && abs(a.z - b.z) < tol
+    }
+
+    /// rootPosition으로 구한 position을 쓰면 local이 정확히 target에 놓인다 — 배율·회전이 섞여도.
+    @Test func rootPositionPlacesLocalAtTarget() {
+        let local = SIMD3<Float>(12, 0, -7)
+        let target = SIMD3<Float>(0.3, 0.86, -1.1)
+        for (yaw, scale) in [(Float.pi, Float(0.03)), (Float(0.7), Float(1)), (Float(-2.1), Float(0.5))] {
+            let p = ScenePlacement.rootPosition(placing: local, at: target, yaw: yaw, scale: scale)
+            #expect(close(world(local, position: p, yaw: yaw, scale: scale), target))
+        }
+    }
+
+    /// rotateY는 KartMotionState/KartForwardCorrection과 같은 관례: R_y(yaw)·forward(h) = forward(h + yaw).
+    @Test func rotateYComposesWithHeading() {
+        for (h, yaw) in [(Float(0), Float.pi / 2), (Float(1.2), Float(-0.4)), (Float(4.7), Float.pi)] {
+            let rotated = ScenePlacement.rotateY(ScenePlacement.forward(heading: h), by: yaw)
+            #expect(close(rotated, ScenePlacement.forward(heading: h + yaw)))
+        }
+    }
+
+    /// 모드에 들어온 순간 출발 heading이 머리 방향을 향해야 한다.
+    @Test func sceneYawMakesStartHeadingFaceHead() {
+        let start: Float = 4.712389 // track_01
+        let headYaw: Float = 0.3
+        let yaw = ScenePlacement.sceneYaw(startHeading: start, headYaw: headYaw)
+        let worldForward = ScenePlacement.rotateY(ScenePlacement.forward(heading: start), by: yaw)
+        #expect(close(worldForward, ScenePlacement.forward(heading: headYaw)))
+    }
+
+    /// 1인칭: 카트는 머리 바로 아래 눈높이만큼 내려간 자리. 3인칭: 더 낮고, 카트 진행 방향(월드)으로 앞.
+    @Test func cockpitTargetsPerMode() {
+        let tuning = CockpitTuning(firstPersonEyeAboveFloor: 0.9, thirdPersonEyeAboveFloor: 1.8, thirdPersonKartAhead: 2.5)
+        let anchor = SIMD3<Float>(1, 1.5, -2)
+        let fp = ScenePlacement.cockpitTarget(anchor: anchor, mode: .firstPerson, kartHeading: 1.0, sceneYaw: 0.5, tuning: tuning)
+        #expect(close(fp, SIMD3(1, 0.6, -2)))
+
+        let tp = ScenePlacement.cockpitTarget(anchor: anchor, mode: .thirdPerson, kartHeading: 1.0, sceneYaw: 0.5, tuning: tuning)
+        let expectedAhead = ScenePlacement.forward(heading: 1.5) * 2.5
+        #expect(close(tp, SIMD3(1, -0.3, -2) + expectedAhead))
+        // 앞으로 민 거리는 정확히 2.5 m, 높이는 손대지 않는다.
+        let d = tp - SIMD3(1, -0.3, -2)
+        #expect(abs((d.x * d.x + d.z * d.z).squareRoot() - 2.5) < 1e-4 && abs(d.y) < 1e-4)
+
+        #expect(close(ScenePlacement.cockpitTarget(anchor: anchor, mode: .diorama, kartHeading: 0, sceneYaw: 0, tuning: tuning), anchor))
+    }
+
+    /// 콕핏 모드에서 rootPosition + cockpitTarget을 합치면 카트가 머리 아래에 온다(1인칭).
+    @Test func firstPersonFollowPutsKartUnderHead() {
+        let tuning = CockpitTuning()
+        let anchor = SIMD3<Float>(0.2, 1.3, -0.4)
+        let kart = SIMD3<Float>(18, 0, -10)
+        let yaw: Float = -1.1
+        let target = ScenePlacement.cockpitTarget(anchor: anchor, mode: .firstPerson, kartHeading: 2.0, sceneYaw: yaw, tuning: tuning)
+        let p = ScenePlacement.rootPosition(placing: kart, at: target, yaw: yaw, scale: 1)
+        let kartWorld = world(kart, position: p, yaw: yaw, scale: 1)
+        #expect(close(kartWorld, anchor - SIMD3(0, tuning.firstPersonEyeAboveFloor, 0)))
+    }
+
+    /// 카트 크기: 디오라마는 배율로 나눠 시각 크기를 고정, 실제 크기 모드는 전장 그대로.
+    @Test func kartFitLengthPerMode() {
+        let tuning = CockpitTuning(kartRealLength: 1.5)
+        #expect(abs(ScenePlacement.kartFitLength(mode: .diorama, sceneScale: 0.03, dioramaVisualLength: 0.12, tuning: tuning) - 4.0) < 1e-4)
+        #expect(ScenePlacement.kartFitLength(mode: .firstPerson, sceneScale: 1, dioramaVisualLength: 0.12, tuning: tuning) == 1.5)
+        #expect(ScenePlacement.kartFitLength(mode: .thirdPerson, sceneScale: 1, dioramaVisualLength: 0.12, tuning: tuning) == 1.5)
+    }
+}
