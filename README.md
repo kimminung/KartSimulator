@@ -1,3 +1,7 @@
+
+
+
+
 # 핀치 로버 (KartSimulator)
 
 > 앱 이름은 **핀치 로버 (Pinch Rover)**로 확정했습니다(결정 53, Issue #30). 문서·코드의 옛 가칭 "핀치 카트"는 같은 앱을 가리킵니다.
@@ -8,7 +12,7 @@
 ### 앱 소개 영상 (30초)
 
 [![핀치 로버 소개 영상 미리보기 — 클릭하면 1280×720 원본(mp4) 재생](Docs/review/intro-preview.gif)](https://github.com/kimminung/KartSimulator/releases/download/v0.3.0/PinchRover_Opening_README_720p.mp4)
-
+https://github.com/user-attachments/assets/91630e82-7d38-4b69-9e3f-95c23f66d8a4
 ▶ 원본(1280×720, H.264, 8.8 MB): https://github.com/kimminung/KartSimulator/releases/download/v0.3.0/PinchRover_Opening_README_720p.mp4 — 릴리스 [v0.3.0](https://github.com/kimminung/KartSimulator/releases/tag/v0.3.0) 첨부 자산. 위 미리보기는 소리 없는 480 px 애니메이션입니다.
 
 | | | |
