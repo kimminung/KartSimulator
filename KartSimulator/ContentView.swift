@@ -14,6 +14,8 @@ struct ContentView: View {
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
     #endif
     @State private var isBusy = false
+    @State private var showOnboarding = false
+    @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
 
     private let columns = [GridItem(.adaptive(minimum: 140), spacing: 16)]
 
@@ -54,19 +56,32 @@ struct ContentView: View {
                     }
                 }
 
-                #if os(visionOS)
-                Button(immersiveSession.isOpen ? "박스 닫기" : "박스 열기") {
-                    Task { await toggleImmersiveSpace() }
+                HStack(spacing: 12) {
+                    #if os(visionOS)
+                    Button(immersiveSession.isOpen ? "박스 닫기" : "박스 열기") {
+                        Task { await toggleImmersiveSpace() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(isBusy)
+                    #else
+                    Text("박스 미리보기는 비전OS에서만 열 수 있습니다.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    #endif
+                    Button("조작법") { showOnboarding = true }
+                        .buttonStyle(.bordered)
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(isBusy)
-                #else
-                Text("박스 미리보기는 비전OS에서만 열 수 있습니다.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                #endif
             }
             .padding(24)
+        }
+        .onAppear {
+            if !hasSeenOnboarding { showOnboarding = true }
+        }
+        .sheet(isPresented: $showOnboarding) {
+            OnboardingView {
+                hasSeenOnboarding = true
+                showOnboarding = false
+            }
         }
     }
 
@@ -157,6 +172,52 @@ private struct KartCard: View {
         #else
         return nil
         #endif
+    }
+}
+
+/// 조작법 화면: 손 그림 5장(전진·후진·좌·우·정지) + 중립 안내 한 줄 + "알겠어요" 버튼
+/// (디자인 PRD 9장, 결정 36-1). 첫 실행 시 자동으로 뜨고, "조작법" 버튼으로 다시 볼 수 있다.
+private struct OnboardingView: View {
+    let onDismiss: () -> Void
+
+    private let gestures: [(image: String, title: String, caption: String)] = [
+        ("gesture_01_forward", "전진", "양손을 모을수록 빨리 전진"),
+        ("gesture_02_reverse", "후진", "양손을 벌릴수록 빨리 후진"),
+        ("gesture_03_left", "좌회전", "왼손만 핀치하면 좌회전"),
+        ("gesture_04_right", "우회전", "오른손만 핀치하면 우회전"),
+        ("gesture_05_stop", "정지", "양손을 떼면 멈춤"),
+    ]
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Text("조작법")
+                .font(.title2.bold())
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 16)], spacing: 16) {
+                ForEach(gestures, id: \.image) { gesture in
+                    VStack(spacing: 8) {
+                        Image(gesture.image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 120, height: 120)
+                        Text(gesture.title)
+                            .font(.headline)
+                        Text(gesture.caption)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                }
+            }
+
+            Text("양손 사이 약 40 cm에서는 제자리(중립)")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            Button("알겠어요", action: onDismiss)
+                .buttonStyle(.borderedProminent)
+        }
+        .padding(32)
     }
 }
 

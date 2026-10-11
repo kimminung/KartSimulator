@@ -259,3 +259,12 @@
 - **4. 카트 카드 호버 전환(36-2)**: `ContentView`의 `KartCard`를 다시 썼다. 기본은 디자이너가 전달한 정적 썸네일(`Design/karts/kart_<id>_thumb.png` → `Resources/KartThumbnails/`에 복사, `Image(_:)` 이름 조회가 안 되는 낱장 PNG라 `Bundle.main.url` + `UIImage`/`NSImage`로 로드)을, `.onHover`로 포커스 상태일 때만 1.4배로 키우고 그때만 `Model3D` 라이브 모델 + 드래그 회전으로 바꾼다.
 - **영향받는 절**: `Docs/TechTask.md` M1·M3·M5, `ImmersiveBoxView.swift`, `TrackTileLibrary.swift`(신규), `ContentView.swift`, `Tools/glb2usdz.py`(신규), `KartSimulator/Resources/Tiles/`·`KartSimulator/Resources/KartThumbnails/`(신규 리소스)
 - **추가 보완(같은 날)**: GitHub PR #8(`gh` 미인증이라 `git fetch origin refs/pull/8/head`로 직접 받아 확인 — 내용은 324cf10·65af7b4와 동일해 이미 Dev에 들어와 있었음)의 디자인 PRD 7장 표와 코드를 대조해서 빠진 2곳을 고쳤다: (1) `waiting` 상태(거리 계산 전 과도기)에서 게이지가 아예 안 보이던 것을 `pedal(0)`과 같은 중립 줄로 묶어 항상 보이게 함, (2) 게이지 아래 "전진 N%"/"후진 N%"/"중립" 글자 라벨이 없던 것을 추가.
+
+## 38. [테크] 이슈 #9·#12 잔여 항목 반영: 벽 콜리전 + wallBump, 조작법 화면
+
+- **날짜**: 2026-10-11
+- **배경**: PR #8을 main에 머지한 뒤, 그 본문이 가리키는 GitHub 이슈 #9~#12(트랙 타일, HUD, 카트 카드, 조작법)를 하나씩 코드와 대조했다. #10·#11은 결정 37번으로 이미 끝나 있었고, #9는 "벽 콜리전 연결 + wallBump 트리거" 항목이, #12는 전체가 빠져 있었다.
+- **1. 벽 콜리전 + `wallBump`(이슈 #9)**: 타일 메시에 `CollisionComponent`를 붙여 레이캐스트하는 대신, 매 프레임 이미 계산하던 중심선 거리 계산을 재사용했다. `TrackPath.closestSegment`가 이제 중심선 위 투영점도 같이 반환하도록 바꾸고(`KartCoreTests`의 두 테스트는 named tuple이라 그대로 통과), `ImmersiveBoxView.tickMotion`에서 `distanceFromCenterline > tileSize/2`(타일 가장자리)면 투영점 방향으로 그 자리에 되밀어 넣는다. 벽에 처음 닿는 프레임에만 `wallBump`를 재생(`wasAgainstWall` 플래그로 중복 재생 방지). **알려진 단순화**: 커브 타일 안쪽 모서리에는 실제 벽이 없는데(이슈 #9 본문) 이 모델은 좌우를 구분하지 않아 양쪽을 다 막는다 — 실기기에서 커브 안쪽을 못 파고들어 어색하면 다시 손봐야 한다.
+- **2. 조작법 화면(이슈 #12)**: `Design/onboarding/gesture_0{1-5}.svg`(모두 단순 `<rect>`만 있어 Xcode 벡터 에셋으로 바로 수입 가능했다)를 `Assets.xcassets/Onboarding/*.imageset`(`preserves-vector-representation`)으로 추가하고, `ContentView`에 `OnboardingView`(5장 그림 + 설명 + "양손 사이 약 40 cm에서는 제자리(중립)" 안내 + "알겠어요")를 시트로 붙였다. 첫 실행 시 `@AppStorage("hasSeenOnboarding")`로 자동 표시, "조작법" 버튼으로 다시 볼 수 있다. 디자인 PRD 8장의 전체 "메뉴 4화면"(시작/대기/카운트다운/결과) 리디자인은 범위 밖이고, 조작법 한 장만 반영했다.
+- **확인**: 두 변경 모두 visionOS 시뮬레이터 destination으로 전체 빌드 통과(`BuildProject`), `KartCoreTests` 37개 중 35개 통과 — 실패한 5개(`EngineSoundMachineTests`, 엔진 사운드 상태 전환)는 오늘 건드린 파일과 무관한 기존 결함으로 별도 기록. 실기기(진짜 Vision Pro)는 사용자 지시에 따라 건드리지 않았다.
+- **영향받는 절**: `Docs/TechTask.md` M3·M5, `KartCore/TrackPath.swift`(반환 튜플에 `projected` 추가), `ImmersiveBoxView.swift`, `ContentView.swift`, `Assets.xcassets/Onboarding/`(신규), GitHub 이슈 #9·#12, PR #14

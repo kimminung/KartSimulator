@@ -24,6 +24,7 @@ struct ImmersiveBoxView: View {
     @State private var trackPath: TrackPath?
     @State private var lapTracker: LapTracker?
     @State private var offTrackMonitor = OffTrackMonitor()
+    @State private var wasAgainstWall = false
     @State private var trackDisplayScale: Float = 1
     @State private var trackWorldCenter: SIMD2<Float> = .zero
     @State private var raceModel = RaceModel()
@@ -421,7 +422,7 @@ struct ImmersiveBoxView: View {
         motion = motion.advancing(drive: drive, tuning: tuning, deltaTime: deltaTime)
 
         let positionXZ = SIMD2(motion.position.x, motion.position.z)
-        let (pathIndex, distanceFromCenterline) = trackPath.closestSegment(to: positionXZ)
+        let (pathIndex, distanceFromCenterline, projectedOnCenterline) = trackPath.closestSegment(to: positionXZ)
         let previousProgress = lapTracker.progress
         lapTracker.update(pathIndex: pathIndex)
         let newProgress = lapTracker.progress
@@ -434,6 +435,26 @@ struct ImmersiveBoxView: View {
             sfxPlayer?.play(.lapComplete)
         } else if newProgress.checkpointsPassedThisLap > previousProgress.checkpointsPassedThisLap {
             sfxPlayer?.play(.checkpoint)
+        }
+
+        // 벽 콜리전: 타일 가장자리(중심선에서 tileSize/2)를 벽으로 보고 그 안쪽으로 밀어낸다 — 타일
+        // 메시로 레이캐스트하는 대신, 이미 매 프레임 계산하는 중심선 거리를 그대로 재사용한 단순 모델.
+        // 실제로는 커브 타일 안쪽 모서리엔 벽이 없다(이슈 #9)지만, 좌우를 구분 안 하는 이 모델은
+        // 양쪽을 다 막는다 — 실기기에서 커브 안쪽이 막혀 어색하면 다시 손봐야 한다.
+        let wallDistance = track.tileSize / 2
+        if distanceFromCenterline > wallDistance {
+            let outward = positionXZ - projectedOnCenterline
+            let outwardLength = simd_length(outward)
+            let direction = outwardLength > 0.0001 ? outward / outwardLength : SIMD2<Float>(1, 0)
+            let clamped = projectedOnCenterline + direction * wallDistance
+            motion.position.x = clamped.x
+            motion.position.z = clamped.y
+            if !wasAgainstWall {
+                sfxPlayer?.play(.wallBump)
+            }
+            wasAgainstWall = true
+        } else {
+            wasAgainstWall = false
         }
 
         let isOffTrack = distanceFromCenterline > (track.width / 2 + 0.5)
