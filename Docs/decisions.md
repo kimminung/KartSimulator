@@ -288,7 +288,7 @@
 ## 40. [디자인] 운전 모드 3종 온보딩 그림 — 디오라마 캡션 개정, 1인칭 2장·3인칭 4장 신규
 
 - **날짜**: 2026-10-11
-- **결정자**: 디자인
+- **결정자**: 디자인(요청·사양) — 실제 작성·커밋·머지는 테크 쪽 Claude가 `design` 브랜치에서 했다(PR #16, Issue #31 검수에서 정정). 1인칭 그림 2장과 3인칭 4장은 결정 47·49로 폐기됐다.
 - **배경**: 테크 결정 39(운전 모드 3종, `Dev` 브랜치 — 이 PR 시점에는 아직 `main`에 없다)로 조작법 화면이 디오라마·1인칭·3인칭 세그먼트로 나뉘었는데, 그림은 디오라마용 5장뿐이라 테크가 1인칭·3인칭 칸에 SF Symbols로 자리만 잡아 둔 상태였다. 요청대로 디오라마 5장은 캡션 중심으로 손보고, 1인칭 2장·3인칭 4장을 새로 만들었다. 파일명은 테크가 제안한 이름 그대로다.
 - **1. 디오라마 5장**
   - `gesture_01_forward`: 전진의 뜻이 "모을수록"에서 "핀치 시작 자리를 유지"로 바뀌어(결정 39의 상대 드래그) 안쪽 화살표를 지웠다. 손을 03~05와 같은 자리(x 8/136)로 옮기고, 두 핀치 점을 잇는 `ui-cyan` 점선(dash 4/6, 70 %)으로 "그 자리에 둔다"를 표현했다.
@@ -388,3 +388,42 @@
 
 - **이 커밋에서 디자인이 같이 고친 것**: 디자인 PRD 1장(모드·앱 이름 행), 4장(완성형 카트 피벗·움직임 표, 운전자), 7장(속도계), 8장(창 배치), 9장(1인칭 폐기 표시, 디오라마 중립 문장 정정), 11장(모드별 시점 규칙), 15장(새 납품 항목).
 - **영향받는 결정**: 39·40·41(1인칭 부분 폐기), 44(1인칭 콕핏 폐기, 3인칭 유지), 45·46(3인칭 기준을 머리 → 카트 진행 방향으로), 14(운전석 캐릭터 "해당 없음" 뒤집음)
+
+## 48. [테크] M4 미니맵 1차: Diorama 테이블 + 트랙 JSON에서 바로 만든 지도, 모드별 배치
+
+- **날짜**: 2026-10-11
+- **배경**: Phase 2 종료 후 다음 마일스톤. 사용자가 Apple Diorama 샘플(`~/Downloads/Diorama`)을 전달해 M4를 시작했다. 디자인 쪽 추가 피드백과 실기기 피드백이 뒤따를 예정이라 1차는 "보이고 동기화되는 것"에 집중했다.
+- **테크 PRD 9장과 다르게 한 것**: PRD는 Diorama의 Shader Graph 지형 재질 + 높이맵/궤적 **이미지**(`minimap_images.py`)를 쓰기로 했는데, 1차에서는 **트랙 JSON 중심선에서 바로 기하(납작한 상자 리본)를 생성**했다. 이유: (1) 이미지 파이프라인·Shader Graph 복사 없이 같은 원본(JSON)에서 나오므로 "주행 트랙과 항상 같다"는 목적은 동일하게 달성, (2) 디자인 PRD 6장의 요소(노면·테두리·궤적·깃발·라벨·마커·랩 텍스트)를 전부 코드로 색만 바꿔 조정할 수 있어 디자인 피드백 반영이 빠르다, (3) 미니맵 지형의 픽셀 룩은 어차피 Shader Graph에서 보간을 허용하기로 했던 부분(테크 PRD 12장). 높이맵 변위·등고선은 보류.
+- **Diorama 샘플에서 가져온 것**: 받침 모델 `Diorama_Base.usdz`만. `KartSimulator/Resources/Minimap/`에 Apple 샘플 라이선스 전문(`LICENSE-Apple-Diorama-Sample.txt`)과 함께 넣고 LICENSE 5조에 고지했다(앱 안 포함은 허용, 단독 재배포·Apple 상표 사용 금지). 샘플의 뷰모델·새·구름·슬라이더·지역 투명도·`RealityKitContent` 패키지는 가져오지 않았다(테크 PRD 9장 "제거할 것"과 같고, 패키지 분리는 M0 보류 항목 그대로).
+- **구성** (`RealityKit/MinimapBuilder.swift`, 모두 미니맵 로컬 m, 지름 0.24 기준):
+  - 받침: `Diorama_Base`를 지름 0.24에 맞춰 상판이 y = 0에 오게 배치, 재질은 `ui-rim`으로 통일(디자인 PRD 6장 "이 부분만 매끈한 재질 허용"). 못 읽으면 원기둥 받침으로 대체.
+  - 지형 원판 `ui-panel` → 노면 리본 3층(테두리 `mm-edge` 1.25배 폭, 노면 `mm-road`, 궤적 `ui-sky` 40 % 1/3 폭) → 출발 깃발(`ui-ink` 기둥 + `mm-finish` 깃발, 체커 무늬 보류) → 체크포인트 라벨(디스크 + 숫자 `generateText`, 미통과 `ui-ink` 40 % / 통과 `ui-cyan`) → 카트 마커(로드된 카트 복제본 1.5 cm + `ui-cyan` 그림자) → 랩 텍스트("1 / 3", 앞 가장자리 60° 기울임).
+  - 투영은 `KartCore/MinimapProjection.swift`: 트랙 바운딩 박스(노면 반폭 포함)를 원에 내접하는 정사각형의 90 %에 등방 배율로 맞추고 중심을 원점에. 축은 트랙 좌표계 그대로라 heading을 그대로 쓴다. `MinimapProjectionTests` 4개.
+  - 동기화(테크 PRD `MinimapSyncSystem` 역할)는 `ImmersiveBoxView.tickMotion`에서 `Minimap.update` 직접 호출(ECS 분리는 여전히 보류). `RaceHUDState`에 `kartMapPosition`·`kartHeading` 추가, `RaceModel.updateMap`으로 채운다.
+  - 상호작용 없음: `InputTargetComponent`를 붙이지 않아 핀치는 그대로 `inputCatcher`로 간다.
+- **배치**: 디오라마 = 박스 앞오른쪽 모서리 위(테크 PRD "우측 하단 모서리 안쪽, 트랙 위에 떠 있게"를 0.7 m 박스에 맞춤), 지름 0.16으로 축소, 바닥에서 7 cm 위. 콕핏 = 모드 진입 순간 머리 기준 앞 1.2 m·오른쪽 0.45 m·아래 0.45 m(HUD 오른쪽 아래), 지름 0.24, 상판을 사용자 쪽으로 35° 기울임, 랩 텍스트가 사용자를 향함. 지도 내용(`mapRoot`)은 `sceneYaw`만큼 돌려 박스/콕핏에서 보이는 트랙 방향과 맞춘다 — 3인칭은 진입 시점 값으로 고정(북쪽 고정식, 세계가 돌아도 지도는 안 돈다).
+- **확인**: visionOS 시뮬레이터 빌드, `KartCoreTests` 12개(미니맵 4 + 씬 배치 8) 통과, `Diorama_Base.usdz`·라이선스 파일이 앱 번들에 들어감을 확인. **시각 확인은 못 했다** — 디바이스 인터랙션 도구가 visionOS 시뮬레이터를 지원하지 않아 박스를 열 수 없었다. 실기기에서 확인할 것: 미니맵이 박스 모서리에 보이는지·크기 0.16이 적당한지, 노면 리본 꺾임이 매끈한지, 라벨 숫자·랩 텍스트가 읽히는지, 마커가 카트를 따라 도는지, 콕핏에서 HUD 옆 위치·35° 기울기가 적절한지.
+- **보류**: 체커 무늬 깃발, 지형 높이맵·등고선, `minimap_images.py`, 통과 색 전환 0.2초 애니메이션, 미니맵 Shader Graph.
+- **영향받는 절**: `Docs/TechTask.md` M4, 테크 PRD 9장(이미지 → 기하로 대체), `KartCore/MinimapProjection.swift`(신규), `RealityKit/MinimapBuilder.swift`(신규), `Resources/Minimap/`(신규), `RaceHUDState`/`RaceModel`, `ImmersiveBoxView`, LICENSE 5조, README
+
+## 49. [테크] 리뷰 회의(결정 47) 반영 1차: 1인칭 폐기·조작 통일, 3인칭 카메라 기준 = 카트 진행 방향, 카트 자세·엔진음 테스트 수정
+
+- **날짜**: 2026-10-11
+- **배경**: 디자인 PR #32·Issue #23~#31(결정 47)을 코드에 반영한 첫 묶음. 미니맵 1차(결정 48)와 같은 PR에 들어간다.
+- **Issue #24 — 1인칭 폐기 + 조작 통일**: `ExperienceMode`는 `diorama`·`thirdPerson` 2종. `DriveState.headSteered`, `KartMotionState`의 `desiredHeading`/`steer`, `MotionTuning.steerRateDegrees`, `HandInputResolver`의 1인칭 분기, HUD 모드 버튼 3→2, 조작법 시트의 1인칭 세그먼트와 1인칭 그림 연결, 1인칭 테스트를 모두 제거했다. **조작 통일은 디자인 제안대로 "3인칭 = 디오라마와 완전히 같은 규칙(후진 포함)"으로 확정** — 추적 카메라가 카트 뒤에 붙어 있어 후진이 일반 레이싱 게임의 후진과 같은 느낌이고, 그림 한 벌(디오라마 5장)을 두 모드가 같이 쓸 수 있다. 그래서 `Assets.xcassets/Onboarding`의 `gesture_fp_*`·`gesture_tp_*` imageset 6개를 지웠다(`Design/onboarding/`의 SVG 정리는 디자인 몫).
+- **Issue #25 — 3인칭 카메라 기준 = 카트 진행 방향**: 결정 45·46의 "머리 yaw" 기준을 버리고, 모드 진입 순간의 머리 yaw를 **기준 방향**(`ChaseCameraReference.forwardYaw`)으로 고정했다. 카트 위치는 기준 방향 2.5 m 앞·1.8 m 아래, 씬 yaw 목표는 `기준 − 카트 heading`(2.5/s 평활, 결정 46 유지). 고개를 돌려도 아무것도 따라오지 않아 양옆을 볼 수 있다. 머리가 기준에서 60°를 넘어 2초 이상 머물면 기준을 머리 쪽으로 1.0/s로 다시 맞춘다(몸을 돌려 앉은 경우). 값은 `CockpitTuning`(`freeLookDegrees` 45, `recenterThresholdDegrees` 60, `recenterHoldSeconds` 2, `recenterRate` 1.0). `ChaseCameraReferenceTests` 4개.
+- **Issue #23 — 카트 자세(일부)**: ① 정면 마커를 이름 **부분 일치**("front") 대신 **정확 일치** 목록(`front_aero`, `race_nose`, `nose`, `front`)으로 찾는다 — razr에서 `front_l`(앞왼 바퀴 묶음)이 걸려 약 35° 비틀리던 원인 제거. ② 카트 높이를 노면 윗면(`TrackDefinition.roadSurfaceHeight` = 타일 4유닛 = 0.25 m)에 둔다 — 전에는 타일 바닥(0)에 두어 모든 카트가 0.25 m 가라앉았다. 콕핏 따라붙기·디버그 트레일도 같은 높이를 쓴다. ③ **바퀴 바닥 접지는 못 했다**: USDZ 5종을 열어 보니 RetireX 원본의 바퀴 피벗 `A`·`B`·`C`·`D`가 노드 이름으로 남아 있지 않다(남은 이름: `root`, `steering_wheel`/`steering_column`, `body`, `nose`, `race_nose` 등). glb→USDZ 변환에서 바퀴 그룹 이름이 사라진 것으로 보인다. 바퀴 기반 접지(#23)와 바퀴 굴림·조향(#26)은 **바퀴 그룹 이름이 보존된 재내보내기**가 있어야 한다 — Issue #23·#26에 코멘트로 요청.
+- **Issue #31 — `EngineSoundMachineTests` 5개 실패 수정**: 원인 두 가지. (a) 시동 2.2초 판정이 `clipTime >= 2.2`인데 1/60초를 132번 더하면 부동소수점 누적으로 2.2에 아주 조금 못 미쳐 idle로 못 넘어갔고, 그 뒤 테스트가 전부 연쇄 실패했다 → `1e-6` 여유. (b) 이미 빠르게 달리는 중에 가속 클립을 시작하면 2.6초를 다 기다려야 루프로 넘어갔다 → 속도비 `rS ≥ 0.85`이고 클립 0.5초 이상이면 바로 루프(`EngineTuning.fastHandoffSpeedRatio`/`fastHandoffMinClipTime`). 가속 클립은 회전수가 올라가는 소리라 이미 최고 속도에 가까우면 음이 어긋나던 것이기도 하다. `Assets/sfx/ENGINE.md`(디자인 소유)에 이 규칙과 "2단계 전진 → 연속 페달" 반영은 디자인에 요청(Issue #31 코멘트).
+- **확인**: visionOS 시뮬레이터 빌드, `KartCoreTests` 전체 통과(엔진음 5개 포함, 처음으로 전부 녹색). **실기기 확인 필요**: razr가 똑바로 서는지, 5종이 노면 위에 서는지(바퀴 접지는 아직), 3인칭에서 고개를 ±45° 돌려도 카트·세계가 고정인지, 60° 넘겨 2초 뒤 기준이 따라오는지, 3인칭 후진이 어지럽지 않은지.
+- **영향받는 절**: 결정 39·44·45·46(1인칭·머리 기준 부분 폐기), `KartCore/ExperienceMode`·`DriveState`·`KartMotionState`·`MotionTuning`·`HandInputResolver`·`ScenePlacement`(`ChaseCameraReference`)·`TrackDefinition.roadSurfaceHeight`·`EngineSoundMachine`, `ImmersiveBoxView`, `ContentView`, `Assets.xcassets/Onboarding`, README, `Docs/TechTask.md`
+
+## 50. [테크] Issue #31 검수 반영 1차: 라이선스·크레딧·문서 정정, 디버그 시각물 기본 끔
+
+- **날짜**: 2026-10-11
+- **반영**:
+  - **OFL 동봉·크레딧**: `Design/fonts/OFL.txt`를 앱 번들 `KartSimulator/Resources/Fonts/OFL.txt`로 복사하고, 메뉴 하단에 "Galmuri 폰트 © Lee Minseo (quiple), SIL OFL 1.1 · 미니맵 받침 © Apple" 크레딧을 넣었다(OFL 1.1 요건). 저작권자 표기를 "quiple" → "Lee Minseo (quiple)"로 고쳤다.
+  - **LICENSE 2조/5조 중복 해소**: RetireX 유래 자산(카트 모델·텍스처·썸네일·실루엣·색 체계)을 2조(공동 저작물)에서 빼고 5조로 일원화했다. 명의(개인 vs CYBOX)는 디자인 담당자가 확정한다고 명시. 엔진음 항목에 출처 사슬(CYBOX "XK ENGINE" → RetireX → 변환)과 `Design/audio/engine_preview.wav` 경로를 추가.
+  - **결정 40 결정자 문구** 정정(디자인 요청·사양, 작성·머지는 테크 Claude, PR #16). `Docs/TechTask.md` 열린 질문 중 해소된 2건(스와치 40/14 pt = 결정 36-3, 타일 대체 텍스처 = 결정 38) 체크.
+  - **디버그 시각물 기본 끔**: `ImmersiveBoxView.showsDebugVisuals = false` — 헤드 구슬·시선 막대·빨간 트레일 엔티티를 `isEnabled = false`로. 머리 yaw 계산(3인칭 리센터에 필요)과 `DEBUG-*` 로그는 유지. 시연 영상에 초록 막대가 보이던 문제 해소.
+- **안 한 것 / 사용자 결정 필요**: `mms.usdz`(Mercedes 메타데이터)가 공개 히스토리 `02940f5`에 남아 있는 문제 — 히스토리 재작성(`git filter-repo`)은 모든 클론을 다시 받아야 하므로 두 담당자가 결정한다. 디자인 소유 문서(`Docs/design-prd.md` 13장 경로, `Assets/sfx/ENGINE.md` 연속 페달 표현, `icon_pinch_in` 폐기)는 Issue #31 코멘트로 디자인에 넘겼다.
+- **영향받는 절**: `LICENSE`, `README.md` 라이선스 표, `Resources/Fonts/OFL.txt`(신규), `ContentView` 크레딧, `ImmersiveBoxView.showsDebugVisuals`, 결정 40, `Docs/TechTask.md`

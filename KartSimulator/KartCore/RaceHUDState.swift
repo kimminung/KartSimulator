@@ -24,6 +24,10 @@ public struct RaceHUDState: Equatable, Sendable {
     public var checkpointsPassed: Int = 0
     public var totalCheckpoints: Int = 0
     public var respawning: Bool = false
+    /// 미니맵 로컬 좌표(m) — `MinimapProjection`으로 변환한 카트 위치 (테크 PRD 10장, M4).
+    public var kartMapPosition: SIMD2<Float> = .zero
+    /// 카트 heading(라디안, 트랙 좌표계). 미니맵 마커 회전.
+    public var kartHeading: Float = 0
 
     public init() {}
 }

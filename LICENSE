@@ -16,8 +16,9 @@ All rights reserved. 모든 권리 보유.
 2. 적용 범위
    "저작물"에는 다음이 모두 포함된다. 단, 제5조의 제3자 구성 요소는 제외한다.
    - 소스 코드(`KartSimulator/`, `KartCoreTests/`, `Tools/`, `Tracks/`)와 빌드 설정
-   - 디자인 산출물(`Design/`, `Assets/`): 카트 모델·텍스처·썸네일·실루엣, 트랙 타일 모델과 텍스처,
-     아이콘·온보딩 그림·목업, 팔레트와 스타일 가이드, 자체 합성 효과음, 생성 스크립트
+   - 디자인 산출물(`Design/`, `Assets/`): 트랙 타일 모델과 텍스처, 아이콘·온보딩 그림·목업, 스타일 가이드,
+     대체 텍스처, 자체 합성 효과음 7개, 생성 스크립트. (RetireX Online에서 가져온 카트 모델·텍스처·썸네일·
+     실루엣과 색 체계는 여기 들지 않고 제5조를 따른다.)
    - 문서(`Docs/`, `README.md`)와 트랙 정의 파일
    - 앱 이름 "핀치 카트", 화면 구성과 조작 방식의 표현
 
@@ -37,17 +38,25 @@ All rights reserved. 모든 권리 보유.
    - 저작권자나 "핀치 카트"의 이름을 보증·홍보에 쓰는 것
 
 5. 제3자 구성 요소 (이 라이선스가 적용되지 않으며, 각자의 원래 조건을 따른다)
-   - Galmuri 폰트 (`Design/fonts/Galmuri*.ttf`, `KartSimulator/Resources/Fonts/`):
-     (c) quiple, SIL Open Font License 1.1. 전문은 `Design/fonts/OFL.txt`.
-   - 엔진음 5개 (`Assets/sfx/engine*.wav`, `KartSimulator/Resources/Audio/engine*.wav`):
-     CC0 기반 녹음을 변환한 것으로, 출처와 확인 기록은 `Assets/sfx/LICENSES.md` 2장에 있다.
+   - Galmuri 폰트 (`Design/fonts/Galmuri*.ttf`, `KartSimulator/Resources/Fonts/Galmuri*.ttf`):
+     Copyright (c) Lee Minseo (quiple), SIL Open Font License 1.1. 전문은 `Design/fonts/OFL.txt`와 앱 번들의
+     `KartSimulator/Resources/Fonts/OFL.txt`. 앱 메뉴 하단에 크레딧을 표시한다.
+   - 엔진음 5개 (`Assets/sfx/engine*.wav`, `KartSimulator/Resources/Audio/engine*.wav`, 미리듣기
+     `Design/audio/engine_preview.wav`): CYBOX DIGITAL ENTERTAINMENT의 애드온 "XK ENGINE"(RetireX Online이 쓰는
+     원본 WAV)을 변환한 것으로, 운영자가 CC0 기반 녹음임을 확인했다. 출처 사슬과 SHA-256은 `Assets/sfx/LICENSES.md` 2장.
+   - RetireX Online에서 가져온 자산 — 카트 모델 5종(`KartSimulator/Resources/Karts/`)·텍스처(`Resources/KartTextures/`)·
+     썸네일과 실루엣(`Design/karts/`)·색 체계(`Design/style-guide.md` 1장): 그 운영사(CYBOX DIGITAL ENTERTAINMENT)의
+     허락 범위 안에서 이 저작물에 포함되며, 그 허락 범위를 넘어서는 이용은 이 라이선스로도 허용되지 않는다.
+     저작권 명의(개인 vs CYBOX)는 디자인 담당자가 확정한다.
    - RetireX Online 참고 자료 (`Design/reference/retirex/`):
      참고용으로만 보관한다. 이 안의 렌더·캡처에 보이는 마인크래프트 요소는 Mojang/Microsoft의 것이며,
-     이 저작물의 일부가 아니고 앱·스토어·홍보에 쓰지 않는다. RetireX Online에서 가져온 카트 모델·텍스처·
-     썸네일·색 체계는 그 운영사(CYBOX DIGITAL ENTERTAINMENT)의 허락 범위 안에서 이 저작물에 포함되며,
-     그 허락 범위를 넘어서는 이용은 이 라이선스로도 허용되지 않는다.
+     이 저작물의 일부가 아니고 앱·스토어·홍보에 쓰지 않는다.
    - Apple 플랫폼 SDK·프레임워크(SwiftUI, RealityKit, ARKit 등)와 SF Pro 계열 시스템 폰트:
      Apple의 개발자 라이선스 조건을 따른다. 저장소에 포함되어 있지 않다.
+   - 미니맵 받침 모델 `KartSimulator/Resources/Minimap/Diorama_Base.usdz`:
+     Apple "Diorama" 샘플 코드에서 가져온 것으로 Apple 샘플 코드 라이선스를 따른다(전문은 같은 폴더의
+     `LICENSE-Apple-Diorama-Sample.txt`). 이 앱의 일부로만 쓰며 단독 재배포·재포장하지 않고, Apple의 이름·상표로
+     이 저작물을 홍보하지 않는다.
 
 6. 보증 부인
    저작물은 "있는 그대로" 제공되며, 상품성·특정 목적 적합성·비침해를 포함한 어떠한 명시적·묵시적 보증도
@@ -69,11 +78,11 @@ English (informational translation; the Korean text governs)
    - Design: iMasterProX (GitHub @iMasterProX)
 
 2. Scope
-   The Work includes the source code, build settings, design deliverables (kart models, textures,
-   thumbnails, silhouettes, track tile models and textures, icons, onboarding illustrations, mockups,
-   palette, style guide, self-synthesized sound effects, generator scripts), documentation, track
-   definitions, the app name "Pinch Kart" and its screen/interaction design — except the third-party
-   components listed in Section 5.
+   The Work includes the source code, build settings, design deliverables (track tile models and
+   textures, icons, onboarding illustrations, mockups, style guide, replacement textures, the seven
+   self-synthesized sound effects, generator scripts), documentation, track definitions, the app name
+   "Pinch Kart" and its screen/interaction design — except the third-party components listed in
+   Section 5 (which include the RetireX-derived kart models, textures, thumbnails and colour system).
 
 3. Permitted
    - Viewing the repository on GitHub, and cloning, building and running it locally for personal
@@ -96,16 +105,23 @@ English (informational translation; the Korean text governs)
    - Using the names of the copyright holders or "Pinch Kart" for endorsement or promotion.
 
 5. Third-party components (not covered by this license; their own terms apply)
-   - Galmuri font — (c) quiple, SIL Open Font License 1.1 (`Design/fonts/OFL.txt`).
-   - Five engine sounds (`engine*.wav`) — converted from CC0-based recordings; provenance in
-     `Assets/sfx/LICENSES.md` Section 2.
+   - Galmuri font — Copyright (c) Lee Minseo (quiple), SIL Open Font License 1.1 (`Design/fonts/OFL.txt`,
+     also bundled at `KartSimulator/Resources/Fonts/OFL.txt`; credited in the app menu).
+   - Five engine sounds (`engine*.wav`, preview `Design/audio/engine_preview.wav`) — converted from the
+     "XK ENGINE" add-on WAVs by CYBOX DIGITAL ENTERTAINMENT (used by RetireX Online), confirmed by the
+     operator to be based on CC0 recordings; provenance and SHA-256 in `Assets/sfx/LICENSES.md` Section 2.
+   - RetireX Online-derived assets — the five kart models, textures, thumbnails/silhouettes and the colour
+     system — are included within the permission granted by its operator (CYBOX DIGITAL ENTERTAINMENT);
+     nothing here extends that permission. Whether the rights holder is named as the individual or CYBOX
+     is for the design lead to confirm.
    - RetireX Online reference material (`Design/reference/retirex/`) — reference only. Minecraft
-     elements visible in those renders belong to Mojang/Microsoft and are not part of the Work. Kart
-     models, textures, thumbnails and the colour system taken from RetireX Online are included within
-     the permission granted by its operator (CYBOX DIGITAL ENTERTAINMENT); nothing here extends that
-     permission.
+     elements visible in those renders belong to Mojang/Microsoft and are not part of the Work.
    - Apple platform SDKs and frameworks and the SF Pro system fonts — Apple developer license terms;
      not included in this repository.
+   - Minimap base model `KartSimulator/Resources/Minimap/Diorama_Base.usdz` — from Apple's "Diorama" sample
+     code, under the Apple Sample Code License (`LICENSE-Apple-Diorama-Sample.txt` in the same folder). Used
+     only as part of this app; not redistributed standalone or repackaged; Apple's names and trademarks are not
+     used to promote this Work.
 
 6. Disclaimer
    THE WORK IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT

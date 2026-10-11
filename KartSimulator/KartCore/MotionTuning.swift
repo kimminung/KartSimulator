@@ -13,9 +13,6 @@ public struct MotionTuning: Sendable {
     public var respawnSpeed: Float
     /// 후진 최고 속도 = `maxSpeed * reverseSpeedFactor`.
     public var reverseSpeedFactor: Float
-    /// 1인칭 전용: 머리 방향(`desiredHeading`)을 따라갈 때 초당 최대 회전각(도). 디오라마·3인칭의
-    /// `turnRateLow`/`turnRateHigh`(손 회전)와는 별개 값이다(결정 39).
-    public var steerRateDegrees: Float
 
     public init(
         maxSpeed: Float = 4.0,
@@ -28,8 +25,7 @@ public struct MotionTuning: Sendable {
         wallSpeedKeep: Float = 0.5,
         offTrackRespawn: TimeInterval = 2.0,
         respawnSpeed: Float = 0,
-        reverseSpeedFactor: Float = 0.5,
-        steerRateDegrees: Float = 120
+        reverseSpeedFactor: Float = 0.5
     ) {
         self.maxSpeed = maxSpeed
         self.accel = accel
@@ -42,6 +38,5 @@ public struct MotionTuning: Sendable {
         self.offTrackRespawn = offTrackRespawn
         self.respawnSpeed = respawnSpeed
         self.reverseSpeedFactor = reverseSpeedFactor
-        self.steerRateDegrees = steerRateDegrees
     }
 }
