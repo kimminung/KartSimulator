@@ -327,3 +327,12 @@
 - **교훈**: 입력(핸드 트래킹)과 표시(모델 축) 두 군데가 동시에 의심될 때는 `DEBUG-MOTION`의 `speed` 부호와 `pos` 변화로 입력부터 확정한 뒤 모델을 건드린다. 결정 32는 그 순서를 지키지 않았다.
 - **확인**: visionOS 시뮬레이터 빌드 + `KartCoreTests` 통과(기존 `EngineSoundMachineTests` 5개 실패는 그대로). 실기기 확인은 사용자 몫 — "전진 시 카트 앞부분이 먼저 나가는지".
 - **영향받는 절**: 결정 32번(폐기), `KartCore/KartForwardCorrection.swift`(신규), `ImmersiveBoxView.frontCorrectionAngle`, `KartCatalog.modelForwardCorrectionDegrees`, `KartCoreTests`
+
+## 43. [테크] 디오라마 출발 방향 반전 — 트랙 JSON이 아니라 박스 표시를 180° 돌림
+
+- **날짜**: 2026-10-11
+- **요청**: 결정 42 확인 뒤 "디오라마 모드 시작 시 차량이 반대쪽을 바라보고 시작되면 좋겠다".
+- **선택지**: (a) `track.start.heading`을 π 더하기 → 랩·체크포인트 판정이 경로 진행 방향을 따르므로 트랙을 거꾸로 도는 셈이 되어 `LapTracker`가 깨진다. (b) 트랙 JSON을 역방향으로 다시 생성 → 생성·검증 스크립트와 체크포인트 순서까지 손대야 한다. (c) **박스 안의 트랙 표시 전체를 180° 돌리기** → 주행·랩 로직은 트랙 좌표계 그대로, 사용자 쪽에서 보이는 것만 바뀐다. (c)를 골랐다.
+- **구현**: `ImmersiveBoxView.trackDisplayYaw = π`. `worldToDisplay`가 트랙 중심 기준으로 R_y(ψ) 회전을 거친 뒤 배율을 곱하고, 타일 회전과 `kartSlot.orientation`에 같은 ψ를 더한다(표시 벡터 R_y(ψ)R_y(h)(-Z) = R_y(h+ψ)(-Z)). 1인칭의 머리 방향은 씬 좌표계 값이라 `tickMotion`에서 ψ를 빼 트랙 좌표계로 되돌린다 — 고개를 돌린 쪽으로 카트가 도는 관계는 그대로다. 디버그 트레일은 표시 좌표를 쓰므로 자동으로 따라온다. 리스폰은 트랙 좌표라 영향 없음.
+- **확인**: visionOS 시뮬레이터 빌드 통과. `KartCoreTests`는 트랙 좌표계 로직만 다뤄 영향 없음. 실기기 확인: 출발 시 카트가 이전과 반대쪽을 보는지, 1인칭에서 고개 돌린 쪽으로 카트가 도는지.
+- **영향받는 절**: `ImmersiveBoxView`(`trackDisplayYaw`, `worldToDisplay`, `placeTile`, `tickMotion`), README 사용법("좌/우는 카트 기준" 설명은 그대로 유효)

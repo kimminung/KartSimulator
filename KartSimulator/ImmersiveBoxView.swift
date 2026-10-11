@@ -29,6 +29,11 @@ struct ImmersiveBoxView: View {
     @State private var wasAgainstWall = false
     @State private var trackDisplayScale: Float = 1
     @State private var trackWorldCenter: SIMD2<Float> = .zero
+    /// 트랙 월드 좌표 → 박스 표시 좌표로 옮길 때 Y축으로 추가 회전하는 각도(라디안). 트랙 JSON의 출발
+    /// 방향은 랩·체크포인트 판정이 따르는 기준이라 건드리지 않고, 대신 **박스 안의 트랙 전체를 180°
+    /// 돌려** 사용자 쪽에서 볼 때 카트가 반대쪽을 보고 출발하게 한다(결정 43번). `worldToDisplay`·
+    /// 타일 회전·`kartSlot` 회전에 모두 같은 값을 더하고, 1인칭 머리 방향은 같은 값을 빼서 트랙 좌표로 되돌린다.
+    private let trackDisplayYaw: Float = .pi
     @State private var raceModel = RaceModel()
     @State private var tileLibrary = TrackTileLibrary()
 
@@ -368,13 +373,17 @@ struct ImmersiveBoxView: View {
         let display = worldToDisplay(worldCenter)
         entity.scale = SIMD3(repeating: trackDisplayScale)
         entity.position = SIMD3(display.x, floorY, display.y)
-        entity.orientation = simd_quatf(angle: rotationDegrees * .pi / 180, axis: [0, 1, 0])
+        entity.orientation = simd_quatf(angle: rotationDegrees * .pi / 180 + trackDisplayYaw, axis: [0, 1, 0])
         parent.addChild(entity)
     }
 
-    /// 트랙 월드 좌표(XZ, 미터)를 박스 바닥의 표시 좌표로 변환한다.
+    /// 트랙 월드 좌표(XZ, 미터)를 박스 바닥의 표시 좌표로 변환한다: 트랙 중심 기준으로 옮기고,
+    /// `trackDisplayYaw`만큼 Y축 회전(R_y(ψ)·(x, z) = (x cosψ + z sinψ, -x sinψ + z cosψ))한 뒤 배율.
     private func worldToDisplay(_ worldXZ: SIMD2<Float>) -> SIMD2<Float> {
-        (worldXZ - trackWorldCenter) * trackDisplayScale
+        let local = worldXZ - trackWorldCenter
+        let c = cos(trackDisplayYaw), s = sin(trackDisplayYaw)
+        let rotated = SIMD2<Float>(local.x * c + local.y * s, -local.x * s + local.y * c)
+        return rotated * trackDisplayScale
     }
 
     /// 디버그 전용: 박스 바닥 표시 좌표 두 점을 빨간 막대 하나로 이어 붙인다(경로 누적용).
@@ -400,8 +409,8 @@ struct ImmersiveBoxView: View {
     /// 헤드 앵커 위치에 구슬을, 기기 정면 방향으로 막대를 띄운다(디버그 시각화, 결정 21번).
     /// 1인칭 모드에서는 여기서 구한 정면 방향이 그대로 조향 입력(`desiredHeading`)이 된다 —
     /// "아이트래킹"이라고 불러왔지만 실제로는 머리(기기) 방향이다(결정 39 기술 노트). `rootEntity`가
-    /// 회전 없이 평행이동만 하므로 씬 좌표축이 트랙 좌표축과 그대로 일치해서, 변환 없이 바로
-    /// `motion.heading`과 같은 공식(`forward = (-sin(h), 0, -cos(h))`)으로 뒤집어 쓸 수 있다.
+    /// 회전 없이 평행이동만 하므로 여기서 돌려주는 값은 **씬(표시) 좌표계** heading이다 — 트랙 좌표계로
+    /// 쓰려면 `tickMotion`에서 `trackDisplayYaw`를 빼야 한다(결정 43번).
     @MainActor
     @discardableResult
     private func updateHeadDebugGizmo() -> Float? {
@@ -428,7 +437,9 @@ struct ImmersiveBoxView: View {
         let now = CACurrentMediaTime()
         let (drive, leftStatus, rightStatus) = inputResolver.resolve(now: now, mode: mode)
         let tuning = MotionTuning().applying(track.tuning)
-        motion = motion.advancing(drive: drive, desiredHeading: mode == .firstPerson ? desiredHeading : nil, tuning: tuning, deltaTime: deltaTime)
+        // 머리 방향은 씬(표시) 좌표계 기준이라, 표시 회전 `trackDisplayYaw`를 빼서 트랙 좌표계 heading으로 되돌린다.
+        let trackSpaceDesiredHeading = desiredHeading.map { $0 - trackDisplayYaw }
+        motion = motion.advancing(drive: drive, desiredHeading: mode == .firstPerson ? trackSpaceDesiredHeading : nil, tuning: tuning, deltaTime: deltaTime)
 
         let positionXZ = SIMD2(motion.position.x, motion.position.z)
         let (pathIndex, distanceFromCenterline, projectedOnCenterline) = trackPath.closestSegment(to: positionXZ)
@@ -520,7 +531,7 @@ struct ImmersiveBoxView: View {
         let display = worldToDisplay(positionXZ)
         kartSlot.position.x = display.x
         kartSlot.position.z = display.y
-        kartSlot.orientation = simd_quatf(angle: motion.heading, axis: [0, 1, 0])
+        kartSlot.orientation = simd_quatf(angle: motion.heading + trackDisplayYaw, axis: [0, 1, 0])
 
         // 디버그: 실제로 이동한 거리를 빨간 선으로 쌓고, 콘솔에도 주기적으로 남긴다.
         if let last = lastTrailDisplayPoint {
