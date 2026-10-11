@@ -82,7 +82,7 @@ Oct 10, 2026 · @Coulson 기준, `Docs/tech-prd.md`에서 파생. 마일스톤 �
 - [x] HUD/트랙 색을 `Design/style-guide.md` 팔레트로 교체 (결정 35번)
 - [x] 제목에 Galmuri 픽셀 폰트 적용 (결정 35번, 디자인 결정 20-3·20-5)
 - [x] 핀치 상태 HUD(양손 점 + 중앙 방향 아이콘 + 세로 페달 게이지, cyan=전진/magenta=후진 6상태) — `RaceHUDOverlay`의 `PinchStatusView`/`PedalGaugeBar` (디자인 PRD 7장, 결정 37번)
-- [x] 조작법 화면(이슈 #12) — `ContentView`의 "조작법" 버튼 + 첫 실행 시 자동 표시(`@AppStorage("hasSeenOnboarding")`), 손 그림 5장(SVG를 Asset Catalog 벡터 이미지로) + "양손 사이 약 40 cm에서는 제자리(중립)" 안내 (결정 38번). 단, 위 "메뉴 4화면" 전체(시작/대기/카운트다운/결과 등)는 아직 아니고 조작법 1장만
+- [x] 조작법 화면(이슈 #12) — `ContentView`의 "조작법" 버튼 + 첫 실행 시 자동 표시(`@AppStorage("hasSeenOnboarding")`), 손 그림 5장(SVG를 Asset Catalog 벡터 이미지로) + 중립 안내 (결정 38번). 결정 39·41로 모드별 세그먼트가 되어 디오라마 5장·1인칭 2장·3인칭 4장 그림(디자인 결정 40)을 연결했고, "40 cm 중립" 문구는 "핀치 시작 간격 기준"으로 바꿨다. 단, 위 "메뉴 4화면" 전체(시작/대기/카운트다운/결과 등)는 아직 아니고 조작법 1장만
 
 ## M6 — 폴리시 · 출시 준비
 

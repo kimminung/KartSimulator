@@ -284,3 +284,13 @@
   - `ContentView`의 `OnboardingView`를 모드 선택 세그먼트로 바꿔 모드별 설명을 보여준다. 디오라마는 기존 SVG 그림(캡션만 새 제스처에 맞게 수정), 1인칭·3인칭은 디자인이 아직 전용 그림을 안 만들어서 SF Symbols로 자리만 잡아 뒀다.
 - **확인**: visionOS 시뮬레이터로 전체 빌드 통과, `KartCoreTests` 45개 중 39개 통과(새로 쓴 디오라마/3인칭/1인칭 테스트 전부 포함) — 실패 5개는 전부 기존의 무관한 `EngineSoundMachineTests` 결함. 실기기는 건드리지 않았다.
 - **영향받는 절**: `Docs/TechTask.md` M2, `KartCore/ExperienceMode.swift`(신규), `DriveState.swift`, `HandInputResolver.swift`, `InputTuning.swift`, `MotionTuning.swift`, `KartMotionState.swift`, `ImmersiveBoxView.swift`, `ContentView.swift`, `KartCoreTests`
+
+## 41. [테크] 디자인 결정 40 수용: 운전 모드 3종 온보딩 그림 11장 연결
+
+- **날짜**: 2026-10-11
+- **배경**: 결정 39에서 1인칭·3인칭 조작법 칸에 SF Symbols로 자리만 잡아 뒀던 것을, 디자인 PR #16(결정 40, `design` 브랜치)의 정식 그림으로 바꿨다. 결정 40은 `design` 브랜치에 있어 이 시점의 `Dev` `decisions.md`에는 아직 없다 — `main`에서 합쳐질 때 39·40·41 순서로 모인다.
+- **반영**:
+  - `Assets.xcassets/Onboarding/`에 `gesture_fp_01_steer`, `gesture_fp_02_throttle`, `gesture_tp_01_forward`~`gesture_tp_04_stop` 6개 imageset(`preserves-vector-representation`)을 추가하고, 그림이 바뀐 `gesture_01_forward.svg`(안쪽 화살표 → 핀치 점 잇는 점선)를 교체했다. 디자인이 `stroke-dasharray`·`opacity`를 피하고 `<rect>`·`<line>`·`<path>`·`<polygon>`·`fill-opacity`만 써서 Xcode SVG 수입에 특이사항 없음.
+  - `ContentView`: 모드별로 따로 있던 `DioramaOnboardingContent`/`FirstPersonOnboardingContent`/`ThirdPersonOnboardingContent`와 `SymbolInstructionCard`를 하나의 `GestureInstruction.gestures(for:)` 표 + `GestureInstructionGrid`로 합쳤다. 캡션은 디자인 `_sheet.png`·PRD 9장 표와 글자 그대로 같다. 그림 아래 한 줄 안내(`footnote(for:)`)를 모드별로 두어, 디오라마의 옛 "양손 사이 약 40 cm = 중립" 문구를 "기준은 핀치를 시작한 순간의 손 간격" 설명으로 대체했다(결정 39의 상대 드래그).
+- **확인**: visionOS 시뮬레이터 destination으로 빌드 통과. 코드 로직 변경은 없고 UI 자료만 바뀌어 `KartCoreTests`에는 영향 없음.
+- **영향받는 절**: `Docs/TechTask.md` M5 조작법 항목, `ContentView.swift`, `Assets.xcassets/Onboarding/`, PR #15(Dev→main)에 커밋 추가
