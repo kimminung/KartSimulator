@@ -358,3 +358,13 @@
 - **테스트**: `ScenePlacementTests`에 headYaw 분기와 `approachAngle`(비율·rate 0·큰 rate·±π 경계 최단 경로) 검증 추가.
 - **확인**: visionOS 시뮬레이터 빌드·테스트 통과. **실기기 확인 필요**: 고개를 좌우로 돌릴 때 카트가 중앙에 머무는지, 평활 6/s가 끈적이지 않는지(느리면 10, 떨리면 4), 멀미가 줄었는지.
 - **영향받는 절**: `KartCore/ScenePlacement.swift`(`cockpitTarget(headYaw:)`, `approachAngle`, `CockpitTuning.thirdPersonHeadYawSmoothingRate`), `ImmersiveBoxView.followKart(headYaw:deltaTime:)`, README 3인칭 설명
+
+## 46. [테크] 3인칭 추적 카메라: 항상 카트 뒤에서 앞을 보도록 씬 yaw를 천천히 따라 돌림
+
+- **날짜**: 2026-10-11
+- **배경**: 결정 45(바라보는 방향 중앙 고정) 실기기 확인 — 카트 시야 중앙 유지 ✅, 멀미 감소 ✅. 추가 요청: "항상 카트의 뒤에서 앞을 보도록 해야 트랙을 알 수 있다". 결정 44·45는 멀미 때문에 **월드를 돌리지 않는** 원칙이었는데, 그러면 코너를 돈 뒤 카트가 옆이나 뒤를 향한 채 시야 중앙에 있어 앞 트랙이 안 보인다.
+- **결정**: 3인칭에 한해 월드 회전을 허용하되 **평활**한다. 매 프레임 목표 씬 yaw = `chaseSceneYaw(kartHeading, headYaw) = headYaw − kartHeading`(지금 카트 heading의 월드 정면 = 바라보는 방향, 즉 카트 뒤에서 앞을 봄)을 구하고, `approachAngle`로 `thirdPersonChaseYawRate` 2.5/s만큼만 따라간다(90° 코너 후 1초에 약 92 %, 3초에 99.9 % 수렴). 평행이동(결정 45의 중앙 고정)은 그대로이므로 회전 피벗은 사실상 카트다 — 사용자 주변이 아니라 2.5 m 앞 카트를 중심으로 세계가 돈다. 1인칭은 변화 없음(월드 회전 없음 유지 — 머리 조향과 월드 회전을 섞으면 피드백 루프가 생긴다). 디오라마 변화 없음.
+- **트레이드오프**: 회전 vection이 다시 들어가므로 멀미가 재발하면 `thirdPersonChaseYawRate`를 낮추거나(1.5) 결정 45 상태(0 = 회전 안 함)로 되돌린다. 값은 `CockpitTuning`에 있다.
+- **테스트**: `ScenePlacementTests.chaseSceneYawPutsViewerBehindKart` — chase yaw 적용 시 카트 월드 정면 = 머리 방향, 90° 코너 후 평활 수렴 시간.
+- **확인**: visionOS 시뮬레이터 빌드·테스트 통과. **실기기 확인 필요**: 코너 뒤 카트가 앞을 향해 트랙이 보이는지, 회전 속도 2.5/s가 어지럽지 않은지.
+- **영향받는 절**: `KartCore/ScenePlacement.swift`(`chaseSceneYaw`, `CockpitTuning.thirdPersonChaseYawRate`), `ImmersiveBoxView.followKart`, README 3인칭 설명, `Docs/TechTask.md` Phase 2

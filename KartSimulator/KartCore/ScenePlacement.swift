@@ -12,19 +12,24 @@ public struct CockpitTuning: Sendable {
     public var kartRealLength: Float
     /// 3인칭: 머리 yaw 평활 속도(1/s). 카트를 시야 중앙에 두되 머리 떨림은 걸러 낸다(결정 45).
     public var thirdPersonHeadYawSmoothingRate: Float
+    /// 3인칭 추적 카메라: 씬 yaw가 "카트 뒤에서 앞을 보는" 목표 yaw를 따라가는 속도(1/s). 월드가 도는
+    /// 것이라 멀미 요인 — 낮을수록 부드럽지만 코너에서 카트가 잠깐 옆을 본다(결정 46).
+    public var thirdPersonChaseYawRate: Float
 
     public init(
         firstPersonEyeAboveFloor: Float = 0.9,
         thirdPersonEyeAboveFloor: Float = 1.8,
         thirdPersonKartAhead: Float = 2.5,
         kartRealLength: Float = 1.5,
-        thirdPersonHeadYawSmoothingRate: Float = 6
+        thirdPersonHeadYawSmoothingRate: Float = 6,
+        thirdPersonChaseYawRate: Float = 2.5
     ) {
         self.firstPersonEyeAboveFloor = firstPersonEyeAboveFloor
         self.thirdPersonEyeAboveFloor = thirdPersonEyeAboveFloor
         self.thirdPersonKartAhead = thirdPersonKartAhead
         self.kartRealLength = kartRealLength
         self.thirdPersonHeadYawSmoothingRate = thirdPersonHeadYawSmoothingRate
+        self.thirdPersonChaseYawRate = thirdPersonChaseYawRate
     }
 }
 
@@ -55,6 +60,13 @@ public enum ScenePlacement {
     /// R_y(yaw)·forward(h) = forward(h + yaw) 이므로 h_start + yaw = headYaw.
     public static func sceneYaw(startHeading: Float, headYaw: Float) -> Float {
         headYaw - startHeading
+    }
+
+    /// 3인칭 추적 카메라 목표 yaw: **지금** 카트 heading이 사용자가 바라보는 방향을 향하게(= 카트 뒤에서
+    /// 앞을 본다). `sceneYaw(startHeading:headYaw:)`와 같은 식을 매 프레임 카트 heading에 적용한 것.
+    /// 호출자가 `approachAngle`로 평활해서 씬 yaw에 반영한다(결정 46).
+    public static func chaseSceneYaw(kartHeading: Float, headYaw: Float) -> Float {
+        headYaw - kartHeading
     }
 
     /// 콕핏 목표점: 카트(트랙 좌표 노면 위 원점)가 월드에서 와야 할 자리.

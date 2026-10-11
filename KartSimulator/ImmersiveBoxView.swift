@@ -269,7 +269,9 @@ struct ImmersiveBoxView: View {
     }
 
     /// 콕핏 모드: 카트의 트랙 좌표가 콕핏 목표점(머리 아래 / 바라보는 방향 앞)에 오도록 씬 루트를 평행이동한다.
-    /// 3인칭은 현재 머리 yaw(평활)를 써서 고개를 돌려도 카트가 시야 중앙에 머문다(결정 45).
+    /// 3인칭은 현재 머리 yaw(평활)를 써서 고개를 돌려도 카트가 시야 중앙에 머물고(결정 45), 추가로 씬 yaw를
+    /// "카트 뒤에서 앞을 보는" 목표로 천천히 돌려 항상 카트 진행 방향을 보게 한다(결정 46, 추적 카메라).
+    /// 1인칭은 씬 yaw를 모드 진입 때 값으로 고정한다(월드 회전 없음).
     @MainActor
     private func followKart(headYaw: Float?, deltaTime: Float) {
         guard mode != .diorama else { return }
@@ -278,6 +280,13 @@ struct ImmersiveBoxView: View {
                 from: smoothedHeadYaw, to: headYaw,
                 rate: cockpitTuning.thirdPersonHeadYawSmoothingRate, deltaTime: deltaTime
             )
+            if mode == .thirdPerson {
+                let chaseYaw = ScenePlacement.chaseSceneYaw(kartHeading: motion.heading, headYaw: smoothedHeadYaw)
+                sceneYaw = ScenePlacement.approachAngle(
+                    from: sceneYaw, to: chaseYaw, rate: cockpitTuning.thirdPersonChaseYawRate, deltaTime: deltaTime
+                )
+                sceneRoot.orientation = simd_quatf(angle: sceneYaw, axis: [0, 1, 0])
+            }
         }
         let target = ScenePlacement.cockpitTarget(
             anchor: cockpitAnchor, mode: mode, kartHeading: motion.heading, sceneYaw: sceneYaw,
