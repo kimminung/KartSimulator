@@ -5,6 +5,12 @@
 **Apple Vision Pro에서 양손 핀치만으로 조종하는 책상 위 복셀 카트 레이싱.**
 컨트롤러 없이, 눈앞에 열린 작은 박스 안의 트랙(또는 실제 크기 트랙)을 손가락 핀치로 달립니다.
 
+### 앱 소개 영상 (30초)
+
+[![핀치 로버 소개 영상 미리보기 — 클릭하면 1280×720 원본(mp4) 재생](Docs/review/intro-preview.gif)](https://github.com/kimminung/KartSimulator/releases/download/v0.3.0/PinchRover_Opening_README_720p.mp4)
+
+▶ 원본(1280×720, H.264, 8.8 MB): https://github.com/kimminung/KartSimulator/releases/download/v0.3.0/PinchRover_Opening_README_720p.mp4 — 릴리스 [v0.3.0](https://github.com/kimminung/KartSimulator/releases/tag/v0.3.0) 첨부 자산. 위 미리보기는 소리 없는 480 px 애니메이션입니다.
+
 | | | |
 | --- | --- | --- |
 | ![카트 선택 메뉴](Docs/review/pr14-device-screenshots/03-kart-select-menu.png) | ![박스 디오라마](Docs/review/pr14-device-screenshots/01-box-overview-wide.png) | ![주행](Docs/review/pr14-device-screenshots/06-driving-close.png) |
@@ -23,7 +29,7 @@ Apple Vision Pro 실기기에서 플레이한 영상입니다. 썸네일을 누�
 
 | 플랫폼 | 언어·프레임워크 | 테스트 | 상태 |
 | --- | --- | --- | --- |
-| visionOS 27 (Apple Vision Pro) | Swift · SwiftUI · RealityKit · ARKit 손·머리 추적 | Swift Testing (`KartCoreTests` 62개) | Phase 2 완료, M4 미니맵 1차 구현, M5 메뉴 4화면·M6 출시 준비 남음 |
+| visionOS 27 (Apple Vision Pro) | Swift · SwiftUI · RealityKit · ARKit 손·머리 추적 | Swift Testing (`KartCoreTests` 63개) | Phase 2 완료, M4 미니맵 1차, 리뷰 회의 반영 완료, M5 메뉴 4화면·M6 출시 준비 남음 |
 
 ---
 
@@ -50,7 +56,7 @@ Apple Vision Pro 실기기에서 플레이한 영상입니다. 썸네일을 누�
 설계 원칙 세 가지가 프로젝트 전체를 관통합니다.
 
 - **글 없이 아는 조작**: 조작법은 손 그림만으로 이해되게 그렸고(디자인 PRD 9장), HUD는 손 모양·화살표·색으로 지금 입력이 어떻게 읽히는지 바로 보여 줍니다.
-- **멀미 배려**: 1인칭 시뮬레이션이 어지러울 수 있어 몰입도가 다른 운전 모드 3종을 두고, 기본은 박스를 밖에서 보는 디오라마입니다(결정 39).
+- **멀미 배려**: 1인칭 시뮬레이션은 어지러워 폐기했고, 몰입도가 다른 운전 모드 2종(디오라마·3인칭)을 두되 기본은 박스를 밖에서 보는 디오라마입니다(결정 39·47·49).
 - **큰 면, 적은 색**: 6 cm 카트와 1 m 거리의 HUD가 한눈에 읽히도록 RetireX 색 체계 기반 팔레트와 픽셀 룩(Galmuri 제목 폰트, 24 px 아이콘)을 씁니다.
 
 ## Phase 1에서 할 수 있는 것
@@ -64,7 +70,8 @@ Apple Vision Pro 실기기에서 플레이한 영상입니다. 썸네일을 누�
 | HUD | 랩·타임·속도 패널, 양손 핀치 상태 + 세로 페달 게이지, 모드 전환 버튼 (RealityView attachment) |
 | 소리 | 효과음 7종(자체 합성) + 엔진음 5종(시동·가속·루프·감속·공회전) 상태 기계 |
 | 온보딩 | 첫 실행 시 조작법 시트. 두 모드가 같은 손 그림 5장을 쓴다 |
-| 미니맵 | Diorama 테이블 위에 트랙 JSON에서 만든 노면·궤적·출발 깃발·체크포인트 라벨·카트 마커·랩 텍스트. 디오라마는 박스 모서리, 콕핏은 HUD 옆 (M4 1차) |
+| 미니맵 | Diorama 테이블 위에 트랙 JSON에서 만든 노면·궤적·출발 깃발·체크포인트 라벨·카트 마커·랩 텍스트. 디오라마는 박스 모서리, 3인칭은 HUD 오른쪽 아래에서 머리를 따라옴 (M4 1차) |
+| 카트 리그 | 핸들 82° 핀치 연동, 코너 바깥 차체 기울기·가감속 피치 (바퀴 굴림은 재내보내기 대기) |
 
 ## 시작하기
 
@@ -76,11 +83,11 @@ Apple Vision Pro 실기기에서 플레이한 영상입니다. 썸네일을 누�
 ## 사용법
 
 1. 메뉴 창에서 카트와 색상을 고른 뒤 **박스 열기** 버튼을 누르면 눈앞에 트랙 박스가 열립니다. 앉아서 플레이하면 편합니다.
-2. 첫 실행 때는 조작법 화면이 자동으로 뜹니다. 위쪽 "디오라마 / 1인칭 / 3인칭" 탭으로 모드별 조작법을 볼 수 있고, 나중에는 메뉴 창의 **조작법** 버튼으로 다시 열 수 있습니다. 이 탭은 설명만 바꿔 보여 줄 뿐, 실제 운전 모드는 바꾸지 않습니다.
+2. 첫 실행 때는 조작법 화면이 자동으로 뜹니다. 위쪽 "디오라마 / 3인칭" 탭으로 모드별 설명을 볼 수 있고(손 조작은 같습니다), 나중에는 메뉴 창의 **조작법** 버튼으로 다시 열 수 있습니다. 이 탭은 설명만 바꿔 보여 줄 뿐, 실제 운전 모드는 바꾸지 않습니다.
 3. 박스 위에 떠 있는 HUD 패널에서 운전 모드를 고르고 주행합니다. HUD의 양손 점(핀치 중이면 청록색)·화살표·페달 게이지로 손 입력이 어떻게 인식되는지 볼 수 있습니다.
 4. 주행을 마치면 HUD(또는 메뉴 창)의 **박스 닫기** 버튼으로 닫습니다. 3인칭에서 HUD 버튼이 안 눌리면 차를 세우고 양손을 뗀 채 4초 기다리세요. 메뉴 창이 정면에 다시 뜹니다. 디지털 크라운을 길게 누르면 언제든 홈으로 나갈 수 있습니다.
 
-![조작법 그림 11장](Design/onboarding/_sheet.png)
+![조작법 그림(디오라마 5장을 두 모드가 함께 씀)](Design/onboarding/_sheet.png)
 
 ### 운전 모드 2종
 
@@ -200,7 +207,7 @@ sequenceDiagram
 | `KartSimulator/RealityKit/` | 박스 프레임, 타일 라이브러리, 카트 맞춤·도색, 오디오 재생, 미니맵 빌더 |
 | `KartSimulator/Models/` | 카트 카탈로그·선택 상태, 이머시브 세션 상태 |
 | `KartSimulator/Resources/` | 카트 USDZ·텍스처, 타일 USDZ, 효과음·엔진음, Galmuri 폰트 |
-| `KartCoreTests/` | Swift Testing 62개 (입력 해석·조향·정면 보정·씬 배치·미니맵 투영·트랙 경로·랩) |
+| `KartCoreTests/` | Swift Testing 63개 (입력 해석·조향·정면 보정·씬 배치·추적 카메라·미니맵 투영·카트 리그·트랙 경로·랩) |
 | `Tracks/`, `Tools/` | 트랙 JSON 2개 + 생성·검증 스크립트, glb→USDZ 변환 |
 
 ## 디자인 산출물 (디자인)
