@@ -639,9 +639,13 @@ struct ScenePlacementTests {
         let fp = ScenePlacement.cockpitTarget(anchor: anchor, mode: .firstPerson, kartHeading: 1.0, sceneYaw: 0.5, tuning: tuning)
         #expect(close(fp, SIMD3(1, 0.6, -2)))
 
+        // headYaw가 없으면 카트 진행 방향(월드 = heading + sceneYaw) 앞 (결정 44)
         let tp = ScenePlacement.cockpitTarget(anchor: anchor, mode: .thirdPerson, kartHeading: 1.0, sceneYaw: 0.5, tuning: tuning)
         let expectedAhead = ScenePlacement.forward(heading: 1.5) * 2.5
         #expect(close(tp, SIMD3(1, -0.3, -2) + expectedAhead))
+        // headYaw가 있으면 카트 진행 방향과 무관하게 **바라보는 방향** 앞 (결정 45: 고개를 돌려도 시야 중앙)
+        let tpHead = ScenePlacement.cockpitTarget(anchor: anchor, mode: .thirdPerson, kartHeading: 1.0, sceneYaw: 0.5, headYaw: -2.0, tuning: tuning)
+        #expect(close(tpHead, SIMD3(1, -0.3, -2) + ScenePlacement.forward(heading: -2.0) * 2.5))
         // 앞으로 민 거리는 정확히 2.5 m, 높이는 손대지 않는다.
         let d = tp - SIMD3(1, -0.3, -2)
         #expect(abs((d.x * d.x + d.z * d.z).squareRoot() - 2.5) < 1e-4 && abs(d.y) < 1e-4)
@@ -667,5 +671,20 @@ struct ScenePlacementTests {
         #expect(abs(ScenePlacement.kartFitLength(mode: .diorama, sceneScale: 0.03, dioramaVisualLength: 0.12, tuning: tuning) - 4.0) < 1e-4)
         #expect(ScenePlacement.kartFitLength(mode: .firstPerson, sceneScale: 1, dioramaVisualLength: 0.12, tuning: tuning) == 1.5)
         #expect(ScenePlacement.kartFitLength(mode: .thirdPerson, sceneScale: 1, dioramaVisualLength: 0.12, tuning: tuning) == 1.5)
+    }
+
+    /// 머리 yaw 평활: 최단 경로로, rate가 클수록 빨리, ±π 경계를 넘어도 짧은 쪽으로.
+    @Test func approachAngleFollowsShortestPathAndRate() {
+        // 한 스텝에 (1 - e^-1) ≈ 63 % 따라간다
+        let a = ScenePlacement.approachAngle(from: 0, to: 1, rate: 1, deltaTime: 1)
+        #expect(abs(a - (1 - exp(Float(-1)))) < 1e-4)
+        // rate 0이면 안 움직이고, 아주 큰 rate면 사실상 도달
+        #expect(ScenePlacement.approachAngle(from: 0.3, to: 2, rate: 0, deltaTime: 1) == 0.3)
+        #expect(abs(ScenePlacement.approachAngle(from: 0.3, to: 2, rate: 1000, deltaTime: 1) - 2) < 1e-3)
+        // +170° → -170°는 +20° 방향이 최단: 결과가 180°를 넘어가야 한다(-180° 쪽이 아니라)
+        let from = Float(170) * .pi / 180, to = Float(-170) * .pi / 180
+        let step = ScenePlacement.approachAngle(from: from, to: to, rate: 1000, deltaTime: 1)
+        #expect(abs(atan2(sin(step - to), cos(step - to))) < 1e-3)
+        #expect(step > from)
     }
 }

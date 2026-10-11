@@ -10,17 +10,21 @@ public struct CockpitTuning: Sendable {
     public var thirdPersonKartAhead: Float
     /// 실제 크기 모드에서 카트의 가장 긴 변 길이(디자인 PRD 4장: 전장 1.5 m).
     public var kartRealLength: Float
+    /// 3인칭: 머리 yaw 평활 속도(1/s). 카트를 시야 중앙에 두되 머리 떨림은 걸러 낸다(결정 45).
+    public var thirdPersonHeadYawSmoothingRate: Float
 
     public init(
         firstPersonEyeAboveFloor: Float = 0.9,
         thirdPersonEyeAboveFloor: Float = 1.8,
         thirdPersonKartAhead: Float = 2.5,
-        kartRealLength: Float = 1.5
+        kartRealLength: Float = 1.5,
+        thirdPersonHeadYawSmoothingRate: Float = 6
     ) {
         self.firstPersonEyeAboveFloor = firstPersonEyeAboveFloor
         self.thirdPersonEyeAboveFloor = thirdPersonEyeAboveFloor
         self.thirdPersonKartAhead = thirdPersonKartAhead
         self.kartRealLength = kartRealLength
+        self.thirdPersonHeadYawSmoothingRate = thirdPersonHeadYawSmoothingRate
     }
 }
 
@@ -54,13 +58,16 @@ public enum ScenePlacement {
     }
 
     /// 콕핏 목표점: 카트(트랙 좌표 노면 위 원점)가 월드에서 와야 할 자리.
-    /// `anchor`는 사용자 머리 위치(월드). 1인칭은 머리 바로 아래 눈높이만큼 내려간 곳,
-    /// 3인칭은 거기서 더 낮추고 카트 진행 방향(월드 기준 = heading + sceneYaw)으로 `thirdPersonKartAhead`만큼 앞.
+    /// `anchor`는 사용자 머리 위치(월드). 1인칭은 머리 바로 아래 눈높이만큼 내려간 곳.
+    /// 3인칭은 거기서 더 낮추고 **사용자가 바라보는 방향(`headYaw`, 월드)**으로 `thirdPersonKartAhead`만큼 앞 —
+    /// 고개를 좌우로 돌려도 카트가 늘 시야 중앙에 있게(결정 45, 실기기 멀미 피드백). `headYaw`가 없으면
+    /// 카트 진행 방향(월드 기준 = heading + sceneYaw)으로 대신한다(결정 44의 원래 동작).
     public static func cockpitTarget(
         anchor: SIMD3<Float>,
         mode: ExperienceMode,
         kartHeading: Float,
         sceneYaw: Float,
+        headYaw: Float? = nil,
         tuning: CockpitTuning
     ) -> SIMD3<Float> {
         switch mode {
@@ -69,9 +76,18 @@ public enum ScenePlacement {
         case .firstPerson:
             return anchor - SIMD3(0, tuning.firstPersonEyeAboveFloor, 0)
         case .thirdPerson:
-            let ahead = forward(heading: kartHeading + sceneYaw) * tuning.thirdPersonKartAhead
+            let aheadYaw = headYaw ?? (kartHeading + sceneYaw)
+            let ahead = forward(heading: aheadYaw) * tuning.thirdPersonKartAhead
             return anchor - SIMD3(0, tuning.thirdPersonEyeAboveFloor, 0) + ahead
         }
+    }
+
+    /// 각도를 `target` 쪽으로 최단 경로(±π 랩어라운드)로 지수 평활한다. `rate`(1/s)가 클수록 빨리 따라간다.
+    /// 3인칭에서 머리 yaw의 떨림이 카트 위치로 그대로 전달되지 않게 하는 용도.
+    public static func approachAngle(from current: Float, to target: Float, rate: Float, deltaTime: Float) -> Float {
+        let delta = atan2(sin(target - current), cos(target - current))
+        let alpha = 1 - exp(-max(rate, 0) * max(deltaTime, 0))
+        return current + delta * alpha
     }
 
     /// 카트 모델의 가장 긴 변을 트랙 좌표계에서 몇 m로 맞출지. 디오라마는 박스 배율과 무관하게

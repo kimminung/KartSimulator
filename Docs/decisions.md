@@ -349,3 +349,12 @@
 - **의도적으로 안 한 것**: 스트리밍/컬링(트랙 16~64 타일이라 실기기 측정 후에만, 결정 39), 3인칭 추적 카메라식 월드 회전(멀미), 콕핏 내부(핸들·대시보드) 모델, 사용자가 걸어 다닐 때 anchor 갱신(들어온 순간 고정). 시뮬레이터처럼 월드 트래킹이 없으면 anchor (0, 1.2, 0)·yaw 0으로 대체.
 - **확인**: visionOS 시뮬레이터 빌드 통과, `ScenePlacementTests` 6개 + 기존 테스트 통과(기존 `EngineSoundMachineTests` 5개 실패는 그대로). **실기기 확인 필요**: 1인칭에서 카트가 발밑/앞에 보이는지와 눈높이 0.9 m가 적절한지, 3인칭 2.5 m·1.8 m가 적절한지, 실제 크기 트랙에서 프레임이 떨어지지 않는지(떨어지면 컬링 착수), 모드 전환 후 핀치가 계속 잡히는지.
 - **영향받는 절**: `Docs/TechTask.md` M2·M6, README(Phase 2), `KartCore/ScenePlacement.swift`(신규), `ImmersiveBoxView`(`sceneRoot`/`applyModeLayout`/`followKart`/`fitKart`/`currentHeadPose`), `KartCoreTests`
+
+## 45. [테크] 3인칭 멀미 피드백: 카트를 카트 진행 방향이 아니라 "바라보는 방향" 앞에 둔다
+
+- **날짜**: 2026-10-11
+- **배경**: Phase 2(결정 44) 실기기 체크리스트는 전부 통과했으나(디오라마 동일, 1인칭 실제 크기·발밑·머리 조향, 3인칭 앞·아래, 콕핏 핀치·HUD), **3인칭에서 멀미**를 느꼈고 "카메라가 좌우로 틀 때도 카트가 중앙에 있었으면 한다"는 요청. 결정 44의 3인칭은 카트를 **카트 진행 방향** 2.5 m 앞에 두었기 때문에, 고개를 돌리면 카트가 시야 밖으로 나가고 다시 찾아야 했다 — 시선이 고정점을 잃는 것이 멀미의 원인이었다.
+- **수정**: `ScenePlacement.cockpitTarget`에 `headYaw`를 추가해 3인칭의 "앞"을 **사용자가 바라보는 방향(월드 yaw)**으로 바꿨다. 이제 고개를 어느 쪽으로 돌려도 카트는 항상 시야 중앙 2.5 m 앞·1.8 m 아래에 있다(카트 모델은 자기 heading대로 돌아 있으므로 어디로 달리는지는 모델 방향으로 보인다). 머리 yaw는 `approachAngle`(최단 경로 지수 평활, `thirdPersonHeadYawSmoothingRate` 6/s)로 걸러 떨림이 카트 위치로 전달되지 않게 했다. `headYaw`가 없으면(시뮬레이터 등) 결정 44의 진행 방향 기준으로 돌아간다. 1인칭·디오라마는 변화 없음.
+- **테스트**: `ScenePlacementTests`에 headYaw 분기와 `approachAngle`(비율·rate 0·큰 rate·±π 경계 최단 경로) 검증 추가.
+- **확인**: visionOS 시뮬레이터 빌드·테스트 통과. **실기기 확인 필요**: 고개를 좌우로 돌릴 때 카트가 중앙에 머무는지, 평활 6/s가 끈적이지 않는지(느리면 10, 떨리면 4), 멀미가 줄었는지.
+- **영향받는 절**: `KartCore/ScenePlacement.swift`(`cockpitTarget(headYaw:)`, `approachAngle`, `CockpitTuning.thirdPersonHeadYawSmoothingRate`), `ImmersiveBoxView.followKart(headYaw:deltaTime:)`, README 3인칭 설명
