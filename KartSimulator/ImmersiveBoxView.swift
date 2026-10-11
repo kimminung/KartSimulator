@@ -42,7 +42,7 @@ struct ImmersiveBoxView: View {
     @State private var loadedKartEntity: Entity?
     /// 월드 좌표에 그대로 두는 것들(미니맵)의 부모. `rootEntity`는 박스 위치로 옮겨져 있어 기준이 다르다.
     @State private var worldAnchor = Entity()
-    /// M4 미니맵(결정 47). 트랙을 읽은 뒤 비동기로 만들어진다.
+    /// M4 미니맵(결정 48). 트랙을 읽은 뒤 비동기로 만들어진다.
     @State private var minimap: Minimap?
     /// 디오라마에서는 박스 앞오른쪽 모서리 위에 작게(지름 0.16 m), 콕핏에서는 HUD 옆에 원래 크기(0.24 m).
     private let minimapTableDiameter: Float = 0.24
@@ -291,7 +291,7 @@ struct ImmersiveBoxView: View {
     /// 미니맵 마커(카트 복제본)의 가장 긴 변. 디자인 PRD 6장 "약 1.5 cm"(지름 0.24 m 테이블 기준 미니맵 로컬).
     private var minimapMarkerLength: Float { 0.015 }
 
-    /// 미니맵 배치(결정 47): 디오라마 = 박스 앞오른쪽 모서리 위에 작게(테크 PRD 9장의 "우측 하단 모서리 안쪽, 트랙 위에
+    /// 미니맵 배치(결정 48): 디오라마 = 박스 앞오른쪽 모서리 위에 작게(테크 PRD 9장의 "우측 하단 모서리 안쪽, 트랙 위에
     /// 떠 있게"를 0.7 m 박스에 맞춘 값), 콕핏 = 모드에 들어온 순간 머리 기준 HUD 오른쪽 아래에 사용자 쪽으로 35° 기울여.
     /// 지도 내용(`mapRoot`)은 씬 yaw만큼 돌려 박스/콕핏에서 보이는 트랙 방향과 맞춘다(3인칭은 진입 시점 값 고정 — 북쪽 고정식).
     @MainActor

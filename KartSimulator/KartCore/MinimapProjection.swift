@@ -1,6 +1,6 @@
 import Foundation
 
-/// 트랙 월드 좌표(XZ, 미터) → 미니맵 로컬 좌표(XZ, 미터) 변환 (테크 PRD 9·10장, 결정 47).
+/// 트랙 월드 좌표(XZ, 미터) → 미니맵 로컬 좌표(XZ, 미터) 변환 (테크 PRD 9·10장, 결정 48).
 /// 지름 `tableDiameter`인 둥근 테이블 위에 트랙 바운딩 박스(노면 폭 포함)가 들어가도록 **등방 배율**로 축소하고
 /// 트랙 중심을 테이블 중심에 놓는다. 축은 트랙 좌표계 그대로(x → x, z → z)라 heading도 그대로 쓴다.
 public struct MinimapProjection: Equatable, Sendable {

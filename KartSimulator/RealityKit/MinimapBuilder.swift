@@ -3,7 +3,7 @@ import RealityKit
 import UIKit
 import simd
 
-/// 미니맵 엔티티 묶음 (M4, 결정 47). `MinimapBuilder.make`가 만들고 `ImmersiveBoxView`가 매 프레임 `update`한다.
+/// 미니맵 엔티티 묶음 (M4, 결정 48). `MinimapBuilder.make`가 만들고 `ImmersiveBoxView`가 매 프레임 `update`한다.
 /// 디자인 PRD 6장: Diorama 테이블 + 평평한 원판 + 노면/궤적 + 출발 깃발 + 체크포인트 라벨 + 카트 마커 + 랩 텍스트.
 /// 상호작용 없음 — `InputTargetComponent`를 붙이지 않아 핀치는 `inputCatcher`로 간다(테크 PRD 9장).
 @MainActor
@@ -117,7 +117,7 @@ enum MinimapBuilder {
             addRibbon(points: mapPoints, width: layer.width, y: layer.y, material: layer.material, into: minimap.mapRoot)
         }
 
-        // 4. 출발 깃발: 기둥 + 작은 깃발(mm-finish). 체커 무늬는 보류(결정 47).
+        // 4. 출발 깃발: 기둥 + 작은 깃발(mm-finish). 체커 무늬는 보류(결정 48).
         if track.start.pathIndex < mapPoints.count {
             let s = mapPoints[track.start.pathIndex]
             let pole = ModelEntity(mesh: .generateBox(size: SIMD3(0.0012, 0.014, 0.0012)), materials: [UnlitMaterial(color: .style(StylePalette.uiInk))])

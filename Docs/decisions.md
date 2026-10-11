@@ -369,7 +369,7 @@
 - **확인**: visionOS 시뮬레이터 빌드·테스트 통과. **실기기 확인 필요**: 코너 뒤 카트가 앞을 향해 트랙이 보이는지, 회전 속도 2.5/s가 어지럽지 않은지.
 - **영향받는 절**: `KartCore/ScenePlacement.swift`(`chaseSceneYaw`, `CockpitTuning.thirdPersonChaseYawRate`), `ImmersiveBoxView.followKart`, README 3인칭 설명, `Docs/TechTask.md` Phase 2
 
-## 47. [테크] M4 미니맵 1차: Diorama 테이블 + 트랙 JSON에서 바로 만든 지도, 모드별 배치
+## 48. [테크] M4 미니맵 1차: Diorama 테이블 + 트랙 JSON에서 바로 만든 지도, 모드별 배치
 
 - **날짜**: 2026-10-11
 - **배경**: Phase 2 종료 후 다음 마일스톤. 사용자가 Apple Diorama 샘플(`~/Downloads/Diorama`)을 전달해 M4를 시작했다. 디자인 쪽 추가 피드백과 실기기 피드백이 뒤따를 예정이라 1차는 "보이고 동기화되는 것"에 집중했다.
