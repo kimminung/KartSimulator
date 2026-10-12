@@ -28,7 +28,15 @@ public final class RaceModel {
         hud.phase = .racing
     }
 
+    /// 일시정지(Issue #44): 주행 중일 때만. 타이머가 멈추고, 재개는 `countdown(_:)` → `go()`로 같은 카운트다운을 다시 탄다
+    /// (`start`와 달리 랩·기록은 그대로 둔다).
+    public func pause() {
+        guard hud.phase == .racing else { return }
+        hud.phase = .paused
+    }
+
     public var isRacing: Bool { hud.phase == .racing }
+    public var isPaused: Bool { hud.phase == .paused }
     public var isFinished: Bool { hud.phase == .finished }
 
     public func updateDrive(_ drive: DriveState, left: HandStatus, right: HandStatus) {
