@@ -1,4 +1,4 @@
-#if os(visionOS)
+#if os(visionOS) || os(iOS)
 import RealityKit
 
 /// 엔진음을 뺀 한 발성 효과음 7종(`Assets/sfx/ENGINE.md` 3-4장 "레이스 이벤트"). `wallBump`는

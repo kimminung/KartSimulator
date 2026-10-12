@@ -1,4 +1,4 @@
-#if os(visionOS)
+#if os(visionOS) || os(iOS)
 import RealityKit
 import UIKit
 import simd
@@ -94,7 +94,7 @@ enum MinimapBuilder {
             )
             fallback.position.y = -0.015
             minimap.root.addChild(fallback)
-            print("DEBUG-MINIMAP Diorama_Base.usdz 없음 — 원기둥 받침 사용")
+            debugLog("DEBUG-MINIMAP Diorama_Base.usdz 없음 — 원기둥 받침 사용")
         }
 
         // 테마 색(결정 58, 서킷 JSON `theme.minimap`): 공원 / 네온 나이트 / 사막 협곡이 미니맵에서도 구분된다. 없으면 기본 팔레트.
@@ -190,25 +190,44 @@ enum MinimapBuilder {
 
     // MARK: - 조각들
 
-    /// 닫힌 점열을 폭 `width`의 납작한 상자들로 잇는다. 꺾이는 점마다 정사각 조각을 두어 틈을 메운다.
+    /// 점열을 폭 `width`의 납작한 리본 **메시 하나**로 만든다(결정 59, Issue #45): 전에는 구간마다 상자 엔티티 + 이음 정사각을
+    /// 따로 만들어 서킷(300~440점 × 3층)에서 엔티티가 2,000개를 넘었다. 지금은 층마다 ModelEntity 1개(삼각형 ≈ 점 수 × 4).
+    /// 구간 사각형 + 꺾이는 점의 정사각(틈 메움)을 같은 메시에 넣는다.
     @MainActor
     private static func addRibbon(points: [SIMD2<Float>], width: Float, y: Float, material: UnlitMaterial, into parent: Entity, closed: Bool = true) {
         guard points.count >= 2 else { return }
-        let thickness: Float = 0.001
-        for i in 0..<(closed ? points.count : points.count - 1) {
+        var positions: [SIMD3<Float>] = []
+        var indices: [UInt32] = []
+        let half = width / 2
+        func quad(_ a: SIMD3<Float>, _ b: SIMD3<Float>, _ c: SIMD3<Float>, _ d: SIMD3<Float>) {
+            let base = UInt32(positions.count)
+            positions.append(contentsOf: [a, b, c, d])
+            // 위에서 볼 때 반시계(+Y 법선)
+            indices.append(contentsOf: [base, base + 2, base + 1, base, base + 3, base + 2])
+        }
+        let count = closed ? points.count : points.count - 1
+        for i in 0..<count {
             let a = points[i], b = points[(i + 1) % points.count]
             let delta = b - a
             let length = simd_length(delta)
             if length > 0.0001 {
-                let segment = ModelEntity(mesh: .generateBox(size: SIMD3(width, thickness, length)), materials: [material])
-                let mid = (a + b) / 2
-                segment.position = SIMD3(mid.x, y, mid.y)
-                segment.orientation = simd_quatf(from: SIMD3<Float>(0, 0, 1), to: SIMD3(delta.x / length, 0, delta.y / length))
-                parent.addChild(segment)
+                let dir = delta / length
+                let side = SIMD2(-dir.y, dir.x) * half
+                quad(SIMD3(a.x + side.x, y, a.y + side.y), SIMD3(b.x + side.x, y, b.y + side.y),
+                     SIMD3(b.x - side.x, y, b.y - side.y), SIMD3(a.x - side.x, y, a.y - side.y))
             }
-            let joint = ModelEntity(mesh: .generateBox(size: SIMD3(width, thickness, width)), materials: [material])
-            joint.position = SIMD3(a.x, y, a.y)
-            parent.addChild(joint)
+            quad(SIMD3(a.x - half, y, a.y - half), SIMD3(a.x - half, y, a.y + half),
+                 SIMD3(a.x + half, y, a.y + half), SIMD3(a.x + half, y, a.y - half))
+        }
+        var descriptor = MeshDescriptor(name: "ribbon")
+        descriptor.positions = MeshBuffers.Positions(positions)
+        descriptor.normals = MeshBuffers.Normals(Array(repeating: SIMD3<Float>(0, 1, 0), count: positions.count))
+        descriptor.primitives = .triangles(indices)
+        do {
+            let mesh = try MeshResource.generate(from: [descriptor])
+            parent.addChild(ModelEntity(mesh: mesh, materials: [material]))
+        } catch {
+            debugLog("DEBUG-MINIMAP 리본 메시 생성 실패: \(error)")
         }
     }
 

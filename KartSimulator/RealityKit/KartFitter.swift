@@ -1,4 +1,4 @@
-#if os(visionOS)
+#if os(visionOS) || os(iOS)
 import RealityKit
 
 enum KartFitter {

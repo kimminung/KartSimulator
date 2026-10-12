@@ -34,6 +34,7 @@ struct ImmersiveBoxView: View {
     @State private var isReloadingTrack = false
     /// 타일만 모아 두는 루트(씬 루트 아래). 트랙을 바꿀 때 이 아래만 비우면 카트·트레일은 그대로 남는다.
     @State private var trackTilesRoot = Entity()
+    @State private var tileCullAccumulator: Float = 0
     @State private var lapTracker: LapTracker?
     @State private var trackDisplayScale: Float = 1
     @State private var trackWorldCenter: SIMD2<Float> = .zero
@@ -219,11 +220,11 @@ struct ImmersiveBoxView: View {
                     do {
                         try await arSession.run([worldTracking])
                     } catch {
-                        print("DEBUG-GAZE ARKitSession 시작 실패: \(error)")
+                        debugLog("DEBUG-GAZE ARKitSession 시작 실패: \(error)")
                     }
                 }
             } else {
-                print("DEBUG-GAZE 이 기기/시뮬레이터는 WorldTrackingProvider를 지원하지 않습니다.")
+                debugLog("DEBUG-GAZE 이 기기/시뮬레이터는 WorldTrackingProvider를 지원하지 않습니다.")
             }
 
             // HUD(속도/랩)를 2D `.overlay()`가 아니라 3D attachment로 박스 바로 위에 띄운다.
@@ -344,7 +345,7 @@ struct ImmersiveBoxView: View {
             fitKart(kart)
         }
         layoutMinimap()
-        print("DEBUG-LAYOUT mode=\(mode) sceneYaw=\(sceneYaw * 180 / .pi)도 scale=\(sceneRoot.scale.x) anchor=\(cockpitAnchor)")
+        debugLog("DEBUG-LAYOUT mode=\(mode) sceneYaw=\(sceneYaw * 180 / .pi)도 scale=\(sceneRoot.scale.x) anchor=\(cockpitAnchor)")
     }
 
     /// 3인칭 입력 캐처 조각(결정 53 추가). 캐처 로컬: 원점 = 머리, −Z = 기준 방향.
@@ -401,6 +402,23 @@ struct ImmersiveBoxView: View {
         followHUD(deltaTime: deltaTime)
     }
 
+    /// 격자 타일 반경 컬링(결정 59, Issue #45): 3인칭(실제 크기)에서만, 0.5초마다 카트에서 `tileCullingRadius` 밖 타일을 끈다.
+    /// 디오라마로 돌아오면 전부 켠다. 서킷(USDZ 한 덩어리)은 대상이 아니다.
+    @MainActor
+    private func cullTiles(around kartPosition: SIMD3<Float>, deltaTime: Float) {
+        guard let track, !track.isCircuit else { return }
+        tileCullAccumulator += deltaTime
+        guard tileCullAccumulator >= 0.5 else { return }
+        tileCullAccumulator = 0
+        let cull = mode == .thirdPerson
+        let radiusSquared = cockpitTuning.tileCullingRadius * cockpitTuning.tileCullingRadius
+        for tile in trackTilesRoot.children {
+            let d = tile.position - kartPosition
+            let enabled = !cull || (d.x * d.x + d.z * d.z) <= radiusSquared
+            if tile.isEnabled != enabled { tile.isEnabled = enabled }
+        }
+    }
+
     /// 종료 안전망(결정 53 추가): 3인칭에서 차를 세우고 양손을 다 뗀 채 `menuWindowReopenAfter`초가 지나면 숨겨 둔 메뉴 창을
     /// 사용자 정면에 다시 연다. HUD 버튼이 어떤 이유로든 안 눌려도 시스템 창의 "박스 닫기"로 나갈 수 있다(디지털 크라운
     /// 길게 누르기 → 홈은 visionOS 공통 탈출구). 다시 핀치하면 타이머는 0으로 돌아간다.
@@ -413,7 +431,7 @@ struct ImmersiveBoxView: View {
             openWindow(id: AppScene.menuWindowID)
             immersiveSession.menuWindowHidden = false
             stoppedHandsFreeSeconds = 0
-            print("DEBUG-EXIT 정지 + 양손 해제 \(menuWindowReopenAfter)초 → 메뉴 창 재오픈(종료 안전망)")
+            debugLog("DEBUG-EXIT 정지 + 양손 해제 \(menuWindowReopenAfter)초 → 메뉴 창 재오픈(종료 안전망)")
         }
     }
 
@@ -500,7 +518,7 @@ struct ImmersiveBoxView: View {
             previousBestTotalTime: previousBest, isNewRecord: isNewRecord,
             kartName: selection.selectedKart.displayName, trackName: track.name
         )
-        print("DEBUG-RACE 완주 total=\(hud.totalTime) laps=\(hud.lapTimes) best=\(String(describing: previousBest)) new=\(isNewRecord)")
+        debugLog("DEBUG-RACE 완주 total=\(hud.totalTime) laps=\(hud.lapTimes) best=\(String(describing: previousBest)) new=\(isNewRecord)")
     }
 
     /// 일시정지(Issue #44, 목업 06): 주행 중에만. 타이머(`RaceModel`)·주행 적분(`tickMotion`)이 멈추고 엔진은 `paused()`,
@@ -555,11 +573,11 @@ struct ImmersiveBoxView: View {
         // 디버그: 이벤트가 아예 안 들어오는지, chirality가 없어서 걸러지는지, 왼/오 각각 어떻게
         // 들어오는지 전부 로그로 남긴다. 원인 파악 끝나면 이 print들은 지운다 (Docs/decisions.md 21번).
         if events.isEmpty {
-            print("DEBUG-GESTURE ingest 호출됐지만 이벤트 0개 (isEnding=\(isEnding))")
+            debugLog("DEBUG-GESTURE ingest 호출됐지만 이벤트 0개 (isEnding=\(isEnding))")
         }
         for event in events {
             guard let chirality = event.chirality else {
-                print("DEBUG-GESTURE chirality 없음 — phase=\(event.phase), location=\(event.location3D)")
+                debugLog("DEBUG-GESTURE chirality 없음 — phase=\(event.phase), location=\(event.location3D)")
                 continue
             }
             let hand: HandChirality = chirality == .left ? .left : .right
@@ -570,7 +588,7 @@ struct ImmersiveBoxView: View {
             // scene(월드, 미터) 좌표로 변환해서 써야 한다.
             let scenePosition = value.convert(event.location3D, from: .local, to: .scene)
             let position = SIMD3<Float>(Float(scenePosition.x), Float(scenePosition.y), Float(scenePosition.z))
-            print("DEBUG-GESTURE \(hand == .left ? "LEFT" : "RIGHT") phase=\(event.phase) pinching=\(pinching) pos=\(position)")
+            debugLog("DEBUG-GESTURE \(hand == .left ? "LEFT" : "RIGHT") phase=\(event.phase) pinching=\(pinching) pos=\(position)")
             // `event.timestamp`는 SwiftUI 제스처 전용 시계라 `tickMotion`의 `now`(CACurrentMediaTime)와
             // 기준 시점이 다르다. 두 값을 그대로 비교하면 항상 "스테일"로 판정돼 `HandInputResolver`가
             // 영원히 .stopped만 반환한다(실기기에서 "차가 안 움직인다"의 진짜 원인, 결정 24번 참고).
@@ -587,11 +605,11 @@ struct ImmersiveBoxView: View {
         guard let definition = TrackCatalog.track(id: trackID) ?? TrackCatalog.tracks.first else {
             // 번들에 트랙 JSON이 하나도 없으면 여기서 끝난다 — 씬 루트 변환·타일·카트 배치가 전부 건너뛰어져 "박스를 열어도
             // 아무것도 안 보이는" 증상이 된다(2026-10-12 실기기, 결정 58 추가). Resources/Tracks 복사 누락을 의심할 것.
-            print("DEBUG-TRACK 카탈로그에 트랙이 없다(selected=\(trackID), bundle=\(TrackCatalog.tracks.map(\.id))) — Resources/Tracks 확인")
+            debugLog("DEBUG-TRACK 카탈로그에 트랙이 없다(selected=\(trackID), bundle=\(TrackCatalog.tracks.map(\.id))) — Resources/Tracks 확인")
             return
         }
         guard let spline = TrackSpline(track: definition) else {
-            print("DEBUG-TRACK \(definition.id): 스플라인을 만들 수 없다(path \(definition.path.count)점, frames \(definition.frames?.count ?? 0))")
+            debugLog("DEBUG-TRACK \(definition.id): 스플라인을 만들 수 없다(path \(definition.path.count)점, frames \(definition.frames?.count ?? 0))")
             return
         }
         let path = TrackPath(definition)
@@ -891,6 +909,7 @@ struct ImmersiveBoxView: View {
         kartSlot.position = pose.position
         kartSlot.orientation = pose.orientation
         followKart(headYaw: headYaw, deltaTime: deltaTime)
+        cullTiles(around: pose.position, deltaTime: deltaTime)
 
         // 미니맵 동기화(테크 PRD 9장 `MinimapSyncSystem` 역할): 마커 위치·회전, 체크포인트 라벨 색, 랩 텍스트.
         let kartTrackPosition = SIMD2(pose.position.x, pose.position.z)
@@ -914,50 +933,8 @@ struct ImmersiveBoxView: View {
         motionLogAccumulator += deltaTime
         if motionLogAccumulator >= motionLogInterval {
             motionLogAccumulator = 0
-            print("DEBUG-MOTION drive=\(drive) speed=\(rail.speed)m/s s=\(rail.s) lateral=\(rail.lateral) yaw=\(rail.yaw * 180 / .pi) pos=\(pose.position) totalDistance=\(totalDistanceTraveled)m")
+            debugLog("DEBUG-MOTION drive=\(drive) speed=\(rail.speed)m/s s=\(rail.s) lateral=\(rail.lateral) yaw=\(rail.yaw * 180 / .pi) pos=\(pose.position) totalDistance=\(totalDistanceTraveled)m")
         }
-    }
-
-    /// 카트 계층에서 이름에 "front"가 들어간 자식 엔티티(Reality Composer Pro에서 차량 앞을
-    /// 표시해 둔 마커)를 찾아, 그 방향을 주행 수학의 정면 축인 로컬 **-Z**로 보내는 Y축 보정 각도를
-    /// 계산한다(`KartForwardCorrection`, 결정 29·42번). 마커가 없으면 `fallbackDegrees`를 그대로 쓴다.
-    ///
-    /// 결정 32번에서 목표를 +Z로 뒤집었던 적이 있는데, 그건 손 좌표 변환 버그(결정 33번)로 카트가
-    /// 실제로 후진하던 것을 모델이 뒤집힌 것으로 오인한 수정이었다. 실기기에서 "뒷부분부터 전진"으로
-    /// 다시 보고되어 -Z로 되돌렸다(결정 42번). 공식은 `KartCoreTests`가 세 축으로 고정한다.
-    private func frontCorrectionAngle(for entity: Entity, fallbackDegrees: Float) -> Float {
-        // 이름 **정확 일치**만 쓴다(Issue #23): 부분 일치 "front"는 razr에서 `front_l`(앞왼 바퀴 묶음, 약 35°)·
-        // `front_blade_l`이 먼저 걸려 카트가 옆으로 비틀려 보였다. 후보는 RetireX 원본에서 차 앞을 뜻하는 이름들.
-        guard let front = findDescendant(in: entity, namedOneOf: Self.frontMarkerNames) else {
-            print("DEBUG-FRONT 정면 마커(\(Self.frontMarkerNames))를 못 찾음 — fallback \(fallbackDegrees)도 사용")
-            return fallbackDegrees * .pi / 180
-        }
-        let nose = front.position(relativeTo: entity)
-        guard let angle = KartForwardCorrection.angle(noseX: nose.x, noseZ: nose.z) else {
-            print("DEBUG-FRONT '\(front.name)' 위치가 원점과 거의 같아 방향을 못 구함 — fallback \(fallbackDegrees)도 사용")
-            return fallbackDegrees * .pi / 180
-        }
-        let after = KartForwardCorrection.rotatedXZ(noseX: nose.x, noseZ: nose.z, by: angle)
-        print("DEBUG-FRONT '\(front.name)' 위치=\(nose) → 보정 \(angle * 180 / .pi)도, 보정 후 nose XZ=\(after) (목표 (0, -1))")
-        return angle
-    }
-
-    /// 차 앞을 뜻하는 노드 이름(RetireX 원본 그대로, 소문자 비교). 앞에 있는 이름을 우선한다.
-    private static let frontMarkerNames = ["front_aero", "race_nose", "nose", "front"]
-
-    private func findDescendant(in entity: Entity, namedOneOf names: [String]) -> Entity? {
-        for name in names {
-            if let found = findDescendant(in: entity, namedExactly: name) { return found }
-        }
-        return nil
-    }
-
-    private func findDescendant(in entity: Entity, namedExactly name: String) -> Entity? {
-        if entity.name.lowercased() == name { return entity }
-        for child in entity.children {
-            if let found = findDescendant(in: child, namedExactly: name) { return found }
-        }
-        return nil
     }
 
     @MainActor
@@ -978,7 +955,7 @@ struct ImmersiveBoxView: View {
             // 엔티티가 들어 있어, 그 위치를 읽어서 보정 각도를 모델마다 자동으로 계산한다(결정 29·42번).
             // 못 찾으면 `KartModel.modelForwardCorrectionDegrees`(이 로스터는 +Z가 정면이라 180도)로 돌아간다.
             entity.orientation = simd_quatf(
-                angle: frontCorrectionAngle(for: entity, fallbackDegrees: kart.modelForwardCorrectionDegrees),
+                angle: KartForwardMarker.correctionAngle(for: entity, fallbackDegrees: kart.modelForwardCorrectionDegrees),
                 axis: [0, 1, 0]
             )
             // 디오라마: 트랙 배율(trackDisplayScale)을 카트에도 그대로 쓰면 트랙이 넓을수록 카트가 같이
@@ -998,24 +975,6 @@ struct ImmersiveBoxView: View {
             print("카트 로드 실패(\(kart.usdzResourceName)): \(error)")
         }
     }
-}
-
-/// 완주 결과(결정 56, Issue #42). `UserDefaults`에 트랙·카트별 최고 총 시간을 저장한다.
-struct RaceResult: Equatable {
-    let totalTime: TimeInterval
-    let lapTimes: [TimeInterval]
-    let bestLapTime: TimeInterval?
-    let previousBestTotalTime: TimeInterval?
-    let isNewRecord: Bool
-    let kartName: String
-    let trackName: String
-}
-
-/// "0:31.42" 형식(디자인 목업 01·07).
-func formatRaceTime(_ t: TimeInterval) -> String {
-    let minutes = Int(t) / 60
-    let seconds = t - Double(minutes * 60)
-    return String(format: "%d:%05.2f", minutes, seconds)
 }
 
 /// HUD 패널(M5): 주행 중 랩·타임·속도·핀치 상태, 카운트다운 중 큰 숫자, 완주 뒤 결과 패널(총 시간·랩별·신기록·다시 하기).

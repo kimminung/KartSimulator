@@ -130,17 +130,18 @@ Oct 10, 2026 · @Coulson 기준, `Docs/tech-prd.md`에서 파생. 마일스톤 �
 
 ## M6 — 폴리시 · 출시 준비 (GitHub 마일스톤 "M6 — 출시 준비": Issue #45·#46)
 
-- [ ] 성능 예산 측정 (90fps, 드로우콜 등 — 테크 PRD 12장)
+- [~] 성능 예산 측정 (90fps, 드로우콜 등 — 테크 PRD 12장) — 코드 쪽 예산·절차는 `Docs/review/perf_2026-10-12.md`(결정 59), 실기기 Instruments 표는 사용자가 채움. 미니맵 리본 메시 병합·타일 반경 컬링 완료
 - [x] 앱 이름 확정 → '핀치 로버'(Pinch Rover), 결정 53. `CFBundleDisplayName`·제목·LICENSE·README 반영, 디자인 문서(PRD 1·15장, `app-name.md`, 목업 01)는 디자인 요청
-- [ ] 아카이브 크기·메모리 예산 확인
+- [x] 아카이브 크기 측정(리소스 51 MB, 결정 59) · [ ] 메모리는 실기기 측정 · [x] 디버그 로그 `debugLog()` 플래그 · [x] 접근성 라벨(트랙·카트·색상 카드) · [ ] 앱 아이콘·스토어 자산(디자인)
 
 ## iOS/iPadOS 버전 (GitHub 마일스톤 "iOS/iPadOS 버전", 결정 56 — M6 뒤)
 
-- [ ] #47 Epic: KartCore 공유, 입력·카메라만 교체. 방향 표는 이슈 본문
-- [ ] #48 iOS 타깃 추가, KartCore 컴파일 확인, 리소스 공유, 메뉴·온보딩 재사용
-- [ ] #49 터치 조작(`TouchInputResolver`, 핀치 규칙 1:1) + 가상 페달 UI, 디자인에 터치 조작 그림 요청
-- [ ] #50 탑뷰·3인칭 카메라(RealityView iOS 18+), HUD 오버레이, 2D 미니맵
-- [ ] #51 (선택) iPad AR 모드
+- [x] #47 Epic: KartCore 공유, 입력·카메라만 교체 — 결정 60
+- [x] #48 같은 앱 타깃을 iOS로 빌드(SUPPORTED_PLATFORMS 기존 설정), KartCore·RealityKit 도우미 공유, 메뉴·온보딩 재사용
+- [x] #49 터치 조작(`TouchInputResolver`, 핀치 규칙 1:1), 터치 존 2개 + 핀치 상태 필. 디자인에 터치 조작 그림은 추후 요청
+- [x] #50 탑뷰·추적 카메라(`ChaseCameraRig`, RealityView 가상 카메라), HUD 오버레이, 2D 미니맵(`TrackPlanCanvas`)
+- [x] #51 (선택) AR 모드 — 평면 앵커 + 디오라마 배율, **실기기 미확인**
+- [ ] 실기기(iPhone/iPad): 두 엄지 조작 감각, 추적 카메라 멀미, AR 평면 인식, 아이패드 가로 레이아웃
 
 ## 열린 질문 (결정되면 `Docs/decisions.md`에 기록)
 
