@@ -74,11 +74,22 @@ struct ImmersiveBoxView: View {
     private let dioramaYaw: Float = .pi
     @State private var raceModel = RaceModel()
     @State private var tileLibrary = TrackTileLibrary()
+    // MARK: - 레이스 흐름 (M5, 결정 56): 카운트다운 잠금 → 주행 → 완주 결과 → 다시 하기
+    /// 카운트다운 중·완주 뒤에는 손 입력을 무시한다(핀치해도 출발 못 하고, 완주 뒤엔 관성으로 선다).
+    @State private var raceLocked = true
+    /// GO 직후 0.6초 동안 HUD에 "GO" 표시.
+    @State private var showsGoFlash = false
+    @State private var countdownTask: Task<Void, Never>?
+    /// 완주 결과(총 시간·랩·베스트·신기록). HUD 결과 패널이 읽는다.
+    @State private var raceResult: RaceResult?
+    @State private var hudLoopLastTick: TimeInterval = CACurrentMediaTime()
 
     // 엔진음 + 효과음 (`Assets/sfx/ENGINE.md` 스펙대로, 디자인 결정 20-6).
     @State private var engineMachine = EngineSoundMachine()
     @State private var engineAudioPlayer: EngineAudioPlayer?
     @State private var sfxPlayer: SFXPlayer?
+    // 배경음 3곡(디자인 결정 55, `Assets/bgm/README.md`): 머리 고정 앰비언트라 RealityKit 밖에서 `AVAudioPlayer`로 튼다.
+    @State private var bgmPlayer = BGMPlayer()
 
     // RealityKit의 매 프레임 콜백에서 안전하게 쓸 수 있는 평범한 스냅샷. `raceModel`은 HUD가
     // 직접 읽으므로, 프레임 콜백에서 바로 건드리면 "Modifying state during view update"가 난다.
@@ -245,8 +256,9 @@ struct ImmersiveBoxView: View {
             // `inputCatcher`와 같은 공간을 공유해 호버가 불안정했는데(결정 26번), 박스 바로 위에
             // 떠 있는 이 패널은 겹치는 엔티티가 없어 바라보고 누르기 훨씬 쉽다.
             Attachment(id: "hud") {
-                RaceHUDOverlay(hud: raceModel.hud, mode: mode, onModeChange: { mode = $0 }) {
+                RaceHUDOverlay(hud: raceModel.hud, mode: mode, showsGoFlash: showsGoFlash, result: raceResult, onModeChange: { mode = $0 }, onRestart: { restartRace() }) {
                     Task {
+                        bgmPlayer.stop(fadeOut: 0.5) // 앱·박스 종료는 0.5초 페이드(배경음 규칙 2)
                         // 3인칭에서 숨긴 메뉴 창을 먼저 사용자 정면에 다시 연다(Issue #27). 창이 하나도 없으면 공간을 닫는 순간 앱이 사라진다.
                         if immersiveSession.menuWindowHidden { openWindow(id: AppScene.menuWindowID); immersiveSession.menuWindowHidden = false }
                         await dismissImmersiveSpace()
@@ -261,6 +273,9 @@ struct ImmersiveBoxView: View {
         }
         .task {
             await runHUDUpdateLoop()
+        }
+        .onDisappear {
+            bgmPlayer.stop(fadeOut: 0.5)
         }
     }
 
@@ -442,14 +457,59 @@ struct ImmersiveBoxView: View {
     private let hudUpdateInterval = Duration.milliseconds(250)
 
     private func runHUDUpdateLoop() async {
+        hudLoopLastTick = CACurrentMediaTime()
         while !Task.isCancelled {
             try? await Task.sleep(for: hudUpdateInterval)
+            // 실제 경과 시간을 쓴다 — 고정 0.25초를 더하면 랩 타임이 폴링 주기로 양자화되고 누락된 틱만큼 짧아진다(결정 56).
+            let now = CACurrentMediaTime()
+            let elapsed = min(max(now - hudLoopLastTick, 0), 1.0)
+            hudLoopLastTick = now
+            let wasFinished = raceModel.isFinished
             raceModel.updateDrive(latestDrive, left: latestLeftStatus, right: latestRightStatus)
-            raceModel.updateMotion(speedMetersPerSecond: latestSpeed, deltaTime: 0.25)
+            raceModel.updateMotion(speedMetersPerSecond: latestSpeed, deltaTime: elapsed)
             raceModel.updateLap(latestLapProgress, totalCheckpoints: latestCheckpointCount)
             raceModel.setRespawning(latestIsOffTrack)
             raceModel.updateMap(position: latestMapPosition, heading: latestHeading)
+            if raceModel.isFinished && !wasFinished {
+                recordResult()
+            }
         }
+    }
+
+    /// 완주 결과 확정 + 트랙·카트별 최고 기록(`UserDefaults`) 갱신. HUD가 결과 패널로 바뀐다(Issue #42).
+    @MainActor
+    private func recordResult() {
+        guard let track else { return }
+        let hud = raceModel.hud
+        let key = "bestTotalTime.\(track.id).\(selection.selectedKartID)"
+        let previousBest = UserDefaults.standard.object(forKey: key) as? Double
+        let isNewRecord = previousBest.map { hud.totalTime < $0 } ?? true
+        if isNewRecord { UserDefaults.standard.set(hud.totalTime, forKey: key) }
+        raceResult = RaceResult(
+            totalTime: hud.totalTime, lapTimes: hud.lapTimes, bestLapTime: hud.bestLapTime,
+            previousBestTotalTime: previousBest, isNewRecord: isNewRecord,
+            kartName: selection.selectedKart.displayName, trackName: track.name
+        )
+        print("DEBUG-RACE 완주 total=\(hud.totalTime) laps=\(hud.lapTimes) best=\(String(describing: previousBest)) new=\(isNewRecord)")
+    }
+
+    /// 다시 하기(Issue #42): 출발 위치로 되돌리고 랩·이탈·트레일을 초기화한 뒤 카운트다운부터 다시 시작한다.
+    @MainActor
+    private func restartRace() {
+        guard let track, let trackPath else { return }
+        let startPoint = trackPath.points[track.start.pathIndex]
+        motion = KartMotionState(speed: 0, heading: track.start.heading, position: SIMD3(startPoint.x, 0, startPoint.y))
+        lapTracker = LapTracker(track: track)
+        offTrackMonitor = OffTrackMonitor()
+        wasAgainstWall = false
+        trailRoot.children.removeAll()
+        lastTrailDisplayPoint = nil
+        raceResult = nil
+        latestLapProgress = LapProgress()
+        engineAudioPlayer?.run(engineMachine.respawned())
+        raceModel.start(totalLaps: track.laps)
+        if mode == .thirdPerson { applyModeLayout() } // 기준 방향·씬 yaw를 새 출발 heading에 맞춘다
+        startCountdown()
     }
 
     /// M2 입력 프로토타입: SpatialEventGesture로 받은 핀치를 HandInputResolver에 넘긴다.
@@ -533,14 +593,28 @@ struct ImmersiveBoxView: View {
 
     /// `Assets/sfx/ENGINE.md` 3-4장: 카운트다운 시작(`countdownTick` 3회) → GO. 시동(`engineIgnition`)은
     /// 카운트다운과 동시에 시작해 2.2초 뒤 공회전으로 넘어간다 — 별도 타이밍이라 병렬로 돈다.
+    /// 3·2·1·GO (Issue #41): 그동안 `raceLocked`로 입력을 잠그고, HUD는 `raceModel.hud.phase`의 숫자를 크게 보여 준다.
     private func startCountdown() {
+        raceLocked = true
+        showsGoFlash = false
+        countdownTask?.cancel()
+        bgmPlayer.stop(fadeOut: 0.5) // 카운트다운 동안은 배경음 없음(다시 하기로 들어와도 마찬가지)
         engineAudioPlayer?.run(engineMachine.countdownStarted())
-        Task {
-            for _ in 0..<3 {
+        countdownTask = Task { @MainActor in
+            for remaining in [3, 2, 1] {
+                guard !Task.isCancelled else { return }
+                raceModel.countdown(remaining)
                 sfxPlayer?.play(.countdownTick)
                 try? await Task.sleep(for: .seconds(1))
             }
+            guard !Task.isCancelled else { return }
+            raceModel.go()
             sfxPlayer?.play(.go)
+            bgmPlayer.startNextTrack(fadeIn: 1.0) // GO 효과음과 동시에 1.0초 페이드 인, 레이스마다 다음 곡
+            raceLocked = false
+            showsGoFlash = true
+            try? await Task.sleep(for: .seconds(0.6))
+            showsGoFlash = false
         }
     }
 
@@ -662,7 +736,9 @@ struct ImmersiveBoxView: View {
         // `ingest()`에서 찍는 시계(CACurrentMediaTime)와 반드시 같은 기준이어야 한다. 섞어 쓰면
         // HandInputResolver의 스테일 판정이 항상 틀어진다(결정 24번).
         let now = CACurrentMediaTime()
-        let (drive, leftStatus, rightStatus) = inputResolver.resolve(now: now, mode: mode)
+        let (resolvedDrive, leftStatus, rightStatus) = inputResolver.resolve(now: now, mode: mode)
+        // 카운트다운 중·완주 뒤에는 입력을 무시한다(결정 56). 손 상태 자체는 HUD에 그대로 보여 준다.
+        let drive: DriveState = raceLocked ? .stopped : resolvedDrive
         let tuning = MotionTuning().applying(track.tuning)
         let previousSpeed = motion.speed
         motion = motion.advancing(drive: drive, tuning: tuning, deltaTime: deltaTime)
@@ -679,6 +755,8 @@ struct ImmersiveBoxView: View {
         if !previousProgress.isFinished && newProgress.isFinished {
             sfxPlayer?.play(.finish)
             engineAudioPlayer?.run(engineMachine.finished())
+            bgmPlayer.stop(fadeOut: 2.0) // 완주: `finish` 효과음과 동시에 2.0초 페이드 아웃
+            raceLocked = true // 완주: 입력 무시, 관성으로 서서히 정지. 결과 패널은 HUD 루프가 띄운다.
         } else if newProgress.currentLap != previousProgress.currentLap {
             sfxPlayer?.play(.lapComplete)
         } else if newProgress.checkpointsPassedThisLap > previousProgress.checkpointsPassedThisLap {
@@ -869,38 +947,130 @@ struct ImmersiveBoxView: View {
     }
 }
 
-/// M5 HUD의 1차 데이터 플러밍 — 배치/스타일은 디자인 전달 후 다듬는다 (`Docs/TechTask.md` M5).
+/// 완주 결과(결정 56, Issue #42). `UserDefaults`에 트랙·카트별 최고 총 시간을 저장한다.
+struct RaceResult: Equatable {
+    let totalTime: TimeInterval
+    let lapTimes: [TimeInterval]
+    let bestLapTime: TimeInterval?
+    let previousBestTotalTime: TimeInterval?
+    let isNewRecord: Bool
+    let kartName: String
+    let trackName: String
+}
+
+/// "0:31.42" 형식(디자인 목업 01·07).
+func formatRaceTime(_ t: TimeInterval) -> String {
+    let minutes = Int(t) / 60
+    let seconds = t - Double(minutes * 60)
+    return String(format: "%d:%05.2f", minutes, seconds)
+}
+
+/// HUD 패널(M5): 주행 중 랩·타임·속도·핀치 상태, 카운트다운 중 큰 숫자, 완주 뒤 결과 패널(총 시간·랩별·신기록·다시 하기).
+/// 배치/스타일은 디자인 목업 04·05·07을 따르되 패널 한 장 구성은 유지(디자인 결정 49-3).
 private struct RaceHUDOverlay: View {
     let hud: RaceHUDState
     let mode: ExperienceMode
+    let showsGoFlash: Bool
+    let result: RaceResult?
     let onModeChange: (ExperienceMode) -> Void
+    let onRestart: () -> Void
     let onClose: () -> Void
 
     var body: some View {
         VStack(spacing: 8) {
             ModeSwitchView(mode: mode, onModeChange: onModeChange)
-            VStack(spacing: 4) {
-                Text("LAP \(hud.lap) / \(hud.totalLaps)")
-                    .font(.headline)
-                    .foregroundStyle(Color.style(StylePalette.uiInk))
-                Text(String(format: "%.1f s", hud.lapTime))
-                    .font(.title2.monospacedDigit())
-                    .foregroundStyle(Color.style(StylePalette.uiInk))
-                Text(String(format: "%.0f km/h", hud.speedKmh))
-                    .font(.subheadline.monospacedDigit())
-                    .foregroundStyle(Color.style(StylePalette.uiInk))
-                if hud.respawning {
-                    Text("트랙 이탈")
-                        .font(.caption.bold())
-                        .foregroundStyle(Color.style(StylePalette.uiWarn))
-                }
+            if let result, hud.phase == .finished {
+                resultPanel(result)
+            } else {
+                racingPanel
             }
-            PinchStatusView(drive: hud.drive, left: hud.left, right: hud.right)
             Button("박스 닫기", action: onClose)
                 .buttonStyle(.bordered)
         }
         .padding(12)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var countdownText: String? {
+        if showsGoFlash { return "GO" }
+        if case .countdown(let n) = hud.phase { return "\(n)" }
+        return nil
+    }
+
+    @ViewBuilder
+    private var racingPanel: some View {
+        if let countdownText {
+            // 카운트다운(목업 04): 숫자는 ui-ink, GO는 ui-cyan. 픽셀 폰트(Galmuri14)로 크게.
+            Text(countdownText)
+                .font(.custom("Galmuri14", size: countdownText == "GO" ? 56 : 72, relativeTo: .largeTitle))
+                .foregroundStyle(countdownText == "GO" ? Color.style(StylePalette.uiCyan) : Color.style(StylePalette.uiInk))
+                .frame(minHeight: 80)
+                .accessibilityLabel(countdownText == "GO" ? "출발" : "카운트다운 \(countdownText)")
+        }
+        VStack(spacing: 4) {
+            Text("LAP \(hud.lap) / \(hud.totalLaps)")
+                .font(.headline)
+                .foregroundStyle(Color.style(StylePalette.uiInk))
+            Text(formatRaceTime(hud.lapTime))
+                .font(.title2.monospacedDigit())
+                .foregroundStyle(Color.style(StylePalette.uiInk))
+            HStack(spacing: 8) {
+                Text("총 " + formatRaceTime(hud.totalTime))
+                if let best = hud.bestLapTime { Text("BEST " + formatRaceTime(best)) }
+            }
+            .font(.caption.monospacedDigit())
+            .foregroundStyle(Color.style(StylePalette.uiInk).opacity(0.8))
+            Text(String(format: "%.0f km/h", hud.speedKmh))
+                .font(.subheadline.monospacedDigit())
+                .foregroundStyle(Color.style(StylePalette.uiInk))
+            if hud.respawning {
+                Text("트랙 이탈")
+                    .font(.caption.bold())
+                    .foregroundStyle(Color.style(StylePalette.uiWarn))
+            }
+        }
+        PinchStatusView(drive: hud.drive, left: hud.left, right: hud.right)
+    }
+
+    /// 결과(목업 07): 총 시간 큰 숫자, 랩별 시간, "신기록!" 배지, 다시 하기.
+    private func resultPanel(_ result: RaceResult) -> some View {
+        VStack(spacing: 6) {
+            Text("완주!")
+                .font(.custom("Galmuri11-Bold", size: 24, relativeTo: .title2))
+                .foregroundStyle(Color.style(StylePalette.uiInk))
+            Text(formatRaceTime(result.totalTime))
+                .font(.system(size: 36, weight: .bold, design: .rounded).monospacedDigit())
+                .foregroundStyle(Color.style(StylePalette.uiInk))
+            if result.isNewRecord {
+                Text("신기록!")
+                    .font(.caption.bold())
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(Color.style(StylePalette.uiGold), in: Capsule())
+                    .foregroundStyle(Color.style(StylePalette.uiNight))
+            } else if let previous = result.previousBestTotalTime {
+                Text("BEST " + formatRaceTime(previous))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(Color.style(StylePalette.uiInk).opacity(0.8))
+            }
+            VStack(spacing: 2) {
+                ForEach(Array(result.lapTimes.enumerated()), id: \.offset) { index, lap in
+                    HStack {
+                        Text("LAP \(index + 1)")
+                        Spacer(minLength: 16)
+                        Text(formatRaceTime(lap))
+                            .foregroundStyle(lap == result.bestLapTime ? Color.style(StylePalette.uiCyan) : Color.style(StylePalette.uiInk))
+                    }
+                    .font(.caption.monospacedDigit())
+                }
+            }
+            .frame(width: 150)
+            .foregroundStyle(Color.style(StylePalette.uiInk))
+            Text("\(result.kartName) · \(result.trackName)")
+                .font(.caption2)
+                .foregroundStyle(Color.style(StylePalette.uiInk).opacity(0.7))
+            Button("다시 하기", action: onRestart)
+                .buttonStyle(.borderedProminent)
+        }
     }
 }
 

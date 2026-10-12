@@ -10,11 +10,26 @@ public final class RaceModel {
 
     public init() {}
 
+    /// 새 레이스. 카운트다운(3)부터 시작하고, `countdown(_:)`·`go()`로 단계가 넘어간다(결정 56).
+    /// 카운트다운 동안 `updateMotion`은 시간을 쌓지 않고, 호출자(`ImmersiveBoxView`)가 입력도 잠근다.
     public func start(totalLaps: Int) {
         hud = RaceHUDState()
         hud.totalLaps = totalLaps
+        hud.phase = .countdown(3)
+    }
+
+    /// 카운트다운 숫자 갱신(3 → 2 → 1).
+    public func countdown(_ remaining: Int) {
+        hud.phase = .countdown(remaining)
+    }
+
+    /// GO — 주행 시작. 타이머가 여기서부터 흐른다.
+    public func go() {
         hud.phase = .racing
     }
+
+    public var isRacing: Bool { hud.phase == .racing }
+    public var isFinished: Bool { hud.phase == .finished }
 
     public func updateDrive(_ drive: DriveState, left: HandStatus, right: HandStatus) {
         hud.drive = drive
@@ -31,12 +46,19 @@ public final class RaceModel {
     }
 
     public func updateLap(_ progress: LapProgress, totalCheckpoints: Int) {
-        if progress.currentLap != hud.lap {
+        guard hud.phase == .racing else {
+            hud.checkpointsPassed = progress.checkpointsPassedThisLap
+            hud.totalCheckpoints = totalCheckpoints
+            return
+        }
+        let lapCompleted = progress.currentLap != hud.lap || (progress.isFinished && hud.lapTimes.count < hud.totalLaps)
+        if lapCompleted {
             let completedLapTime = hud.lapTime
+            hud.lapTimes.append(completedLapTime)
             hud.bestLapTime = hud.bestLapTime.map { min($0, completedLapTime) } ?? completedLapTime
             hud.lapTime = 0
         }
-        hud.lap = progress.currentLap
+        hud.lap = progress.isFinished ? hud.totalLaps : progress.currentLap
         hud.checkpointsPassed = progress.checkpointsPassedThisLap
         hud.totalCheckpoints = totalCheckpoints
         if progress.isFinished {

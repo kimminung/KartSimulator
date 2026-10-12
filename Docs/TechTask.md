@@ -104,18 +104,31 @@ Oct 10, 2026 · @Coulson 기준, `Docs/tech-prd.md`에서 파생. 마일스톤 �
 - [x] `ImmersiveBoxView`에 임시 HUD(`RaceHUDOverlay`, 2D `.overlay`)로 랩/타임/속도 표시, 센터라인 이탈 시 "트랙 이탈" 뱃지
 - [ ] **알려진 문제**: 이머시브 스페이스가 열려 있는 동안 RealityView가 계속 렌더링 중이라, `raceModel`(Observable)을 어떤 스케줄(프레임 콜백/GCD/Task)로 갱신해도 SwiftUI가 "Modifying state during view update"를 로그에 남긴다(크래시는 아니고 HUD 값은 정상 갱신됨). 갱신 주기를 250ms로 늦춰 로그 노이즈만 줄여둔 상태 — 정식 해결은 아래 항목과 함께
 - [x] HUD를 2D `.overlay`에서 `RealityView`의 3D attachment(entity에 붙는 SwiftUI 뷰)로 교체 (결정 25·26번)
-- [ ] 메뉴 4화면 + 볼륨 HUD 3상태 목업 반영
+- [x] 카운트다운 대기(3·2·1·GO 입력 잠금, HUD 큰 숫자) — Issue #41, 결정 56
+- [x] 결과 화면(총 시간·랩별·신기록·다시 하기) — Issue #42, 결정 56
+- [x] 배경음 3곡 연결(`Resources/BGM/`, `BGMPlayer` 머리 고정 재생, GO 1.0초 페이드 인 → 반복 → 완주 2.0초/종료 0.5초 페이드 아웃, 레이스마다 곡 순환, 버스 −6 dB) — 디자인 결정 55-1, 결정 56. 일시정지 덕킹(−10 dB)은 #44에서
+- [ ] 시작 화면 트랙 선택(track_01·02·03) — Issue #43
+- [ ] 일시정지 패널 — Issue #44
+- [ ] HUD 속도계 교체 — Issue #28(디자인 리소스 대기)
 - [x] 효과음 7종 + 엔진음 5종 연결 — `Assets/sfx/ENGINE.md` 스펙대로 `EngineSoundMachine`/`EngineAudioPlayer`/`SFXPlayer` 구현 (결정 35번). `wallBump`는 M3 벽 충돌 로직 추가로 트리거 연결 완료 (결정 38번)
 - [x] HUD/트랙 색을 `Design/style-guide.md` 팔레트로 교체 (결정 35번)
 - [x] 제목에 Galmuri 픽셀 폰트 적용 (결정 35번, 디자인 결정 20-3·20-5)
 - [x] 핀치 상태 HUD(양손 점 + 중앙 방향 아이콘 + 세로 페달 게이지, cyan=전진/magenta=후진 6상태) — `RaceHUDOverlay`의 `PinchStatusView`/`PedalGaugeBar` (디자인 PRD 7장, 결정 37번)
 - [x] 조작법 화면(이슈 #12) — `ContentView`의 "조작법" 버튼 + 첫 실행 시 자동 표시(`@AppStorage("hasSeenOnboarding")`), 손 그림 5장(SVG를 Asset Catalog 벡터 이미지로) + 중립 안내 (결정 38번). 결정 39·41로 모드별 세그먼트가 되어 디오라마 5장·1인칭 2장·3인칭 4장 그림(디자인 결정 40)을 연결했고, "40 cm 중립" 문구는 "핀치 시작 간격 기준"으로 바꿨다. 단, 위 "메뉴 4화면" 전체(시작/대기/카운트다운/결과 등)는 아직 아니고 조작법 1장만
 
-## M6 — 폴리시 · 출시 준비
+## M6 — 폴리시 · 출시 준비 (GitHub 마일스톤 "M6 — 출시 준비": Issue #45·#46)
 
 - [ ] 성능 예산 측정 (90fps, 드로우콜 등 — 테크 PRD 12장)
 - [x] 앱 이름 확정 → '핀치 로버'(Pinch Rover), 결정 53. `CFBundleDisplayName`·제목·LICENSE·README 반영, 디자인 문서(PRD 1·15장, `app-name.md`, 목업 01)는 디자인 요청
 - [ ] 아카이브 크기·메모리 예산 확인
+
+## iOS/iPadOS 버전 (GitHub 마일스톤 "iOS/iPadOS 버전", 결정 56 — M6 뒤)
+
+- [ ] #47 Epic: KartCore 공유, 입력·카메라만 교체. 방향 표는 이슈 본문
+- [ ] #48 iOS 타깃 추가, KartCore 컴파일 확인, 리소스 공유, 메뉴·온보딩 재사용
+- [ ] #49 터치 조작(`TouchInputResolver`, 핀치 규칙 1:1) + 가상 페달 UI, 디자인에 터치 조작 그림 요청
+- [ ] #50 탑뷰·3인칭 카메라(RealityView iOS 18+), HUD 오버레이, 2D 미니맵
+- [ ] #51 (선택) iPad AR 모드
 
 ## 열린 질문 (결정되면 `Docs/decisions.md`에 기록)
 

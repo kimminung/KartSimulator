@@ -758,3 +758,47 @@ struct KartRigPoseTests {
         #expect(still.wheelSpin == 0, "정지하면 바퀴가 멈춘다")
     }
 }
+
+// MARK: - 레이스 흐름 (M5, 결정 56): 카운트다운 → GO → 랩 기록 → 완주
+
+@MainActor
+struct RaceModelTests {
+    @Test func startsInCountdownAndTimerWaitsForGo() {
+        let model = RaceModel()
+        model.start(totalLaps: 3)
+        #expect(model.hud.phase == .countdown(3))
+        model.updateMotion(speedMetersPerSecond: 0, deltaTime: 1)
+        #expect(model.hud.totalTime == 0, "카운트다운 중에는 시간이 흐르지 않는다")
+        model.countdown(2); model.countdown(1)
+        #expect(model.hud.phase == .countdown(1))
+        model.go()
+        #expect(model.isRacing)
+        model.updateMotion(speedMetersPerSecond: 2, deltaTime: 0.5)
+        #expect(abs(model.hud.totalTime - 0.5) < 1e-9 && abs(model.hud.lapTime - 0.5) < 1e-9)
+    }
+
+    @Test func lapTimesAccumulatePerLapAndFinishClosesLastLap() {
+        let model = RaceModel()
+        model.start(totalLaps: 2); model.go()
+        model.updateMotion(speedMetersPerSecond: 3, deltaTime: 10)
+        model.updateLap(LapProgress(currentLap: 2, checkpointsPassedThisLap: 0, isFinished: false), totalCheckpoints: 3)
+        #expect(model.hud.lapTimes == [10] && model.hud.lap == 2 && model.hud.lapTime == 0)
+        model.updateMotion(speedMetersPerSecond: 3, deltaTime: 8)
+        model.updateLap(LapProgress(currentLap: 2, checkpointsPassedThisLap: 0, isFinished: true), totalCheckpoints: 3)
+        #expect(model.hud.lapTimes == [10, 8], "완주 순간 마지막 랩이 닫힌다")
+        #expect(model.hud.bestLapTime == 8 && model.hud.lap == 2 && model.isFinished)
+        #expect(abs(model.hud.totalTime - 18) < 1e-9)
+        // 완주 뒤에는 시간도 랩도 더 쌓이지 않는다
+        model.updateMotion(speedMetersPerSecond: 1, deltaTime: 5)
+        model.updateLap(LapProgress(currentLap: 2, checkpointsPassedThisLap: 0, isFinished: true), totalCheckpoints: 3)
+        #expect(abs(model.hud.totalTime - 18) < 1e-9 && model.hud.lapTimes.count == 2)
+    }
+
+    @Test func restartResetsEverything() {
+        let model = RaceModel()
+        model.start(totalLaps: 3); model.go()
+        model.updateMotion(speedMetersPerSecond: 3, deltaTime: 4)
+        model.start(totalLaps: 3)
+        #expect(model.hud.phase == .countdown(3) && model.hud.totalTime == 0 && model.hud.lapTimes.isEmpty && model.hud.lap == 1)
+    }
+}
