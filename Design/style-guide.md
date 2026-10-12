@@ -99,7 +99,7 @@
 | 상태 색 | 활성 `ui-cyan`, 비활성 `ui-ink` 40 %, 경고 `ui-warn` |
 | 파일 | `Design/icons/icon_<이름>.svg` |
 
-세트: `hand_left_pinch`, `hand_left_open`, `hand_right_pinch`, `hand_right_open`, `arrow_forward`, `arrow_reverse`(후진, `ui-magenta`), `arrow_left`, `arrow_right`, `pinch_in`(모으기 = 전진), `spread`(벌리기 = 후진), `stop`, `flag_checkpoint`, `flag_finish`, `play`, `pause`, `restart`, `hand_missing`, 그리고 미니맵용 `minimap_start_flag`, `minimap_checkpoint_1~3`. 한 장 미리보기는 `Design/icons/_sheet.png`다.
+세트: `hand_left_pinch`, `hand_left_open`, `hand_right_pinch`, `hand_right_open`, `arrow_forward`, `arrow_reverse`(후진, `ui-magenta`), `arrow_left`, `arrow_right`, `spread`(벌리기 = 후진), `stop`, `flag_checkpoint`, `flag_finish`, `play`, `pause`, `restart`, `hand_missing`, 그리고 미니맵용 `minimap_start_flag`, `minimap_checkpoint_1~3`. 한 장 미리보기는 `Design/icons/_sheet.png`다.
 
 **카트 그림(결정 20-1)**
 
