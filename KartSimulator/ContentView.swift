@@ -148,7 +148,8 @@ private struct TrackCard: View {
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
             // 서킷 특징 태그(결정 58): 루프·헬릭스·시케인… 어떤 스킬을 쓰는 맵인지 한눈에.
-            if let features = track.features, !features.isEmpty {
+            let features = track.features ?? (track.isCircuit ? [] : ["격자 타일", "90° 코너"])
+            if !features.isEmpty {
                 Text(features.filter { $0 != "직선" }.prefix(3).joined(separator: " · "))
                     .font(.caption2)
                     .foregroundStyle(Color.style(StylePalette.uiCyan))

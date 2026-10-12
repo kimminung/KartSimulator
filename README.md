@@ -38,7 +38,7 @@ Apple Vision Pro 실기기에서 플레이한 영상입니다. 썸네일을 누�
 
 | 플랫폼 | 언어·프레임워크 | 테스트 | 상태 |
 | --- | --- | --- | --- |
-| visionOS 27 (Apple Vision Pro) | Swift · SwiftUI · RealityKit · ARKit 손·머리 추적 | Swift Testing (`KartCoreTests` 83개) | Phase 2 완료, M4 미니맵 1차, 리뷰 회의 반영 완료, M5 거의 완료(속도계 대기)·M6 출시 준비 남음 |
+| visionOS 27 (Apple Vision Pro) | Swift · SwiftUI · RealityKit · ARKit 손·머리 추적 | Swift Testing (`KartCoreTests` 87개) | Phase 2 완료, M4 미니맵 1차, 리뷰 회의 반영 완료, M5 거의 완료(속도계 대기)·M6 출시 준비 남음 |
 
 ---
 
@@ -74,7 +74,7 @@ Apple Vision Pro 실기기에서 플레이한 영상입니다. 썸네일을 누�
 | --- | --- |
 | 카트 | USDZ 카트 5종(`arcrix`, `bogubkart`, `gospel`, `razr`, `sirius`) × 도색 17색. 메뉴 카드에 시선을 두면 1.4배로 커지며 라이브 3D로 바뀌고 드래그로 360° 회전 |
 | 공간 | `ImmersiveSpace`(progressive) 안의 박스 프레임 디오라마. Digital Crown으로 몰입도 조절 |
-| 트랙 | **서킷 3종**(루키 오벌·리본 루프·스카이 스파이럴 — 아래 [서킷 3종](#서킷-3종) 참고)을 시작 화면 카드(경로 썸네일·난이도·특징 태그·최고 기록)에서 선택. 3D 스플라인 중심선 위 **레일 주행**(코너 드리프트·안쪽 라인·중력·벽 미끄러짐), 노면은 Blender가 구운 USDZ. 격자 타일 4종(`straight`/`curve`/`start`/`grass`) 트랙도 계속 읽을 수 있음 |
+| 트랙 | **4종** — 격자 타일 트랙 '첫 바퀴' + **서킷 3종**(루키 오벌·리본 루프·스카이 스파이럴 — 아래 [서킷 3종](#서킷-3종) 참고)을 시작 화면 카드(경로 썸네일·난이도·특징 태그·최고 기록)에서 선택. 3D 스플라인 중심선 위 **레일 주행**(코너 드리프트·안쪽 라인·중력·벽 미끄러짐), 노면은 Blender가 구운 USDZ. 격자 타일 4종(`straight`/`curve`/`start`/`grass`) 트랙도 계속 읽을 수 있음 |
 | 입력 | 양손 핀치 유지=전진, 핀치한 채 벌리면 후진, 한손만 핀치=반대쪽 회전. 디오라마·3인칭 두 모드가 같은 조작(결정 49). HUD 버튼으로 즉시 전환 |
 | HUD | 랩·타임·속도 패널, 양손 핀치 상태 + 세로 페달 게이지, 모드 전환 버튼, 카운트다운 3·2·1·GO, 일시정지(재개 카운트다운·다시 시작), 완주 결과(총 시간·랩별·신기록·다시 하기·트랙 선택) (RealityView attachment) |
 | 소리 | 효과음 7종(자체 합성) + 엔진음 5종(시동·가속·루프·감속·공회전) 상태 기계 + 배경음 3곡(iMasterProX 작곡, GO 페이드 인 → 완주 페이드 아웃, 머리 고정 재생) |
@@ -84,7 +84,7 @@ Apple Vision Pro 실기기에서 플레이한 영상입니다. 썸네일을 누�
 
 ## 서킷 3종
 
-컨셉이 다른 서킷 세 개를 테크가 직접 만들었습니다(결정 58). 트랙은 구간 목록(직선·뱅크 커브·언덕·360° 루프·헬릭스)으로 3D 중심선을 생성하고(`Tracks/tools/gen_circuit.py`), 헤드리스 Blender가 노면 메시를 USDZ로 굽습니다(`Tools/build_circuit.py`). 아래 그림은 같은 스크립트가 찍은 확인 렌더입니다.
+기존 격자 타일 트랙 '첫 바퀴'에 더해, 컨셉이 다른 서킷 세 개를 테크가 직접 만들었습니다(결정 58). 맵은 총 4개입니다. 트랙은 구간 목록(직선·뱅크 커브·언덕·360° 루프·헬릭스)으로 3D 중심선을 생성하고(`Tracks/tools/gen_circuit.py`), 헤드리스 Blender가 노면 메시를 USDZ로 굽습니다(`Tools/build_circuit.py`). 아래 그림은 같은 스크립트가 찍은 확인 렌더입니다.
 
 | | 루키 오벌 (easy) | 리본 루프 (normal) | 스카이 스파이럴 (hard) |
 | --- | --- | --- | --- |
@@ -231,7 +231,7 @@ sequenceDiagram
 | `KartSimulator/RealityKit/` | 박스 프레임, 타일 라이브러리, 카트 맞춤·도색, 오디오 재생, 미니맵 빌더 |
 | `KartSimulator/Models/` | 카트 카탈로그·선택 상태, 이머시브 세션 상태 |
 | `KartSimulator/Resources/` | 카트 USDZ·텍스처, 타일 USDZ, 효과음·엔진음·배경음, Galmuri 폰트 |
-| `KartCoreTests/` | Swift Testing 83개 (입력 해석·조향·정면 보정·씬 배치·추적 카메라·미니맵 투영·카트 리그·트랙 경로·랩·스플라인·레일 주행·서킷 통합) |
+| `KartCoreTests/` | Swift Testing 87개 (입력 해석·조향·정면 보정·씬 배치·추적 카메라·미니맵 투영·카트 리그·트랙 경로·랩·스플라인·레일 주행·서킷 통합) |
 | `Tracks/`, `Tools/` | 서킷 JSON 3개(`gen_circuit.py`) + 격자 트랙 JSON·생성·검증 스크립트, 노면 메시 빌더 `build_circuit.py`(Blender → USDZ), glb→USDZ 변환 |
 
 ## 디자인 산출물 (디자인)

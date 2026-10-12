@@ -584,8 +584,16 @@ struct ImmersiveBoxView: View {
     @MainActor
     private func loadTrack() {
         let trackID = selection.selectedTrackID
-        guard let definition = TrackCatalog.track(id: trackID) ?? TrackCatalog.tracks.first,
-              let spline = TrackSpline(track: definition) else { return }
+        guard let definition = TrackCatalog.track(id: trackID) ?? TrackCatalog.tracks.first else {
+            // 번들에 트랙 JSON이 하나도 없으면 여기서 끝난다 — 씬 루트 변환·타일·카트 배치가 전부 건너뛰어져 "박스를 열어도
+            // 아무것도 안 보이는" 증상이 된다(2026-10-12 실기기, 결정 58 추가). Resources/Tracks 복사 누락을 의심할 것.
+            print("DEBUG-TRACK 카탈로그에 트랙이 없다(selected=\(trackID), bundle=\(TrackCatalog.tracks.map(\.id))) — Resources/Tracks 확인")
+            return
+        }
+        guard let spline = TrackSpline(track: definition) else {
+            print("DEBUG-TRACK \(definition.id): 스플라인을 만들 수 없다(path \(definition.path.count)점, frames \(definition.frames?.count ?? 0))")
+            return
+        }
         let path = TrackPath(definition)
 
         let xs = path.points.map(\.x)

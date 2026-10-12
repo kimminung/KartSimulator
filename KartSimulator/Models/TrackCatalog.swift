@@ -5,9 +5,9 @@ import Foundation
 /// `TrackDefinition`의 Codable 합성이 기본 격리(main actor)라 카탈로그 전체를 main actor에 둔다 — 쓰는 곳(뷰·박스)도 모두 main actor다.
 @MainActor
 enum TrackCatalog {
-    /// 카드 순서 = 난이도 순(결정 58 서킷 3종): 루키 오벌(easy) → 리본 루프(normal) → 스카이 스파이럴(hard).
-    /// 격자 타일 트랙(`track_0X`, 스키마 1)은 `Tracks/`에 원본만 남기고 번들에서 뺐다 — 코드는 둘 다 읽을 수 있다.
-    static let trackIDs = ["circuit_01", "circuit_02", "circuit_03"]
+    /// 카드 4장(사용자 결정 2026-10-12: 기존 트랙 포함 네 개): 첫 바퀴(격자 타일, easy) → 루키 오벌(easy) → 리본 루프(normal) →
+    /// 스카이 스파이럴(hard). `track_02`·`track_03`(격자)은 `Tracks/`에 원본만 남긴다 — 코드는 스키마 1·2 둘 다 읽는다.
+    static let trackIDs = ["track_01", "circuit_01", "circuit_02", "circuit_03"]
 
     /// 번들에서 한 번만 디코딩해 둔다(카드 썸네일·박스 로드가 같이 쓴다).
     static let tracks: [TrackDefinition] = trackIDs.compactMap(load)

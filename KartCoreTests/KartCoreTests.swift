@@ -1050,3 +1050,27 @@ struct CircuitIntegrationTests {
         print("CIRCUIT \(id) lap in \(elapsed)s, wall hits \(hits), maxHeight \(maxHeight)")
     }
 }
+
+struct TrackResourceTests {
+    /// 번들에 들어가는 폴더(`KartSimulator/Resources/Tracks/`)에 카탈로그 트랙의 JSON(+서킷 USDZ)이 있어야 한다.
+    /// 2026-10-12 실기기: 서킷 JSON을 `Tracks/`에만 쓰고 리소스 폴더에 복사하지 않아 "박스 열기" 후 트랙·카트가 보이지 않았다(결정 58).
+    @Test(arguments: ["track_01", "circuit_01", "circuit_02", "circuit_03"])
+    func bundledTrackResourcesExist(id: String) throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let resources = root.appendingPathComponent("KartSimulator/Resources/Tracks")
+        let json = resources.appendingPathComponent("\(id).json")
+        #expect(FileManager.default.fileExists(atPath: json.path), "\(id).json이 Resources/Tracks에 없다 — Tracks/에서 복사할 것")
+        let data = try Data(contentsOf: json)
+        let track = try JSONDecoder().decode(TrackDefinition.self, from: data)
+        #expect(track.id == id)
+        if let model = track.model {
+            let usdz = resources.appendingPathComponent("\(model).usdz")
+            #expect(FileManager.default.fileExists(atPath: usdz.path), "\(model).usdz가 없다 — Tools/build_circuit.py로 구울 것")
+        }
+        // 원본(`Tracks/`)과 같은 내용이어야 한다(한쪽만 다시 생성하고 복사를 빼먹는 실수 방지)
+        let source = root.appendingPathComponent("Tracks/\(id).json")
+        if let sourceData = try? Data(contentsOf: source) {
+            #expect(sourceData == data, "\(id).json: Tracks/ 원본과 Resources/Tracks 사본이 다르다")
+        }
+    }
+}
