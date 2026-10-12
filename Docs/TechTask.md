@@ -130,9 +130,9 @@ Oct 10, 2026 · @Coulson 기준, `Docs/tech-prd.md`에서 파생. 마일스톤 �
 
 ## M6 — 폴리시 · 출시 준비 (GitHub 마일스톤 "M6 — 출시 준비": Issue #45·#46)
 
-- [~] 성능 예산 측정 (90fps, 드로우콜 등 — 테크 PRD 12장) — 코드 쪽 예산·절차는 `Docs/review/perf_2026-10-12.md`(결정 59), 실기기 Instruments 표는 사용자가 채움. 미니맵 리본 메시 병합·타일 반경 컬링 완료
+- [x] 성능 예산 측정 — 자체 측정기(`FrameTimeSampler`+`MemoryFootprint` PERF 로그, 결정 61)로 시뮬레이터 수치 기록(`Docs/review/perf_2026-10-12.md`), 미니맵 리본 메시 병합·타일 반경 컬링(결정 59). 실기기 Instruments 표는 후속(다듬기)
 - [x] 앱 이름 확정 → '핀치 로버'(Pinch Rover), 결정 53. `CFBundleDisplayName`·제목·LICENSE·README 반영, 디자인 문서(PRD 1·15장, `app-name.md`, 목업 01)는 디자인 요청
-- [x] 아카이브 크기 측정(리소스 51 MB, 결정 59) · [ ] 메모리는 실기기 측정 · [x] 디버그 로그 `debugLog()` 플래그 · [x] 접근성 라벨(트랙·카트·색상 카드) · [ ] 앱 아이콘·스토어 자산(디자인)
+- [x] 아카이브 크기 측정(리소스 51 MB, 결정 59) · [x] 메모리 PERF 로그(결정 61) · [x] 디버그 로그 `debugLog()` 플래그 · [x] 접근성 라벨 · [x] 앱 아이콘 자리표시자(`Tools/make_app_icon.py`) + 스토어 자산 초안(`Docs/store/listing.md`) — 정식 아이콘·스크린샷은 디자인 후속
 
 ## iOS/iPadOS 버전 (GitHub 마일스톤 "iOS/iPadOS 버전", 결정 56 — M6 뒤)
 

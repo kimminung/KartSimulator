@@ -257,6 +257,7 @@ sequenceDiagram
 | `KartSimulator/KartCore/` | 입력 해석, 레일 주행(`TrackSpline`·`RailMotionState`), 트랙 정의(스키마 1·2), 랩·HUD 상태·일시정지, 엔진음 상태 기계, 카트 정면 보정, 씬 배치(콕핏) |
 | `KartSimulator/RealityKit/` | 박스 프레임, 타일 라이브러리, 카트 맞춤·도색·리그, 엔진음·효과음·배경음 재생, 미니맵 빌더(테마·라벨) |
 | `KartSimulator/Models/` | 트랙·카트 카탈로그, 선택 상태(트랙·카트·색), 이머시브 세션 상태 |
+| `KartSimulator/Utilities/` | 팔레트·색 확장, `debugLog`(DEBUG 전용, 통합 로그), 메모리 측정 |
 | `KartSimulator/Resources/` | 카트 USDZ·텍스처, 타일 USDZ, 서킷 노면 USDZ + 트랙 JSON 4개, 효과음·엔진음·배경음, Galmuri 폰트, 미니맵 받침 |
 | `KartCoreTests/` | Swift Testing 87개 (입력 해석·조향·정면 보정·씬 배치·추적 카메라·미니맵 투영·카트 리그·트랙 경로·랩·스플라인·레일 주행·서킷 통합) |
 | `Tracks/`, `Tools/` | 서킷 JSON 3개(`gen_circuit.py`) + 격자 트랙 JSON·생성·검증 스크립트, 노면 메시 빌더 `build_circuit.py`(Blender → USDZ), glb→USDZ 변환 |
@@ -298,7 +299,7 @@ flowchart LR
 
 ## 테크 × 디자인 협업 흐름
 
-한 저장소에서 테크는 `Dev`, 디자인은 `design` 브랜치만 쓰고, 둘 다 `main`으로 PR을 보냅니다. 서로의 요청·답변은 코드가 아니라 **`Docs/decisions.md`의 번호 붙은 결정 기록**으로 주고받습니다(2026-10-12 기준 60번까지).
+한 저장소에서 테크는 `Dev`, 디자인은 `design` 브랜치만 쓰고, 둘 다 `main`으로 PR을 보냅니다. 서로의 요청·답변은 코드가 아니라 **`Docs/decisions.md`의 번호 붙은 결정 기록**으로 주고받습니다(2026-10-12 기준 61번까지).
 
 ```mermaid
 flowchart TB
@@ -346,7 +347,7 @@ flowchart TB
 | M4 | 미니맵(Diorama 테이블, 궤적, 마커, 테마 색·구간 라벨) | ✅ 결정 48·53·58 |
 | M5 | HUD·효과음·엔진음·팔레트·폰트·조작법 화면 · 카운트다운 잠금·결과 화면·다시 하기·배경음(결정 56) · 트랙 선택·일시정지(결정 57) | ✅ (속도계 #28은 디자인 리소스 도착 후) |
 | 서킷 3종 | 3D 스플라인 트랙 생성기, Blender 노면 USDZ, 레일 주행 모델, 루프 카메라, 테마 미니맵 — 루키 오벌·리본 루프·스카이 스파이럴 | ✅ 결정 58, 실기기 튜닝 피드백 반영 예정 |
-| M6 | 성능 측정·컬링(#45), 디버그 코드 제거·아카이브·접근성·아이콘(#46) | 🟨 코드 쪽 완료(결정 59: 로그 플래그·미니맵 메시 병합·타일 컬링·접근성·번들 측정). 실기기 Instruments 표(`Docs/review/perf_2026-10-12.md`)·앱 아이콘(디자인) 남음 |
+| M6 | 성능 측정·컬링(#45), 디버그 코드 제거·아카이브·접근성·아이콘(#46) | ✅ 결정 59·61 — 로그 플래그, 미니맵 메시 병합, 타일 컬링, 접근성, 자체 PERF 측정기(프레임·메모리), 앱 아이콘 자리표시자, 스토어 초안(`Docs/store/listing.md`). 실기기 Instruments 표·정식 아이콘은 다듬기 단계 |
 | iOS/iPadOS | 아이폰·아이패드 버전 — KartCore 공유, 터치 조작, 탑뷰/추적 카메라, AR (#47~#51, 결정 60) | ✅ 1차(시뮬레이터 확인), 실기기·AR 확인 남음 |
 
 상세 체크리스트는 `Docs/TechTask.md`, 디자인 납품 체크리스트는 `Docs/design-prd.md` 15장. 남은 작업은 GitHub [이슈](https://github.com/kimminung/KartSimulator/issues)·[마일스톤](https://github.com/kimminung/KartSimulator/milestones)으로 관리합니다.
@@ -375,6 +376,8 @@ KartSimulator/
 | [`Docs/design-prd.md`](Docs/design-prd.md) | 디자인 요구사항(팔레트·카트·타일·HUD·온보딩·전달 규칙·브랜치 운영) |
 | [`Docs/TechTask.md`](Docs/TechTask.md) | 마일스톤별 체크리스트 |
 | [`Docs/decisions.md`](Docs/decisions.md) | 번호 붙은 결정 기록 (테크·디자인 공용) |
+| [`Docs/review/perf_2026-10-12.md`](Docs/review/perf_2026-10-12.md) | 성능·번들·메모리 예산과 측정 절차(M6) |
+| [`Docs/store/listing.md`](Docs/store/listing.md) | 스토어 자산 초안(아이콘·설명·스크린샷 후보) |
 | [`Design/HANDOFF_RETIREX.md`](Design/HANDOFF_RETIREX.md) | 디자인 산출물 인계·재생성 방법 |
 
 ## 팀

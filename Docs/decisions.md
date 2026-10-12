@@ -557,3 +557,14 @@
 - **메뉴**: 트랙 카드 4장은 가로 스크롤(iPhone 세로에서 잘렸다), "레이스 시작" 버튼(iOS) → 전체 화면 레이스. 조작법 각주에 터치 조작 설명. 시작 화면·조작법·카트 선택은 visionOS와 같은 `ContentView`.
 - **확인(iPhone 16 시뮬레이터, 디바이스 인터랙션 도구로 캡처)**: 메뉴 4장 카드·레이스 시작 → 네온 서킷 3D 장면(루프·연석·출발선·카트)·HUD·미니맵 정상, 한 손 홀드로 "우회전"·두 손 홀드로 전진(10 km/h, 미니맵 마커 이동), 탑뷰 전환으로 서킷 전체, 일시정지·재개·닫기 동작, 세로 화면 레이아웃 정상. 테스트 93개(터치 해석 2·카메라 리그 4 추가). 실기기 확인 항목: 두 엄지 동시 터치 감각, 추적 카메라 멀미 여부, 루프 통과 시 카메라, AR 평면 인식·배율, 아이패드 가로 레이아웃.
 - **영향받는 절**: `KartCore/TouchInputResolver.swift`·`ChaseCameraRig.swift`·`RaceFormatting.swift`(신규), `RealityKit/KartForwardMarker.swift`(신규), `Views/TrackPlanCanvas.swift`(신규), `iOS/RaceSceneController.swift`·`RaceScreen.swift`(신규), `ContentView`(iOS 분기·가로 스크롤), `RealityKit/*`(플랫폼 가드), 빌드 설정(`UILaunchScreen_Generation`, `NSCameraUsageDescription`), README iOS 절, `Docs/TechTask.md` iOS
+
+## 61. [테크] M6 마감 — 프레임·메모리 자체 측정기, 앱 아이콘 자리표시자, 스토어 자산 초안 (Issue #45·#46 종결)
+
+- **날짜**: 2026-10-12
+- **배경**: 사용자 지시 "남은 이슈들 해결하고 머지" — 실기기 Instruments와 디자인 아이콘을 기다리지 않고 테크가 할 수 있는 형태로 두 이슈를 닫는다. 다듬기는 나중에.
+- **자체 측정기**: `KartCore/FrameTimeSampler`(5초 구간 평균·최악 프레임 시간·fps) + `Utilities/MemoryFootprint`(`task_vm_info.phys_footprint`, Xcode 게이지와 같은 기준)를 visionOS `tickMotion`·iOS `tick`에 걸어 `PERF … fps= avg= worst= entities= mem=` 로그를 남긴다. `debugLog`는 이제 `print`와 함께 통합 로그(`Logger`, 서브시스템 `com.kimminung.kart`, notice)에도 써서 **Xcode 없이** `xcrun simctl spawn <udid> log show --predicate 'subsystem == "com.kimminung.kart"'`(시뮬레이터)나 Console.app(실기기)으로 읽는다. Release에서는 전부 빠진다.
+- **측정 결과(iPhone 16 시뮬레이터, Debug, 디바이스 인터랙션으로 주행)**: `Docs/review/perf_2026-10-12.md` 1·3장 표. 시뮬레이터 수치라 실기기 절대값은 아니지만 트랙 간 상대 비용(첫 바퀴 vs 서킷, 추적 vs 탑뷰)과 메모리 자릿수를 확인하는 용도.
+- **앱 아이콘 자리표시자**: `Tools/make_app_icon.py`(PIL)가 디자인 `icons.mjs`의 16×16 탑뷰 카트 마스크 + 트랙 링(시안·마젠타 연석, 출발선 체커) + `ui-well` 격자 바탕으로 visionOS 3층 `AppIcon.solidimagestack`과 iOS `AppIcon.appiconset`(1024)을 만든다. `ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon`. 디자인이 정식 아이콘을 내면 같은 자리에 덮어쓴다.
+- **스토어 자산 초안**: `Docs/store/listing.md` — 부제·설명(한/영)·키워드·스크린샷 후보(실기기 캡처·서킷 렌더·iOS 시뮬레이터)·개인정보 문구. 실기기 스크린샷은 출시 전 재촬영.
+- **이슈 처리**: #45(성능 측정)·#46(출시 정리)은 이 결정으로 닫는다. 실기기 Instruments 표·정식 아이콘은 `perf_2026-10-12.md`·`listing.md`의 후속 항목으로 남긴다.
+- **영향받는 절**: `KartCore/FrameTimeSampler.swift`·`Utilities/MemoryFootprint.swift`·`Tools/make_app_icon.py`·`Assets.xcassets/AppIcon.*`·`Docs/store/listing.md`(신규), `Utilities/DebugLog.swift`(Logger), `ImmersiveBoxView`·`RaceSceneController` PERF 로그, `Docs/review/perf_2026-10-12.md`, `.gitignore`(.perf/)

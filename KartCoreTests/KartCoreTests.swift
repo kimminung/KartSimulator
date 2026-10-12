@@ -1134,3 +1134,17 @@ struct ChaseCameraRigTests {
         #expect(mid.position.x > 5 && mid.position.x < 7, "1/rate 초 뒤 약 63 %: \(mid.position.x)")
     }
 }
+
+struct FrameTimeSamplerTests {
+    @Test func reportsAverageAndWorstEveryInterval() {
+        var sampler = FrameTimeSampler(interval: 1)
+        var report: FrameTimeSampler.Report?
+        for i in 0..<60 {
+            let dt = i == 30 ? 0.05 : 1.0 / 60
+            if let r = sampler.record(deltaTime: dt) { report = r }
+        }
+        let r = try! #require(report)
+        #expect(r.frames >= 58 && abs(r.worstMilliseconds - 50) < 0.5 && r.averageFPS > 50 && r.averageFPS < 62, "\(r)")
+        #expect(sampler.record(deltaTime: 0) == nil, "0 프레임은 무시")
+    }
+}
