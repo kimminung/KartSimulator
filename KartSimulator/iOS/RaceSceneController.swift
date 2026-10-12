@@ -39,6 +39,7 @@ final class RaceSceneController {
     @ObservationIgnored private var arAnchor: AnchorEntity?
     @ObservationIgnored private var spatialSession: SpatialTrackingSession?
     @ObservationIgnored private var sceneStarted = false
+    @ObservationIgnored private var frameSampler = FrameTimeSampler(interval: 5)
     /// 카운트다운 숫자를 **장면 안**(카메라 앞 1.2 m)에 3D 텍스트로 띄운다 — SwiftUI 오버레이는 RealityView가 첫 프레임을 그리기
     /// 전(검은 자리표시자) 위에도 보여서 "검은 화면에 3"이 떴다. 장면 안 텍스트는 장면이 보일 때만 보인다(결정 60).
     @ObservationIgnored private let countdownEntity = ModelEntity()
@@ -475,6 +476,13 @@ final class RaceSceneController {
             cameraPose = ChaseCameraRig.follow(current: cameraPose, target: cameraTarget(deltaTime: deltaTime), rate: cameraTuning.followRate, deltaTime: deltaTime)
             applyCamera()
         }
+        if let report = frameSampler.record(deltaTime: Double(deltaTime)) {
+            debugLog(String(format: "PERF iOS mode=%@ track=%@ fps=%.1f avg=%.2fms worst=%.1fms entities=%d mem=%.0fMB", cameraMode.rawValue, track.id, report.averageFPS, report.averageMilliseconds, report.worstMilliseconds, Self.countEntities(worldRoot), MemoryFootprint.currentMB()))
+        }
+    }
+
+    private static func countEntities(_ entity: Entity) -> Int {
+        1 + entity.children.reduce(0) { $0 + countEntities($1) }
     }
 
     private func cameraTarget(deltaTime: Float) -> CameraPose {

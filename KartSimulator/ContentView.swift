@@ -346,11 +346,12 @@ private struct GestureInstruction: Identifiable {
     static func footnote(for mode: ExperienceMode) -> String {
         #if os(iOS)
         return "iPhone·iPad에서는 화면 왼쪽·오른쪽 반이 왼손·오른손 핀치입니다. 양쪽 누름 = 전진, 누른 채 아래로 끌기 = 후진, 한쪽만 = 그쪽으로 회전."
-        #endif
+        #else
         switch mode {
         case .diorama: return "기준은 핀치를 시작한 순간의 손 간격입니다. 그 자리에 두면 전진, 벌리면 후진."
         case .thirdPerson: return "조작은 디오라마와 같습니다. 시점은 카트 뒤에서 카트가 가는 쪽을 보고, 고개는 자유롭게 돌려도 됩니다."
         }
+        #endif
     }
 }
 

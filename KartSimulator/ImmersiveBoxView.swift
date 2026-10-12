@@ -35,6 +35,8 @@ struct ImmersiveBoxView: View {
     /// 타일만 모아 두는 루트(씬 루트 아래). 트랙을 바꿀 때 이 아래만 비우면 카트·트레일은 그대로 남는다.
     @State private var trackTilesRoot = Entity()
     @State private var tileCullAccumulator: Float = 0
+    /// 프레임 시간 측정(결정 61, Issue #45): 5초마다 `PERF` 로그. Release에서는 `debugLog`가 비어 비용이 없다.
+    @State private var frameSampler = FrameTimeSampler(interval: 5)
     @State private var lapTracker: LapTracker?
     @State private var trackDisplayScale: Float = 1
     @State private var trackWorldCenter: SIMD2<Float> = .zero
@@ -400,6 +402,12 @@ struct ImmersiveBoxView: View {
         sceneRoot.position = ScenePlacement.rootPosition(placing: kartLocal, at: target, yaw: sceneYaw, scale: 1)
         inputCatcher.orientation = simd_quatf(angle: reference, axis: [0, 1, 0]) // 앞 벽이 기준 방향(리센터 포함)을 따라간다
         followHUD(deltaTime: deltaTime)
+    }
+
+    /// 측정용: 엔티티 수(자식 포함).
+    static func countEntities(_ entity: Entity?) -> Int {
+        guard let entity else { return 0 }
+        return 1 + entity.children.reduce(0) { $0 + countEntities($1) }
     }
 
     /// 격자 타일 반경 컬링(결정 59, Issue #45): 3인칭(실제 크기)에서만, 0.5초마다 카트에서 `tileCullingRadius` 밖 타일을 끈다.
@@ -910,6 +918,9 @@ struct ImmersiveBoxView: View {
         kartSlot.orientation = pose.orientation
         followKart(headYaw: headYaw, deltaTime: deltaTime)
         cullTiles(around: pose.position, deltaTime: deltaTime)
+        if let report = frameSampler.record(deltaTime: Double(deltaTime)) {
+            debugLog(String(format: "PERF visionOS mode=%@ track=%@ fps=%.1f avg=%.2fms worst=%.1fms entities=%d mem=%.0fMB", String(describing: mode), track.id, report.averageFPS, report.averageMilliseconds, report.worstMilliseconds, Self.countEntities(sceneRoot) + Self.countEntities(minimap?.root), MemoryFootprint.currentMB()))
+        }
 
         // 미니맵 동기화(테크 PRD 9장 `MinimapSyncSystem` 역할): 마커 위치·회전, 체크포인트 라벨 색, 랩 텍스트.
         let kartTrackPosition = SIMD2(pose.position.x, pose.position.z)
