@@ -759,7 +759,7 @@ struct KartRigPoseTests {
     }
 }
 
-// MARK: - 레이스 흐름 (M5, 결정 55): 카운트다운 → GO → 랩 기록 → 완주
+// MARK: - 레이스 흐름 (M5, 결정 56): 카운트다운 → GO → 랩 기록 → 완주
 
 @MainActor
 struct RaceModelTests {

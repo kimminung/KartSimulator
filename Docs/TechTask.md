@@ -104,8 +104,8 @@ Oct 10, 2026 · @Coulson 기준, `Docs/tech-prd.md`에서 파생. 마일스톤 �
 - [x] `ImmersiveBoxView`에 임시 HUD(`RaceHUDOverlay`, 2D `.overlay`)로 랩/타임/속도 표시, 센터라인 이탈 시 "트랙 이탈" 뱃지
 - [ ] **알려진 문제**: 이머시브 스페이스가 열려 있는 동안 RealityView가 계속 렌더링 중이라, `raceModel`(Observable)을 어떤 스케줄(프레임 콜백/GCD/Task)로 갱신해도 SwiftUI가 "Modifying state during view update"를 로그에 남긴다(크래시는 아니고 HUD 값은 정상 갱신됨). 갱신 주기를 250ms로 늦춰 로그 노이즈만 줄여둔 상태 — 정식 해결은 아래 항목과 함께
 - [x] HUD를 2D `.overlay`에서 `RealityView`의 3D attachment(entity에 붙는 SwiftUI 뷰)로 교체 (결정 25·26번)
-- [x] 카운트다운 대기(3·2·1·GO 입력 잠금, HUD 큰 숫자) — Issue #41, 결정 55
-- [x] 결과 화면(총 시간·랩별·신기록·다시 하기) — Issue #42, 결정 55
+- [x] 카운트다운 대기(3·2·1·GO 입력 잠금, HUD 큰 숫자) — Issue #41, 결정 56
+- [x] 결과 화면(총 시간·랩별·신기록·다시 하기) — Issue #42, 결정 56
 - [ ] 시작 화면 트랙 선택(track_01·02·03) — Issue #43
 - [ ] 일시정지 패널 — Issue #44
 - [ ] HUD 속도계 교체 — Issue #28(디자인 리소스 대기)
@@ -121,7 +121,7 @@ Oct 10, 2026 · @Coulson 기준, `Docs/tech-prd.md`에서 파생. 마일스톤 �
 - [x] 앱 이름 확정 → '핀치 로버'(Pinch Rover), 결정 53. `CFBundleDisplayName`·제목·LICENSE·README 반영, 디자인 문서(PRD 1·15장, `app-name.md`, 목업 01)는 디자인 요청
 - [ ] 아카이브 크기·메모리 예산 확인
 
-## iOS/iPadOS 버전 (GitHub 마일스톤 "iOS/iPadOS 버전", 결정 55 — M6 뒤)
+## iOS/iPadOS 버전 (GitHub 마일스톤 "iOS/iPadOS 버전", 결정 56 — M6 뒤)
 
 - [ ] #47 Epic: KartCore 공유, 입력·카메라만 교체. 방향 표는 이슈 본문
 - [ ] #48 iOS 타깃 추가, KartCore 컴파일 확인, 리소스 공유, 메뉴·온보딩 재사용

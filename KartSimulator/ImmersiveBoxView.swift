@@ -74,7 +74,7 @@ struct ImmersiveBoxView: View {
     private let dioramaYaw: Float = .pi
     @State private var raceModel = RaceModel()
     @State private var tileLibrary = TrackTileLibrary()
-    // MARK: - 레이스 흐름 (M5, 결정 55): 카운트다운 잠금 → 주행 → 완주 결과 → 다시 하기
+    // MARK: - 레이스 흐름 (M5, 결정 56): 카운트다운 잠금 → 주행 → 완주 결과 → 다시 하기
     /// 카운트다운 중·완주 뒤에는 손 입력을 무시한다(핀치해도 출발 못 하고, 완주 뒤엔 관성으로 선다).
     @State private var raceLocked = true
     /// GO 직후 0.6초 동안 HUD에 "GO" 표시.
@@ -454,7 +454,7 @@ struct ImmersiveBoxView: View {
         hudLoopLastTick = CACurrentMediaTime()
         while !Task.isCancelled {
             try? await Task.sleep(for: hudUpdateInterval)
-            // 실제 경과 시간을 쓴다 — 고정 0.25초를 더하면 랩 타임이 폴링 주기로 양자화되고 누락된 틱만큼 짧아진다(결정 55).
+            // 실제 경과 시간을 쓴다 — 고정 0.25초를 더하면 랩 타임이 폴링 주기로 양자화되고 누락된 틱만큼 짧아진다(결정 56).
             let now = CACurrentMediaTime()
             let elapsed = min(max(now - hudLoopLastTick, 0), 1.0)
             hudLoopLastTick = now
@@ -729,7 +729,7 @@ struct ImmersiveBoxView: View {
         // HandInputResolver의 스테일 판정이 항상 틀어진다(결정 24번).
         let now = CACurrentMediaTime()
         let (resolvedDrive, leftStatus, rightStatus) = inputResolver.resolve(now: now, mode: mode)
-        // 카운트다운 중·완주 뒤에는 입력을 무시한다(결정 55). 손 상태 자체는 HUD에 그대로 보여 준다.
+        // 카운트다운 중·완주 뒤에는 입력을 무시한다(결정 56). 손 상태 자체는 HUD에 그대로 보여 준다.
         let drive: DriveState = raceLocked ? .stopped : resolvedDrive
         let tuning = MotionTuning().applying(track.tuning)
         let previousSpeed = motion.speed
@@ -938,7 +938,7 @@ struct ImmersiveBoxView: View {
     }
 }
 
-/// 완주 결과(결정 55, Issue #42). `UserDefaults`에 트랙·카트별 최고 총 시간을 저장한다.
+/// 완주 결과(결정 56, Issue #42). `UserDefaults`에 트랙·카트별 최고 총 시간을 저장한다.
 struct RaceResult: Equatable {
     let totalTime: TimeInterval
     let lapTimes: [TimeInterval]

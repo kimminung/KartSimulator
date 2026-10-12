@@ -10,7 +10,7 @@ public final class RaceModel {
 
     public init() {}
 
-    /// 새 레이스. 카운트다운(3)부터 시작하고, `countdown(_:)`·`go()`로 단계가 넘어간다(결정 55).
+    /// 새 레이스. 카운트다운(3)부터 시작하고, `countdown(_:)`·`go()`로 단계가 넘어간다(결정 56).
     /// 카운트다운 동안 `updateMotion`은 시간을 쌓지 않고, 호출자(`ImmersiveBoxView`)가 입력도 잠근다.
     public func start(totalLaps: Int) {
         hud = RaceHUDState()

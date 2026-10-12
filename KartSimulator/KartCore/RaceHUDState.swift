@@ -17,7 +17,7 @@ public struct RaceHUDState: Equatable, Sendable {
     public var lapTime: TimeInterval = 0
     public var totalTime: TimeInterval = 0
     public var bestLapTime: TimeInterval?
-    /// 완료한 랩의 기록(초). 완주하면 `totalLaps`개가 찬다(결정 55, 결과 화면).
+    /// 완료한 랩의 기록(초). 완주하면 `totalLaps`개가 찬다(결정 56, 결과 화면).
     public var lapTimes: [TimeInterval] = []
     public var speedKmh: Double = 0
     public var drive: DriveState = .stopped
