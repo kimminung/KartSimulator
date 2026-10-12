@@ -387,7 +387,7 @@ struct ImmersiveBoxView: View {
     /// 고개를 ±45° 돌려도 아무것도 따라오지 않고, ±60°를 2초 넘게 벗어나 있으면 기준이 머리 쪽으로 1.0/s로 옮겨 간다.
     @MainActor
     private func followKart(headYaw: Float?, deltaTime: Float) {
-        guard mode == .thirdPerson, let track else { return }
+        guard mode == .thirdPerson, track != nil else { return }
         chaseReference.update(headYaw: headYaw, deltaTime: deltaTime, tuning: cockpitTuning)
         let reference = chaseReference.forwardYaw
         let chaseYaw = ScenePlacement.chaseSceneYaw(kartHeading: rail.heading, referenceYaw: reference)
