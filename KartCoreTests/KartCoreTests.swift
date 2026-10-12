@@ -763,6 +763,25 @@ struct KartRigPoseTests {
 
 @MainActor
 struct RaceModelTests {
+    @Test func pauseFreezesTimerAndResumeKeepsRecords() {
+        let model = RaceModel()
+        model.start(totalLaps: 3)
+        model.pause()
+        #expect(model.hud.phase == .countdown(3), "카운트다운 중에는 일시정지가 없다")
+        model.go()
+        model.updateMotion(speedMetersPerSecond: 2, deltaTime: 1.0)
+        model.pause()
+        #expect(model.isPaused)
+        model.updateMotion(speedMetersPerSecond: 0, deltaTime: 5.0)
+        #expect(abs(model.hud.totalTime - 1.0) < 1e-9, "일시정지 중에는 시간이 흐르지 않는다")
+        model.countdown(3); model.countdown(1)
+        model.updateMotion(speedMetersPerSecond: 0, deltaTime: 1.0)
+        #expect(abs(model.hud.totalTime - 1.0) < 1e-9, "재개 카운트다운 중에도 멈춰 있다")
+        model.go()
+        model.updateMotion(speedMetersPerSecond: 2, deltaTime: 0.5)
+        #expect(abs(model.hud.totalTime - 1.5) < 1e-9 && abs(model.hud.lapTime - 1.5) < 1e-9, "재개 뒤 이어서 흐른다(기록 초기화 없음)")
+    }
+
     @Test func startsInCountdownAndTimerWaitsForGo() {
         let model = RaceModel()
         model.start(totalLaps: 3)

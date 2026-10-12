@@ -26,6 +26,11 @@ struct ImmersiveBoxView: View {
 
     @State private var track: TrackDefinition?
     @State private var trackPath: TrackPath?
+    /// 지금 박스에 지어진 트랙 id. 메뉴 창에서 다른 트랙을 고르면(Issue #43) `update:`가 차이를 보고 `reloadTrack()`을 부른다.
+    @State private var loadedTrackID: String?
+    @State private var isReloadingTrack = false
+    /// 타일만 모아 두는 루트(씬 루트 아래). 트랙을 바꿀 때 이 아래만 비우면 카트·트레일은 그대로 남는다.
+    @State private var trackTilesRoot = Entity()
     @State private var lapTracker: LapTracker?
     @State private var offTrackMonitor = OffTrackMonitor()
     @State private var wasAgainstWall = false
@@ -77,6 +82,8 @@ struct ImmersiveBoxView: View {
     // MARK: - 레이스 흐름 (M5, 결정 56): 카운트다운 잠금 → 주행 → 완주 결과 → 다시 하기
     /// 카운트다운 중·완주 뒤에는 손 입력을 무시한다(핀치해도 출발 못 하고, 완주 뒤엔 관성으로 선다).
     @State private var raceLocked = true
+    /// 일시정지(Issue #44): 입력 잠금에 더해 주행 적분까지 멈춘다(카트가 그 자리에 선 채로 있음). 재개는 3·2·1 카운트다운 재사용.
+    @State private var isPaused = false
     /// GO 직후 0.6초 동안 HUD에 "GO" 표시.
     @State private var showsGoFlash = false
     @State private var countdownTask: Task<Void, Never>?
@@ -158,6 +165,8 @@ struct ImmersiveBoxView: View {
 
             kartSlot.name = "kartSlot"
             sceneRoot.addChild(kartSlot)
+            trackTilesRoot.name = "trackTiles"
+            sceneRoot.addChild(trackTilesRoot)
 
             // 엔진음·효과음을 kartSlot에 붙인다(카트 모델 자체가 아니라 — 카트는 색상/모델이
             // 바뀔 때마다 통째로 교체되지만 kartSlot은 그대로라, 여기 붙이면 다시 로드할 필요가 없다).
@@ -185,18 +194,7 @@ struct ImmersiveBoxView: View {
             content.add(rootEntity)
             content.add(worldAnchor)
             loadTrack()
-            if let track {
-                await buildTrackTiles(definition: track, into: sceneRoot)
-            }
-            if let track, let trackPath {
-                let built = await MinimapBuilder.make(track: track, path: trackPath, tableDiameter: minimapTableDiameter)
-                worldAnchor.addChild(built.root)
-                minimap = built
-                if let kart = loadedKartEntity {
-                    built.setMarker(cloneOf: kart, markerLength: minimapMarkerLength)
-                }
-                layoutMinimap()
-            }
+            await buildTrackScenery()
 
             // 디버그: 헤드 위치 구슬 + 시선 방향 막대. world 좌표계에 바로 두므로 rootEntity가 아니라
             // content에 직접 추가한다 (rootEntity는 박스 위치로 옮겨져 있어 기준이 다르다).
@@ -242,6 +240,13 @@ struct ImmersiveBoxView: View {
                 tickMotion(deltaTime: Float(event.deltaTime), headYaw: headYaw)
             }
         } update: { _, _ in
+            if !isReloadingTrack, let loadedTrackID, loadedTrackID != selection.selectedTrackID {
+                isReloadingTrack = true
+                Task {
+                    await reloadTrack()
+                    isReloadingTrack = false
+                }
+            }
             guard !isLoading,
                   loadedKartID != selection.selectedKartID || loadedColorID != selection.selectedColorID
             else { return }
@@ -256,7 +261,10 @@ struct ImmersiveBoxView: View {
             // `inputCatcher`와 같은 공간을 공유해 호버가 불안정했는데(결정 26번), 박스 바로 위에
             // 떠 있는 이 패널은 겹치는 엔티티가 없어 바라보고 누르기 훨씬 쉽다.
             Attachment(id: "hud") {
-                RaceHUDOverlay(hud: raceModel.hud, mode: mode, showsGoFlash: showsGoFlash, result: raceResult, onModeChange: { mode = $0 }, onRestart: { restartRace() }) {
+                RaceHUDOverlay(hud: raceModel.hud, mode: mode, showsGoFlash: showsGoFlash, result: raceResult, onModeChange: { mode = $0 }, onRestart: { restartRace() }, onPause: { pauseRace() }, onResume: { resumeRace() }, onTrackSelect: {
+                    // 트랙 카드는 메뉴 창에 있다. 3인칭에서 숨긴 창을 정면에 다시 열면 고르는 즉시 박스가 새 트랙으로 바뀐다(`reloadTrack`).
+                    if immersiveSession.menuWindowHidden { openWindow(id: AppScene.menuWindowID); immersiveSession.menuWindowHidden = false }
+                }) {
                     Task {
                         bgmPlayer.stop(fadeOut: 0.5) // 앱·박스 종료는 0.5초 페이드(배경음 규칙 2)
                         // 3인칭에서 숨긴 메뉴 창을 먼저 사용자 정면에 다시 연다(Issue #27). 창이 하나도 없으면 공간을 닫는 순간 앱이 사라진다.
@@ -493,6 +501,26 @@ struct ImmersiveBoxView: View {
         print("DEBUG-RACE 완주 total=\(hud.totalTime) laps=\(hud.lapTimes) best=\(String(describing: previousBest)) new=\(isNewRecord)")
     }
 
+    /// 일시정지(Issue #44, 목업 06): 주행 중에만. 타이머(`RaceModel`)·주행 적분(`tickMotion`)이 멈추고 엔진은 `paused()`,
+    /// 배경음은 −10 dB. HUD는 일시정지 패널(재개·다시 시작·박스 닫기)로 바뀐다. 3인칭 종료 안전망(정지+양손 해제 4초 → 메뉴 창)은
+    /// 패널을 못 누를 때의 예비 경로로 남겨 둔다 — 일시정지 중에도 손을 떼고 있으면 그대로 동작한다.
+    @MainActor
+    private func pauseRace() {
+        guard raceModel.isRacing, !raceLocked else { return }
+        isPaused = true
+        raceLocked = true
+        raceModel.pause()
+        engineAudioPlayer?.run(engineMachine.paused())
+        bgmPlayer.duck(true)
+    }
+
+    /// 재개: 3·2·1·GO를 다시 탄 뒤 입력이 풀린다. 기록·랩·곡은 그대로.
+    @MainActor
+    private func resumeRace() {
+        guard isPaused else { return }
+        startCountdown(resuming: true)
+    }
+
     /// 다시 하기(Issue #42): 출발 위치로 되돌리고 랩·이탈·트레일을 초기화한 뒤 카운트다운부터 다시 시작한다.
     @MainActor
     private func restartRace() {
@@ -551,55 +579,85 @@ struct ImmersiveBoxView: View {
         }
     }
 
-    /// `Tracks/track_01.json`(앱 번들에 복사된 사본)을 읽어 월드→박스 배율을 계산한다.
-    /// 타일 3D 배치는 `buildTrackTiles(definition:into:)`가 비동기로 따로 한다(디자인 결정 36-4).
+    /// 선택된 트랙(`selection.selectedTrackID`, 번들의 `track_XX.json`)을 읽어 월드→박스 배율과 출발 상태를 잡는다.
+    /// 타일 3D 배치·미니맵은 `buildTrackScenery()`가 비동기로 따로 한다(디자인 결정 36-4).
     @MainActor
     private func loadTrack() {
-        guard let url = Bundle.main.url(forResource: "track_01", withExtension: "json") else {
-            print("트랙 리소스를 찾을 수 없습니다: track_01.json")
-            return
+        let trackID = selection.selectedTrackID
+        guard let definition = TrackCatalog.track(id: trackID) ?? TrackCatalog.tracks.first else { return }
+        let path = TrackPath(definition)
+
+        let xs = path.points.map(\.x)
+        let zs = path.points.map(\.y)
+        guard let minX = xs.min(), let maxX = xs.max(),
+              let minZ = zs.min(), let maxZ = zs.max() else { return }
+        let worldSpan = max(maxX - minX, max(maxZ - minZ, 0.001))
+
+        track = definition
+        trackPath = path
+        loadedTrackID = trackID
+        lapTracker = LapTracker(track: definition)
+        offTrackMonitor = OffTrackMonitor()
+        wasAgainstWall = false
+        trailRoot.children.removeAll()
+        lastTrailDisplayPoint = nil
+        raceResult = nil
+        latestLapProgress = LapProgress()
+        trackDisplayScale = trackFootprint / worldSpan
+        trackWorldCenter = SIMD2((minX + maxX) / 2, (minZ + maxZ) / 2)
+
+        let startPoint = path.points[definition.start.pathIndex]
+        motion = KartMotionState(
+            speed: 0,
+            heading: definition.start.heading,
+            position: SIMD3(startPoint.x, 0, startPoint.y)
+        )
+        raceModel.start(totalLaps: definition.laps)
+        applyModeLayout()
+        startCountdown()
+    }
+
+    /// 타일(씬 루트 아래 `trackTilesRoot`)과 미니맵(월드 앵커 아래)을 현재 `track`으로 짓는다. 이미 있으면 먼저 치운다.
+    @MainActor
+    private func buildTrackScenery() async {
+        trackTilesRoot.children.removeAll()
+        minimap?.root.removeFromParent()
+        minimap = nil
+        guard let track, let trackPath else { return }
+        await buildTrackTiles(definition: track, into: trackTilesRoot)
+        let built = await MinimapBuilder.make(track: track, path: trackPath, tableDiameter: minimapTableDiameter)
+        worldAnchor.addChild(built.root)
+        minimap = built
+        if let kart = loadedKartEntity {
+            built.setMarker(cloneOf: kart, markerLength: minimapMarkerLength)
         }
+        layoutMinimap()
+    }
 
-        do {
-            let data = try Data(contentsOf: url)
-            let definition = try JSONDecoder().decode(TrackDefinition.self, from: data)
-            let path = TrackPath(definition)
-
-            let xs = path.points.map(\.x)
-            let zs = path.points.map(\.y)
-            guard let minX = xs.min(), let maxX = xs.max(),
-                  let minZ = zs.min(), let maxZ = zs.max() else { return }
-            let worldSpan = max(maxX - minX, max(maxZ - minZ, 0.001))
-
-            track = definition
-            trackPath = path
-            lapTracker = LapTracker(track: definition)
-            trackDisplayScale = trackFootprint / worldSpan
-            trackWorldCenter = SIMD2((minX + maxX) / 2, (minZ + maxZ) / 2)
-
-            let startPoint = path.points[definition.start.pathIndex]
-            motion = KartMotionState(
-                speed: 0,
-                heading: definition.start.heading,
-                position: SIMD3(startPoint.x, 0, startPoint.y)
-            )
-            raceModel.start(totalLaps: definition.laps)
-            applyModeLayout()
-            startCountdown()
-        } catch {
-            print("트랙 로드 실패: \(error)")
-        }
+    /// 박스가 열린 채로 메뉴 창에서 트랙을 바꿨을 때(Issue #43): 타일·미니맵·출발 위치를 다시 만들고 카운트다운부터.
+    /// 배경음은 `startCountdown()`이 0.5초 페이드로 끈다(배경음 규칙 "트랙 선택 0.5초").
+    @MainActor
+    private func reloadTrack() async {
+        countdownTask?.cancel()
+        engineAudioPlayer?.run(engineMachine.respawned())
+        loadTrack()
+        await buildTrackScenery()
     }
 
     /// `Assets/sfx/ENGINE.md` 3-4장: 카운트다운 시작(`countdownTick` 3회) → GO. 시동(`engineIgnition`)은
     /// 카운트다운과 동시에 시작해 2.2초 뒤 공회전으로 넘어간다 — 별도 타이밍이라 병렬로 돈다.
     /// 3·2·1·GO (Issue #41): 그동안 `raceLocked`로 입력을 잠그고, HUD는 `raceModel.hud.phase`의 숫자를 크게 보여 준다.
-    private func startCountdown() {
+    /// `resuming`(Issue #44): 일시정지에서 돌아올 때는 기록·곡을 그대로 두고 카운트다운만 다시 탄다 — 배경음은 −10 dB에서
+    /// GO에 원래 음량으로, 엔진은 `resumed()`로 공회전부터.
+    private func startCountdown(resuming: Bool = false) {
         raceLocked = true
         showsGoFlash = false
         countdownTask?.cancel()
-        bgmPlayer.stop(fadeOut: 0.5) // 카운트다운 동안은 배경음 없음(다시 하기로 들어와도 마찬가지)
-        engineAudioPlayer?.run(engineMachine.countdownStarted())
+        if !resuming {
+            isPaused = false
+            bgmPlayer.stop(fadeOut: 0.5) // 카운트다운 동안은 배경음 없음(다시 하기·트랙 선택으로 들어와도 마찬가지)
+            engineAudioPlayer?.run(engineMachine.countdownStarted())
+        }
         countdownTask = Task { @MainActor in
             for remaining in [3, 2, 1] {
                 guard !Task.isCancelled else { return }
@@ -610,7 +668,13 @@ struct ImmersiveBoxView: View {
             guard !Task.isCancelled else { return }
             raceModel.go()
             sfxPlayer?.play(.go)
-            bgmPlayer.startNextTrack(fadeIn: 1.0) // GO 효과음과 동시에 1.0초 페이드 인, 레이스마다 다음 곡
+            if resuming {
+                isPaused = false
+                bgmPlayer.duck(false)
+                engineAudioPlayer?.run(engineMachine.resumed(pedal: 0, isHolding: false, speed: Double(abs(motion.speed))))
+            } else {
+                bgmPlayer.startNextTrack(fadeIn: 1.0) // GO 효과음과 동시에 1.0초 페이드 인, 레이스마다 다음 곡
+            }
             raceLocked = false
             showsGoFlash = true
             try? await Task.sleep(for: .seconds(0.6))
@@ -741,7 +805,9 @@ struct ImmersiveBoxView: View {
         let drive: DriveState = raceLocked ? .stopped : resolvedDrive
         let tuning = MotionTuning().applying(track.tuning)
         let previousSpeed = motion.speed
-        motion = motion.advancing(drive: drive, tuning: tuning, deltaTime: deltaTime)
+        // 일시정지 중에는 주행 시간을 0으로 흘려 속도·위치·이탈 타이머가 그대로 멈춘다(Issue #44). HUD 추종·손 상태 표시는 계속.
+        let motionDelta: Float = isPaused ? 0 : deltaTime
+        motion = motion.advancing(drive: drive, tuning: tuning, deltaTime: motionDelta)
         // 카트 리그(핸들·차체 기울기·바퀴, Issue #26): 손 입력과 속도 변화로 부품을 돌린다.
         kartRig?.update(drive: drive, speed: motion.speed, maxSpeed: tuning.maxSpeed, acceleration: (motion.speed - previousSpeed) / deltaTime, deltaTime: deltaTime)
 
@@ -784,7 +850,7 @@ struct ImmersiveBoxView: View {
         }
 
         let isOffTrack = distanceFromCenterline > (track.width / 2 + 0.5)
-        offTrackMonitor.update(isOffTrack: isOffTrack, deltaTime: TimeInterval(deltaTime), threshold: tuning.offTrackRespawn)
+        offTrackMonitor.update(isOffTrack: isOffTrack, deltaTime: TimeInterval(motionDelta), threshold: tuning.offTrackRespawn)
 
         updateExitSafetyNet(drive: drive, left: leftStatus, right: rightStatus, deltaTime: deltaTime)
 
@@ -974,6 +1040,9 @@ private struct RaceHUDOverlay: View {
     let result: RaceResult?
     let onModeChange: (ExperienceMode) -> Void
     let onRestart: () -> Void
+    let onPause: () -> Void
+    let onResume: () -> Void
+    let onTrackSelect: () -> Void
     let onClose: () -> Void
 
     var body: some View {
@@ -981,6 +1050,8 @@ private struct RaceHUDOverlay: View {
             ModeSwitchView(mode: mode, onModeChange: onModeChange)
             if let result, hud.phase == .finished {
                 resultPanel(result)
+            } else if hud.phase == .paused {
+                pausePanel
             } else {
                 racingPanel
             }
@@ -1030,6 +1101,29 @@ private struct RaceHUDOverlay: View {
             }
         }
         PinchStatusView(drive: hud.drive, left: hud.left, right: hud.right)
+        if hud.phase == .racing {
+            Button("일시정지", action: onPause)
+                .buttonStyle(.bordered)
+        }
+    }
+
+    /// 일시정지(목업 06): 멈춘 시점의 랩·총 시간, 재개(주 버튼)·다시 시작. 종료는 아래 공용 "박스 닫기".
+    private var pausePanel: some View {
+        VStack(spacing: 8) {
+            Text("일시정지")
+                .font(.custom("Galmuri11-Bold", size: 24, relativeTo: .title2))
+                .foregroundStyle(Color.style(StylePalette.uiInk))
+            Text("LAP \(hud.lap) / \(hud.totalLaps) · " + formatRaceTime(hud.totalTime))
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(Color.style(StylePalette.uiInk).opacity(0.8))
+            HStack(spacing: 8) {
+                Button("재개", action: onResume)
+                    .buttonStyle(.borderedProminent)
+                Button("다시 시작", action: onRestart)
+                    .buttonStyle(.bordered)
+            }
+        }
+        .frame(minHeight: 80)
     }
 
     /// 결과(목업 07): 총 시간 큰 숫자, 랩별 시간, "신기록!" 배지, 다시 하기.
@@ -1068,8 +1162,13 @@ private struct RaceHUDOverlay: View {
             Text("\(result.kartName) · \(result.trackName)")
                 .font(.caption2)
                 .foregroundStyle(Color.style(StylePalette.uiInk).opacity(0.7))
-            Button("다시 하기", action: onRestart)
-                .buttonStyle(.borderedProminent)
+            HStack(spacing: 8) {
+                Button("다시 하기", action: onRestart)
+                    .buttonStyle(.borderedProminent)
+                // 목업 07의 "트랙 선택": 메뉴 창의 트랙 카드로 보낸다(3인칭에서는 숨겨 둔 창을 다시 연다, Issue #43).
+                Button("트랙 선택", action: onTrackSelect)
+                    .buttonStyle(.bordered)
+            }
         }
     }
 }

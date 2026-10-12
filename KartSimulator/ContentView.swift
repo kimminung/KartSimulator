@@ -30,6 +30,24 @@ struct ContentView: View {
                         .foregroundStyle(.secondary)
                 }
 
+                // 트랙 카드 3장(Issue #43, 디자인 목업 01): 경로 썸네일·이름·난이도 점·선택한 카트의 최고 기록.
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("트랙")
+                        .font(.headline)
+                    HStack(alignment: .top, spacing: 12) {
+                        ForEach(TrackCatalog.tracks, id: \.id) { track in
+                            TrackCard(
+                                track: track,
+                                isSelected: track.id == selection.selectedTrackID,
+                                bestTotalTime: TrackCatalog.bestTotalTime(trackID: track.id, kartID: selection.selectedKartID)
+                            )
+                            .onTapGesture { selection.selectedTrackID = track.id }
+                        }
+                    }
+                }
+
+                Text("카트")
+                    .font(.headline)
                 LazyVGrid(columns: columns, spacing: 16) {
                     ForEach(KartCatalog.karts) { kart in
                         KartCard(kart: kart, isSelected: kart.id == selection.selectedKartID)
@@ -102,6 +120,78 @@ struct ContentView: View {
         }
     }
     #endif
+}
+
+/// 트랙 카드(목업 01): 어두운 우물 위에 중심선을 두 겹(테두리 `mm-edge` + 노면 `mm-road`)으로 그리고 출발점에 `ui-sky` 점,
+/// 이름, 난이도 점 5개 중 n개(`ui-gold`), "최고 m:ss.xx"(선택한 카트 기준, 없으면 "—").
+private struct TrackCard: View {
+    let track: TrackDefinition
+    let isSelected: Bool
+    let bestTotalTime: TimeInterval?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            TrackThumbnail(track: track)
+                .frame(width: 120, height: 120)
+                .background(Color.style(StylePalette.uiWell).opacity(0.78), in: RoundedRectangle(cornerRadius: 8))
+            Text(track.name)
+                .font(.subheadline.weight(.semibold))
+            HStack(spacing: 4) {
+                ForEach(0..<5, id: \.self) { index in
+                    Circle()
+                        .fill(index < TrackCatalog.difficultyDots(track.difficulty) ? Color.style(StylePalette.uiGold) : Color.white.opacity(0.3))
+                        .frame(width: 7, height: 7)
+                }
+            }
+            .accessibilityLabel("난이도 \(TrackCatalog.difficultyDots(track.difficulty)) / 5")
+            Text("최고 " + (bestTotalTime.map(formatRaceTime) ?? "—"))
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+        }
+        .padding(12)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .strokeBorder(isSelected ? Color.style(StylePalette.uiCyan) : .clear, lineWidth: 2)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 16))
+        .hoverEffect()
+    }
+}
+
+/// 트랙 JSON의 `path`(중심선, 미터)를 카드 안에 맞춰 그린다. 디오라마 표시(`ScenePlacement` 씬 yaw π, 결정 43·44)와 같은 방향이 되도록
+/// 위아래·좌우를 뒤집어 두어 박스에서 보는 모양과 카드가 일치한다.
+private struct TrackThumbnail: View {
+    let track: TrackDefinition
+
+    var body: some View {
+        Canvas { context, size in
+            let points = track.path.map(\.vector)
+            guard points.count > 2,
+                  let minX = points.map(\.x).min(), let maxX = points.map(\.x).max(),
+                  let minZ = points.map(\.y).min(), let maxZ = points.map(\.y).max() else { return }
+            let inset: CGFloat = 16
+            let span = CGFloat(max(maxX - minX, maxZ - minZ, 0.001))
+            let scale = (min(size.width, size.height) - inset * 2) / span
+            let offsetX = (size.width - CGFloat(maxX - minX) * scale) / 2
+            let offsetY = (size.height - CGFloat(maxZ - minZ) * scale) / 2
+            func point(_ p: SIMD2<Float>) -> CGPoint {
+                // 박스는 트랙을 180° 돌려 보여 준다(결정 43): x·z 둘 다 뒤집는다. z는 화면 아래가 +z.
+                CGPoint(x: size.width - (offsetX + CGFloat(p.x - minX) * scale),
+                        y: size.height - (offsetY + CGFloat(p.y - minZ) * scale))
+            }
+            var path = Path()
+            path.move(to: point(points[0]))
+            for p in points.dropFirst() { path.addLine(to: point(p)) }
+            path.closeSubpath()
+            let roadWidth = max(CGFloat(track.width) * scale, 4)
+            context.stroke(path, with: .color(Color.style(StylePalette.mmEdge)), style: StrokeStyle(lineWidth: roadWidth * 1.5, lineJoin: .round))
+            context.stroke(path, with: .color(Color.style(StylePalette.mmRoad)), style: StrokeStyle(lineWidth: roadWidth, lineJoin: .round))
+            let start = point(points[min(track.start.pathIndex, points.count - 1)])
+            let dot = CGRect(x: start.x - 4, y: start.y - 4, width: 8, height: 8)
+            context.fill(Path(ellipseIn: dot), with: .color(Color.style(StylePalette.uiSky)))
+        }
+    }
 }
 
 /// 기본은 정적 3D 렌더 썸네일을 작게 보여주고, 시선 포커스·호버일 때만 1.4배로 커지면서
