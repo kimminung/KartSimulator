@@ -102,7 +102,6 @@ const ICON = {
   arrow_left: HEAD_LEFT(9) + R(8, 9, 8, 2) + R(14, 11, 2, 10),
   arrow_right: HEAD_RIGHT(9) + R(8, 9, 8, 2) + R(8, 11, 2, 10),
   spread: R(4, 11, 16, 2) + R(4, 9, 2, 6) + R(18, 9, 2, 6) + R(6, 7, 2, 2) + R(6, 15, 2, 2) + R(16, 7, 2, 2) + R(16, 15, 2, 2), // pinch out: hands apart -> reverse
-  pinch_in: R(2, 11, 7, 2) + R(7, 9, 2, 6) + R(5, 7, 2, 2) + R(5, 15, 2, 2) + R(15, 11, 7, 2) + R(15, 9, 2, 6) + R(17, 7, 2, 2) + R(17, 15, 2, 2) + R(11, 6, 2, 12), // hands together -> forward
   stop: R(6, 6, 12, 12),
   flag_checkpoint: R(5, 3, 2, 18) + R(7, 3, 12, 2) + R(7, 5, 10, 2) + R(7, 7, 12, 2) + R(7, 9, 10, 2) + R(3, 19, 6, 2),
   flag_finish: R(5, 3, 2, 18) + R(7, 3, 3, 3) + R(13, 3, 3, 3) + R(10, 6, 3, 3) + R(16, 6, 3, 3) + R(7, 9, 3, 3) + R(13, 9, 3, 3) + `<rect x="7" y="3" width="12" height="9" fill="none" stroke="currentColor" stroke-width="1"/>` + R(3, 19, 6, 2),
@@ -211,22 +210,12 @@ const G = {
   gesture_03_left: hand(HAND_PINCH_L, 8, 20, [13, 3]) + hand(mirror(HAND_OPEN_L), 136, 20) + kartSvg(96, 176, -30) + turnArrow(56, 150, "l"),
   gesture_04_right: hand(HAND_OPEN_L, 8, 20) + hand(mirror(HAND_PINCH_L), 136, 20, [10, 3]) + kartSvg(96, 176, 30) + turnArrow(166, 150, "r"),
   gesture_05_stop: hand(HAND_OPEN_L, 8, 20) + hand(mirror(HAND_OPEN_L), 136, 20) + kartSvg(96, 176, 0) + stopBlock,
-  // -- first person: the head (not the eyes: visionOS gives apps the device pose only) steers slowly; any pinch = throttle
-  gesture_fp_01_steer: headSvg(120, 84, 28) + kartSvg(96, 176, 28) + gentleArc("r"),
-  gesture_fp_02_throttle: hand(HAND_PINCH_L, 8, 20, [13, 3]) + arrowV(56, 136, 24, "u", PAL.cyan) + hand(mirror(HAND_OPEN_L), 136, 20).replace("<g fill", `<g fill-opacity="0.4" fill`) + arrowV(184, 128, 24, "d", PAL.ink, 0.4) + kartSvg(96, 176, 0) + kartUp,
-  // -- third person: same hand shapes as the diorama, but both hands pinched is always forward (no reverse, no spacing)
-  gesture_tp_01_forward: hand(HAND_PINCH_L, 8, 20, [13, 3]) + hand(mirror(HAND_PINCH_L), 136, 20, [10, 3]) + kartSvg(96, 176, 0) + kartUp + noReverse(156, 176),
-  gesture_tp_02_left: hand(HAND_PINCH_L, 8, 20, [13, 3]) + hand(mirror(HAND_OPEN_L), 136, 20) + kartSvg(96, 176, -30) + turnArrow(56, 150, "l"),
-  gesture_tp_03_right: hand(HAND_OPEN_L, 8, 20) + hand(mirror(HAND_PINCH_L), 136, 20, [10, 3]) + kartSvg(96, 176, 30) + turnArrow(166, 150, "r"),
-  gesture_tp_04_stop: hand(HAND_OPEN_L, 8, 20) + hand(mirror(HAND_OPEN_L), 136, 20) + kartSvg(96, 176, 0) + stopBlock,
 };
 const G_ROWS = [ // preview sheet rows: [names, captions] per mode (captions = ContentView OnboardingView, decision 39)
-  [["gesture_01_forward", "gesture_02_reverse", "gesture_03_left", "gesture_04_right", "gesture_05_stop"], ["양손을 핀치한 채로 있으면 전진", "핀치한 채로 양손을 벌리면 후진", "오른손을 떼면(왼손만 핀치) 좌회전", "왼손을 떼면(오른손만 핀치) 우회전", "양손을 떼면 멈춤"], "디오라마"],
-  [["gesture_fp_01_steer", "gesture_fp_02_throttle"], ["머리가 향하는 쪽으로 서서히 회전", "한쪽 손이라도 핀치하면 가속, 떼면 감속"], "1인칭"],
-  [["gesture_tp_01_forward", "gesture_tp_02_left", "gesture_tp_03_right", "gesture_tp_04_stop"], ["양손을 핀치하면 전진 (후진 없음)", "왼손만 핀치하면 좌회전", "오른손만 핀치하면 우회전", "양손을 떼면 멈춤"], "3인칭"],
+  [["gesture_01_forward", "gesture_02_reverse", "gesture_03_left", "gesture_04_right", "gesture_05_stop"], ["양손을 핀치한 채로 있으면 전진", "핀치한 채로 양손을 벌리면 후진", "오른손을 떼면(왼손만 핀치) 좌회전", "왼손을 떼면(오른손만 핀치) 우회전", "양손을 떼면 멈춤"], "디오라마·3인칭"],
 ];
-for (const old of ["gesture_02_left", "gesture_03_right", "gesture_04_stop"]) fs.rmSync(path.join(ONB, old + ".svg"), { force: true });
-fs.rmSync(path.join(ICONS, "icon_arrow_forward_full.svg"), { force: true });
+for (const old of ["gesture_02_left", "gesture_03_right", "gesture_04_stop", "gesture_fp_01_steer", "gesture_fp_02_throttle", "gesture_tp_01_forward", "gesture_tp_02_left", "gesture_tp_03_right", "gesture_tp_04_stop"]) fs.rmSync(path.join(ONB, old + ".svg"), { force: true });
+for (const old of ["icon_arrow_forward_full", "icon_pinch_in"]) fs.rmSync(path.join(ICONS, old + ".svg"), { force: true });
 for (const [name, body] of Object.entries(G)) fs.writeFileSync(path.join(ONB, `${name}.svg`), `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240" shape-rendering="crispEdges"><title>${name}</title>${body}</svg>\n`);
 
 // ---- previews (need sharp)

@@ -12,6 +12,10 @@
 https://github.com/user-attachments/assets/91630e82-7d38-4b69-9e3f-95c23f66d8a4
 -->
 
+https://github.com/user-attachments/assets/47b5f397-4794-46e4-a431-0a9ec2f93311
+
+
+
 [![핀치 로버 소개 영상 미리보기 — 클릭하면 1280×720 원본(mp4) 재생](Docs/review/intro-preview.gif)](https://github.com/kimminung/KartSimulator/releases/download/v0.3.0/PinchRover_Opening_README_720p.mp4)
 
 ▶ 원본(1280×720, H.264, 8.8 MB): https://github.com/kimminung/KartSimulator/releases/download/v0.3.0/PinchRover_Opening_README_720p.mp4 — 릴리스 [v0.3.0](https://github.com/kimminung/KartSimulator/releases/tag/v0.3.0) 첨부 자산. 위 미리보기는 소리 없는 480 px 애니메이션입니다.
