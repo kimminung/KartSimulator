@@ -1,6 +1,6 @@
 # 엔진음 사용 설명 (결정 20-6)
 
-RetireX Online이 실제로 쓰는 카트 엔진음과 그 재생 규칙을 핀치 카트의 조작에 맞게 옮긴 것이다. 2026-10-11 개정(결정 49): 조작이 2단계 전진(`forwardHalf`/`forwardFull`)에서 **연속 페달 `DriveState.pedal(Float)`**(결정 30·31·39)로 바뀌고 1인칭이 폐기(결정 48)되어, 3-1장 입력 해석을 테크 구현(`EngineSoundMachine.update(dt:pedal:isHolding:speed:maxSpeed:)`)에 맞췄다. 디오라마·3인칭 모두 같은 규칙이다. 테크가 이 문서만 보고 Swift로 구현할 수 있게 썼다. 파일 출처와 라이선스는 `LICENSES.md` 2장에 있다. 운영자 확인 완료: CC0 기반, 라이선스 제약 없음(2026-10-11).
+RetireX Online이 실제로 쓰는 카트 엔진음과 그 재생 규칙을 핀치 카트의 조작에 맞게 옮긴 것이다. 2026-10-11 개정(결정 54): 조작이 2단계 전진(`forwardHalf`/`forwardFull`)에서 **연속 페달 `DriveState.pedal(Float)`**(결정 30·31·39)로 바뀌고 1인칭이 폐기(결정 47)되어, 3-1장 입력 해석을 테크 구현(`EngineSoundMachine.update(dt:pedal:isHolding:speed:maxSpeed:)`)에 맞췄다. 디오라마·3인칭 모두 같은 규칙이다. 테크가 이 문서만 보고 Swift로 구현할 수 있게 썼다. 파일 출처와 라이선스는 `LICENSES.md` 2장에 있다. 운영자 확인 완료: CC0 기반, 라이선스 제약 없음(2026-10-11).
 
 ## 1. 파일
 
@@ -53,7 +53,7 @@ RetireX는 20틱/초 서버에서 클립 세 개를 상태 기계로 잇는다(`
 | `stopped`, `waiting` | `pedal = 0`, `isHolding = false` | **뗌**(release) | 자연 감속 / 제동 |
 
 - 가속 판정은 `pedal > 0.02`다. 디오라마·3인칭에서 전진은 거의 항상 1.0이라, 실제로는 "핀치 = 최대 회전수, 놓음 = 감속"으로 들린다.
-- 1인칭(`headSteered`)은 폐기됐다(결정 48). 남아 있는 동안에는 `accelerating`을 `pedal = 1` 또는 0으로 넘긴다.
+- 1인칭(`headSteered`)은 폐기됐다(결정 47). 남아 있는 동안에는 `accelerating`을 `pedal = 1` 또는 0으로 넘긴다.
 
 카운트다운 중과 완주 뒤에는 입력을 `stopped`로 넘긴다(카트가 움직이지 않으므로).
 
@@ -80,10 +80,11 @@ RetireX는 20틱/초 서버에서 클립 세 개를 상태 기계로 잇는다(`
 | 지금 | 일 | 할 것 | 다음 |
 | --- | --- | --- | --- |
 | off | 카운트다운 시작 | `engineIgnition` 재생 | ignition |
-| ignition | 2.2초 지남 | `engineIdle` 0.3초 페이드 인(시동 꼬리 위로) | idle |
+| ignition | 2.2초 지남(부동소수점 누적 대비 1e-6 여유, 테크 결정 49) | `engineIdle` 0.3초 페이드 인(시동 꼬리 위로) | idle |
 | idle | 가속 | idle 0.3초 페이드 아웃, `engineAccel` 처음부터(피치·음량은 목표 속도비 기준) | accel |
 | idle | 유지(회전, 0.3 m/s 이상) | `engineLoop` 0.25초 페이드 인 | going |
 | accel | 클립 시간 2.6초 | `engineLoop` 0.13초 페이드 인. **accel은 끄지 않는다**(꼬리가 교차 페이드) | going |
+| accel | 이미 빠름: rS ≥ 0.85(`fastHandoffSpeedRatio`)이고 클립 시간 0.5초(`fastHandoffMinClipTime`) 이상 | 2.6초를 기다리지 않고 `engineLoop` 0.13초 페이드 인(테크 결정 49). 가속 클립은 회전수가 올라가는 소리라, 이미 최고 속도 근처면 음이 어긋난다 | going |
 | accel | 목표 속도비(페달 값)가 바뀜 | accel 피치·음량을 새 목표 쪽으로 0.3초에 걸쳐 옮김 | accel |
 | accel | 뗌 | accel 0.08초 페이드 아웃, `engineDecel` 재생(피치·음량은 지금 rS 기준, 이후 고정) | decel |
 | going | 매 프레임 | 루프 피치·음량 = 3-2의 식(rS) | going |

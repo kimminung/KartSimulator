@@ -44,6 +44,12 @@ public final class RaceModel {
         }
     }
 
+    /// 미니맵용 카트 위치(미니맵 로컬 m)·heading (테크 PRD 10장 `MinimapSyncSystem` 입력).
+    public func updateMap(position: SIMD2<Float>, heading: Float) {
+        hud.kartMapPosition = position
+        hud.kartHeading = heading
+    }
+
     /// 지금은 "센터라인 이탈 중" 상태를 그대로 보여준다. 실제 "복귀 중(0.5s)" 연출은
     /// 타일/벽 에셋이 생기는 M3 후반~M5에서 다듬는다.
     public func setRespawning(_ respawning: Bool) {

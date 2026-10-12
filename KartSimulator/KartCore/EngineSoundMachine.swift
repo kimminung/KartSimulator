@@ -37,6 +37,9 @@ public struct EngineTuning: Sendable {
     public var brakeCutBefore = 1.8
     public var ignitionToIdle = 2.2
     public var useIdle = true
+    /// 이미 이 속도비 이상으로 달리는 중에 가속 클립이 시작됐으면, 최소 `fastHandoffMinClipTime` 뒤 바로 루프로(결정 49).
+    public var fastHandoffSpeedRatio = 0.85
+    public var fastHandoffMinClipTime = 0.5
     public init() {}
 }
 
@@ -79,7 +82,8 @@ public struct EngineSoundMachine: Sendable {
             break
         case .ignition:
             clipTime += dt
-            if clipTime >= tuning.ignitionToIdle { phase = .idle; out += idleIn(0.3) }
+            // 1/60 s를 132번 더하면 2.2에 아주 조금 못 미친다 — 부동소수점 누적 오차만큼 여유를 둔다.
+            if clipTime + 1e-6 >= tuning.ignitionToIdle { phase = .idle; out += idleIn(0.3) }
         case .idle:
             if throttle { out += startAccel(target) } else if hold { out += startLoop(fade: 0.25) }
         case .accel:
@@ -93,7 +97,10 @@ public struct EngineSoundMachine: Sendable {
                     clipGain += (gain(target) - clipGain) * min(1, dt / 0.3)
                     out.append(.set(.accel, rate: clipRate, gainDb: clipGain))
                 }
-                if clipTime >= tuning.accelHandoff { out += startLoop(fade: tuning.handoffFade) }
+                // 가속 클립은 회전수가 올라가는 소리라, 이미 최고 속도에 가깝게 달리고 있으면(rS ≥ fastHandoffSpeedRatio)
+                // 끝까지 틀지 않고 일찍 루프로 넘긴다(결정 49: 속도가 있는 상태에서 다시 밟을 때 음이 어긋나던 문제).
+                let alreadyFast = rS >= tuning.fastHandoffSpeedRatio && clipTime >= tuning.fastHandoffMinClipTime
+                if clipTime >= tuning.accelHandoff || alreadyFast { out += startLoop(fade: tuning.handoffFade) }
             }
         case .going:
             if !throttle && !hold {

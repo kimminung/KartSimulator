@@ -12,7 +12,7 @@
 2. 쓰는 굵기만 이 폴더에 둔다. 제목·카운트다운에는 `Galmuri11-Bold`(또는 `Galmuri14`)를 권한다. 큰 글자(48~120 pt)에서 픽셀이 또렷하다.
 3. 받은 묶음에 든 `OFL.txt`(라이선스 전문)를 이 폴더에 같이 둔다.
 4. 앱 정보(설정·크레딧)에 "Galmuri © 2019–2025 Lee Minseo (quiple), SIL Open Font License 1.1"을 적는다. 저작권자는 `OFL.txt` 1행 기준 Lee Minseo이고, "quiple"은 저작권자의 상표·활동명이다.
-5. OFL은 폰트를 배포할 때 라이선스 전문을 함께 넣도록 요구한다. 앱 번들(`KartSimulator/Resources/Fonts/`)에도 `OFL.txt`를 같이 둔다(테크 몫, 결정 49).
+5. OFL은 폰트를 배포할 때 라이선스 전문을 함께 넣도록 요구한다. 앱 번들(`KartSimulator/Resources/Fonts/`)에도 `OFL.txt`를 같이 둔다(테크 반영 완료, 결정 50).
 
 ## OFL 1.1 요점
 

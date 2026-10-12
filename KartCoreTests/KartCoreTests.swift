@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import simd
 @testable import KartSimulator
 
 struct HandInputResolverTests {
@@ -139,13 +140,25 @@ struct HandInputResolverTests {
         return nil
     }
 
-    // MARK: - 3인칭: 디오라마와 같은 손 모양이지만 후진이 없다 — 양손 핀치는 항상 전진 최대치 (결정 39)
+    // MARK: - 3인칭: 디오라마와 **같은 규칙** — 유지 = 전진, 벌리면 후진, 한손 = 회전 (결정 49, Issue #24)
 
-    @Test func thirdPersonBothHandsIsForwardRegardlessOfDistance() {
+    @Test func thirdPersonHoldingPinchIsForwardLikeDiorama() {
         let resolver = HandInputResolver()
-        feedBothHands(resolver, distance: 0.80) // 디오라마라면 후진일 큰 거리
+        feedBothHands(resolver, distance: 0.80)
         let result = resolver.resolve(now: 0.1, mode: .thirdPerson)
-        #expect(result.drive == .pedal(1.0), "3인칭은 거리와 무관하게 항상 전진 최대치여야 한다(후진 없음)")
+        #expect(result.drive == .pedal(1.0), "핀치를 시작한 간격 그대로면(넓게 시작했어도) 전진 최대치")
+    }
+
+    @Test func thirdPersonSpreadingAfterPinchReversesLikeDiorama() {
+        let resolver = HandInputResolver()
+        feedBothHands(resolver, distance: 0.30)
+        _ = resolver.resolve(now: 0.1, mode: .thirdPerson)
+        for i in 1...40 {
+            feedBothHands(resolver, distance: 0.30 + 0.40 * Float(i) / 40, timestamp: 0.1 + Double(i) * 0.05)
+            _ = resolver.resolve(now: 0.1 + Double(i) * 0.05 + 0.05, mode: .thirdPerson)
+        }
+        let result = resolver.resolve(now: 2.3, mode: .thirdPerson)
+        #expect((pedalValue(result.drive) ?? 1) < 0, "3인칭에도 후진이 있다(디오라마와 같은 규칙)")
     }
 
     @Test func thirdPersonOneHandTurns() {
@@ -162,24 +175,6 @@ struct HandInputResolverTests {
         resolver.ingest(HandSample(chirality: .right, isPinching: false, position: nil, timestamp: 0))
         let result = resolver.resolve(now: 0, mode: .thirdPerson)
         #expect(result.drive == .stopped)
-    }
-
-    // MARK: - 1인칭: 손은 가속 여부만, 조향은 머리 방향(ImmersiveBoxView가 따로 계산) (결정 39)
-
-    @Test func firstPersonEitherHandPinchingAccelerates() {
-        let resolver = HandInputResolver()
-        feedPinch(resolver, .left, at: 0, debounced: true)
-        resolver.ingest(HandSample(chirality: .right, isPinching: false, position: nil, timestamp: 0.1))
-        let result = resolver.resolve(now: 0.1, mode: .firstPerson)
-        #expect(result.drive == .headSteered(accelerating: true))
-    }
-
-    @Test func firstPersonNoHandsStopsAccelerating() {
-        let resolver = HandInputResolver()
-        resolver.ingest(HandSample(chirality: .left, isPinching: false, position: nil, timestamp: 0))
-        resolver.ingest(HandSample(chirality: .right, isPinching: false, position: nil, timestamp: 0))
-        let result = resolver.resolve(now: 0, mode: .firstPerson)
-        #expect(result.drive == .headSteered(accelerating: false))
     }
 
     // MARK: - 손별 디바운스/그레이스/스테일 (모드와 무관한 공통 로직)
@@ -284,62 +279,6 @@ struct KartMotionStateTests {
         #expect(state.position.z > 0, "forward is -Z, so reversing should move toward +Z")
     }
 
-    // MARK: - 1인칭: 머리 방향으로 조향(`.headSteered`), 가속은 손 입력만 (결정 39)
-
-    @Test func headSteeredAcceleratingApproachesMaxSpeed() {
-        let tuning = MotionTuning()
-        var state = KartMotionState()
-        for _ in 0..<60 {
-            state = state.advancing(drive: .headSteered(accelerating: true), desiredHeading: 0, tuning: tuning, deltaTime: 1.0 / 60.0)
-        }
-        #expect(abs(state.speed - 3.0) < 0.05, "accel 3.0 m/s^2 over 1s from rest -> ~3.0 m/s")
-    }
-
-    @Test func headSteeredNotAcceleratingDecelerates() {
-        let tuning = MotionTuning()
-        var state = KartMotionState(speed: 3.0, heading: 0, position: .zero)
-        for _ in 0..<60 {
-            state = state.advancing(drive: .headSteered(accelerating: false), desiredHeading: 0, tuning: tuning, deltaTime: 1.0 / 60.0)
-        }
-        #expect(state.speed < 3.0, "손을 떼면 감속해야 한다")
-    }
-
-    @Test func headSteeredTurnsTowardDesiredHeadingAtFixedRate() {
-        let tuning = MotionTuning(steerRateDegrees: 90)
-        var state = KartMotionState(speed: 0, heading: 0, position: .zero)
-        // 목표 방향이 90도 떨어져 있고, steerRateDegrees=90°/s라 1초면 정확히 도달해야 한다.
-        let desired = Float.pi / 2
-        for _ in 0..<60 {
-            state = state.advancing(drive: .headSteered(accelerating: false), desiredHeading: desired, tuning: tuning, deltaTime: 1.0 / 60.0)
-        }
-        #expect(abs(state.heading - desired) < 0.01, "1초 동안 90°/s로 돌면 목표 방향에 도달해야 한다")
-    }
-
-    @Test func headSteeredDoesNotOvershootDesiredHeading() {
-        let tuning = MotionTuning(steerRateDegrees: 90)
-        var state = KartMotionState(speed: 0, heading: 0, position: .zero)
-        let desired: Float = 0.1 // steerRateDegrees 기준 한 프레임 최대 회전각보다 훨씬 작은 목표
-        state = state.advancing(drive: .headSteered(accelerating: false), desiredHeading: desired, tuning: tuning, deltaTime: 1.0 / 60.0)
-        #expect(state.heading <= desired + 0.0001, "목표보다 더 돌아가면(overshoot) 안 된다")
-    }
-
-    @Test func headSteeredTurnsShortestDirectionAcrossWrap() {
-        let tuning = MotionTuning(steerRateDegrees: 36000) // 한 프레임에 사실상 즉시 도달하도록 아주 크게
-        // heading이 +π - 0.01 근처에 있고 목표가 -π + 0.01 근처면, 실제로는 아주 가까운 방향(±π 경계를
-        // 넘어서)인데 단순히 desired - heading을 빼면 거의 2π짜리 "먼 길"로 계산된다 — 최단 경로로 가야 한다.
-        var state = KartMotionState(speed: 0, heading: .pi - 0.01, position: .zero)
-        let desired = -Float.pi + 0.01
-        state = state.advancing(drive: .headSteered(accelerating: false), desiredHeading: desired, tuning: tuning, deltaTime: 1.0 / 60.0)
-        let shortestDelta = atan2(sin(desired - state.heading), cos(desired - state.heading))
-        #expect(abs(shortestDelta) < 0.05, "±π 경계를 최단 방향으로 넘어가야 한다")
-    }
-
-    @Test func headSteeredWithNilDesiredHeadingKeepsHeadingUnchanged() {
-        let tuning = MotionTuning()
-        var state = KartMotionState(speed: 0, heading: 1.0, position: .zero)
-        state = state.advancing(drive: .headSteered(accelerating: true), desiredHeading: nil, tuning: tuning, deltaTime: 1.0 / 60.0)
-        #expect(state.heading == 1.0, "머리 방향을 못 구했으면(nil) 방향을 바꾸지 않아야 한다")
-    }
 }
 
 /// `Assets/sfx/ENGINE.md` 5장의 시험 목록 중 핵심 전환만 추린 것. `forwardHalf`/`forwardFull`
@@ -632,59 +571,49 @@ struct ScenePlacementTests {
         #expect(close(worldForward, ScenePlacement.forward(heading: headYaw)))
     }
 
-    /// 1인칭: 카트는 머리 바로 아래 눈높이만큼 내려간 자리. 3인칭: 더 낮고, 카트 진행 방향(월드)으로 앞.
+    /// 3인칭: 카트는 머리 아래 1.8 m, **기준 방향**(진입 순간 머리 yaw)으로 2.5 m 앞. 디오라마는 anchor 그대로.
     @Test func cockpitTargetsPerMode() {
-        let tuning = CockpitTuning(firstPersonEyeAboveFloor: 0.9, thirdPersonEyeAboveFloor: 1.8, thirdPersonKartAhead: 2.5)
+        let tuning = CockpitTuning(thirdPersonEyeAboveFloor: 1.8, thirdPersonKartAhead: 2.5)
         let anchor = SIMD3<Float>(1, 1.5, -2)
-        let fp = ScenePlacement.cockpitTarget(anchor: anchor, mode: .firstPerson, kartHeading: 1.0, sceneYaw: 0.5, tuning: tuning)
-        #expect(close(fp, SIMD3(1, 0.6, -2)))
-
-        // headYaw가 없으면 카트 진행 방향(월드 = heading + sceneYaw) 앞 (결정 44)
-        let tp = ScenePlacement.cockpitTarget(anchor: anchor, mode: .thirdPerson, kartHeading: 1.0, sceneYaw: 0.5, tuning: tuning)
-        let expectedAhead = ScenePlacement.forward(heading: 1.5) * 2.5
-        #expect(close(tp, SIMD3(1, -0.3, -2) + expectedAhead))
-        // headYaw가 있으면 카트 진행 방향과 무관하게 **바라보는 방향** 앞 (결정 45: 고개를 돌려도 시야 중앙)
-        let tpHead = ScenePlacement.cockpitTarget(anchor: anchor, mode: .thirdPerson, kartHeading: 1.0, sceneYaw: 0.5, headYaw: -2.0, tuning: tuning)
-        #expect(close(tpHead, SIMD3(1, -0.3, -2) + ScenePlacement.forward(heading: -2.0) * 2.5))
-        // 앞으로 민 거리는 정확히 2.5 m, 높이는 손대지 않는다.
+        let tp = ScenePlacement.cockpitTarget(anchor: anchor, mode: .thirdPerson, referenceYaw: -2.0, tuning: tuning)
+        #expect(close(tp, SIMD3(1, -0.3, -2) + ScenePlacement.forward(heading: -2.0) * 2.5))
         let d = tp - SIMD3(1, -0.3, -2)
         #expect(abs((d.x * d.x + d.z * d.z).squareRoot() - 2.5) < 1e-4 && abs(d.y) < 1e-4)
-
-        #expect(close(ScenePlacement.cockpitTarget(anchor: anchor, mode: .diorama, kartHeading: 0, sceneYaw: 0, tuning: tuning), anchor))
+        #expect(close(ScenePlacement.cockpitTarget(anchor: anchor, mode: .diorama, referenceYaw: 0, tuning: tuning), anchor))
     }
 
-    /// 콕핏 모드에서 rootPosition + cockpitTarget을 합치면 카트가 머리 아래에 온다(1인칭).
-    @Test func firstPersonFollowPutsKartUnderHead() {
+    /// rootPosition + cockpitTarget을 합치면 카트(노면 높이 포함)가 기준 방향 2.5 m 앞·1.8 m 아래에 온다.
+    @Test func thirdPersonFollowPutsKartAheadOfReference() {
         let tuning = CockpitTuning()
         let anchor = SIMD3<Float>(0.2, 1.3, -0.4)
-        let kart = SIMD3<Float>(18, 0, -10)
-        let yaw: Float = -1.1
-        let target = ScenePlacement.cockpitTarget(anchor: anchor, mode: .firstPerson, kartHeading: 2.0, sceneYaw: yaw, tuning: tuning)
+        let kart = SIMD3<Float>(18, 0.25, -10)
+        let reference: Float = 0.7
+        let yaw = ScenePlacement.chaseSceneYaw(kartHeading: 2.0, referenceYaw: reference)
+        let target = ScenePlacement.cockpitTarget(anchor: anchor, mode: .thirdPerson, referenceYaw: reference, tuning: tuning)
         let p = ScenePlacement.rootPosition(placing: kart, at: target, yaw: yaw, scale: 1)
         let kartWorld = world(kart, position: p, yaw: yaw, scale: 1)
-        #expect(close(kartWorld, anchor - SIMD3(0, tuning.firstPersonEyeAboveFloor, 0)))
+        #expect(close(kartWorld, anchor - SIMD3(0, tuning.thirdPersonEyeAboveFloor, 0) + ScenePlacement.forward(heading: reference) * tuning.thirdPersonKartAhead))
     }
 
     /// 카트 크기: 디오라마는 배율로 나눠 시각 크기를 고정, 실제 크기 모드는 전장 그대로.
     @Test func kartFitLengthPerMode() {
         let tuning = CockpitTuning(kartRealLength: 1.5)
         #expect(abs(ScenePlacement.kartFitLength(mode: .diorama, sceneScale: 0.03, dioramaVisualLength: 0.12, tuning: tuning) - 4.0) < 1e-4)
-        #expect(ScenePlacement.kartFitLength(mode: .firstPerson, sceneScale: 1, dioramaVisualLength: 0.12, tuning: tuning) == 1.5)
         #expect(ScenePlacement.kartFitLength(mode: .thirdPerson, sceneScale: 1, dioramaVisualLength: 0.12, tuning: tuning) == 1.5)
     }
 
-    /// 3인칭 추적 카메라(결정 46): chaseSceneYaw를 씬 yaw로 쓰면 지금 카트 heading의 월드 정면이 머리 방향과 같다
+    /// 3인칭 추적 카메라(결정 46·49): chaseSceneYaw를 씬 yaw로 쓰면 지금 카트 heading의 월드 정면이 기준 방향과 같다
     /// = 사용자는 카트 뒤에서 카트가 가는 쪽을 본다. 평활을 거쳐도 충분히 지나면 같은 곳에 수렴한다.
     @Test func chaseSceneYawPutsViewerBehindKart() {
         let kartHeading: Float = 2.3, headYaw: Float = -0.4
-        let yaw = ScenePlacement.chaseSceneYaw(kartHeading: kartHeading, headYaw: headYaw)
+        let yaw = ScenePlacement.chaseSceneYaw(kartHeading: kartHeading, referenceYaw: headYaw)
         let kartWorldForward = ScenePlacement.rotateY(ScenePlacement.forward(heading: kartHeading), by: yaw)
         #expect(close(kartWorldForward, ScenePlacement.forward(heading: headYaw)))
 
         // 카트가 90° 꺾였을 때 씬 yaw를 평활로 따라가면 1초 뒤(rate 2.5) 약 92 %, 3초 뒤 99.9 % 수렴
         var sceneYaw = yaw
         let turned = kartHeading + .pi / 2
-        let target = ScenePlacement.chaseSceneYaw(kartHeading: turned, headYaw: headYaw)
+        let target = ScenePlacement.chaseSceneYaw(kartHeading: turned, referenceYaw: headYaw)
         for _ in 0..<90 { sceneYaw = ScenePlacement.approachAngle(from: sceneYaw, to: target, rate: 2.5, deltaTime: 1.0 / 90.0) }
         let remaining = abs(atan2(sin(target - sceneYaw), cos(target - sceneYaw)))
         #expect(remaining < (Float.pi / 2) * 0.1 && remaining > 0)
@@ -705,5 +634,127 @@ struct ScenePlacementTests {
         let step = ScenePlacement.approachAngle(from: from, to: to, rate: 1000, deltaTime: 1)
         #expect(abs(atan2(sin(step - to), cos(step - to))) < 1e-3)
         #expect(step > from)
+    }
+}
+
+// MARK: - 미니맵 투영 (M4, 결정 48)
+
+struct MinimapProjectionTests {
+    /// track_01과 비슷한 20 × 12 m 직사각 루프 + 노면 폭 3 m가 지름 0.24 m 테이블에 들어가고 중심이 원점에 온다.
+    @Test func fitsTrackInsideTableAndCentersIt() {
+        let pts: [SIMD2<Float>] = [SIMD2(6, -6), SIMD2(26, -6), SIMD2(26, -18), SIMD2(6, -18)]
+        let p = MinimapProjection(points: pts, trackWidth: 3, tableDiameter: 0.24)
+        #expect(abs(p.center.x - 16) < 1e-4 && abs(p.center.y + 12) < 1e-4)
+        // 가장 긴 변 20 + 3 = 23 m → 내접 정사각형 0.24/√2 · 0.9
+        let expectedScale = Float(0.24) / Float(2).squareRoot() * 0.9 / 23
+        #expect(abs(p.scale - expectedScale) < 1e-6)
+        for pt in pts {
+            let m = p.mapPosition(pt)
+            #expect(simd_length(m) + p.mapLength(1.5) <= 0.12 + 1e-5) // 노면 반폭까지 포함해도 원 안
+        }
+        #expect(simd_length(p.mapPosition(p.center)) < 1e-6)
+    }
+
+    @Test func mapLengthUsesSameScale() {
+        let p = MinimapProjection(points: [SIMD2(0, 0), SIMD2(10, 0)], trackWidth: 2, tableDiameter: 0.24)
+        #expect(abs(p.mapLength(4) - 4 * p.scale) < 1e-7)
+    }
+
+    @Test func emptyPathIsIdentity() {
+        let p = MinimapProjection(points: [], trackWidth: 3, tableDiameter: 0.24)
+        #expect(p.scale == 1 && p.center == .zero)
+    }
+
+    /// LapTracker는 순서대로만 통과시키므로 앞에서부터 passedCount개가 통과.
+    @Test func checkpointPassedOrdinals() {
+        #expect(MinimapProjection.isCheckpointPassed(ordinal: 0, passedCount: 1))
+        #expect(!MinimapProjection.isCheckpointPassed(ordinal: 1, passedCount: 1))
+        #expect(!MinimapProjection.isCheckpointPassed(ordinal: 0, passedCount: 0))
+        #expect(MinimapProjection.isCheckpointPassed(ordinal: 2, passedCount: 3))
+    }
+}
+
+// MARK: - 3인칭 카메라 기준 방향 (결정 49, Issue #25): 고개 ±45° 자유, ±60° 2초 넘으면 리센터
+
+struct ChaseCameraReferenceTests {
+    private let tuning = CockpitTuning(recenterThresholdDegrees: 60, recenterHoldSeconds: 2, recenterRate: 1.0)
+
+    @Test func freeLookDoesNotMoveReference() {
+        var ref = ChaseCameraReference(forwardYaw: 0.2)
+        for _ in 0..<600 { ref.update(headYaw: 0.2 + 40 * .pi / 180, deltaTime: 1.0 / 60.0, tuning: tuning) } // 40°, 10초
+        #expect(abs(ref.forwardYaw - 0.2) < 1e-6 && !ref.isRecentering)
+    }
+
+    @Test func briefGlanceBeyondThresholdDoesNotRecenter() {
+        var ref = ChaseCameraReference(forwardYaw: 0)
+        for _ in 0..<90 { ref.update(headYaw: 80 * .pi / 180, deltaTime: 1.0 / 60.0, tuning: tuning) } // 1.5초 < 2초
+        #expect(!ref.isRecentering && ref.forwardYaw == 0)
+        ref.update(headYaw: 0, deltaTime: 1.0 / 60.0, tuning: tuning) // 돌아오면 타이머 리셋
+        for _ in 0..<90 { ref.update(headYaw: 80 * .pi / 180, deltaTime: 1.0 / 60.0, tuning: tuning) }
+        #expect(!ref.isRecentering)
+    }
+
+    @Test func holdingBeyondThresholdRecentersTowardHead() {
+        var ref = ChaseCameraReference(forwardYaw: 0)
+        let head: Float = 90 * .pi / 180
+        for _ in 0..<125 { ref.update(headYaw: head, deltaTime: 1.0 / 60.0, tuning: tuning) } // 2.08초
+        #expect(ref.isRecentering)
+        for _ in 0..<60 { ref.update(headYaw: head, deltaTime: 1.0 / 60.0, tuning: tuning) } // 1초: 약 63 %
+        #expect(ref.forwardYaw > head * 0.5 && ref.forwardYaw < head)
+        for _ in 0..<600 { ref.update(headYaw: head, deltaTime: 1.0 / 60.0, tuning: tuning) }
+        #expect(abs(ref.forwardYaw - head) < 0.05 && !ref.isRecentering)
+    }
+
+    @Test func missingHeadYawLeavesReferenceAlone() {
+        var ref = ChaseCameraReference(forwardYaw: 1.1)
+        for _ in 0..<300 { ref.update(headYaw: nil, deltaTime: 1.0 / 60.0, tuning: tuning) }
+        #expect(ref.forwardYaw == 1.1)
+    }
+}
+
+// MARK: - 카트 리그 자세 (Issue #26, 결정 51): 핸들 82°·앞바퀴 30° 핀치 연동, 차체 roll/pitch, 바퀴 굴림
+
+struct KartRigPoseTests {
+    private let tuning = KartRigTuning()
+
+    @Test func steeringFollowsPinchAndSettlesWithinTenthOfASecond() {
+        var pose = KartRigPose()
+        for _ in 0..<9 { pose.update(drive: .turnLeft, speed: 0, maxSpeed: 4, acceleration: 0, wheelRadius: 0.1, deltaTime: 1.0 / 90.0, tuning: tuning) }
+        // lerp(dt×14)를 0.1초: 1 − (1 − 14/90)^9 ≈ 0.78 이상
+        #expect(pose.steer > 0.75)
+        #expect(pose.steeringWheelAngle(tuning: tuning) > 0.75 * 82 && pose.frontWheelAngle(tuning: tuning) > 0.75 * 30)
+        for _ in 0..<90 { pose.update(drive: .turnRight, speed: 0, maxSpeed: 4, acceleration: 0, wheelRadius: 0.1, deltaTime: 1.0 / 90.0, tuning: tuning) }
+        #expect(pose.steer < -0.99)
+        for _ in 0..<90 { pose.update(drive: .stopped, speed: 0, maxSpeed: 4, acceleration: 0, wheelRadius: 0.1, deltaTime: 1.0 / 90.0, tuning: tuning) }
+        #expect(abs(pose.steer) < 0.01, "손을 떼면 핸들이 돌아온다")
+    }
+
+    @Test func bodyRollsOutwardProportionalToSpeed() {
+        var slow = KartRigPose(), fast = KartRigPose()
+        for _ in 0..<180 {
+            slow.update(drive: .turnLeft, speed: 1, maxSpeed: 4, acceleration: 0, wheelRadius: 0.1, deltaTime: 1.0 / 90.0, tuning: tuning)
+            fast.update(drive: .turnLeft, speed: 4, maxSpeed: 4, acceleration: 0, wheelRadius: 0.1, deltaTime: 1.0 / 90.0, tuning: tuning)
+        }
+        // 왼쪽으로 돌면 roll은 음수(바깥=오른쪽), 최고 속도에서 약 −4°
+        #expect(fast.roll < slow.roll && slow.roll < 0)
+        #expect(abs(fast.roll + tuning.bodyRollDegrees) < 0.1)
+    }
+
+    @Test func pitchFollowsAccelerationSign() {
+        var pose = KartRigPose()
+        for _ in 0..<90 { pose.update(drive: .pedal(1), speed: 2, maxSpeed: 4, acceleration: 4, wheelRadius: 0.1, deltaTime: 1.0 / 90.0, tuning: tuning) }
+        #expect(pose.pitch > 0.9 * tuning.bodyPitchDegrees, "가속하면 뒤로")
+        for _ in 0..<90 { pose.update(drive: .stopped, speed: 2, maxSpeed: 4, acceleration: -4, wheelRadius: 0.1, deltaTime: 1.0 / 90.0, tuning: tuning) }
+        #expect(pose.pitch < -0.9 * tuning.bodyPitchDegrees, "감속하면 앞으로")
+    }
+
+    @Test func wheelSpinMatchesTravelDistance() {
+        var pose = KartRigPose()
+        // 반지름 0.1 m, 2 m/s로 0.1초 → 0.2 m 이동 = 2 rad ≈ 114.6°
+        for _ in 0..<9 { pose.update(drive: .pedal(1), speed: 2, maxSpeed: 4, acceleration: 0, wheelRadius: 0.1, deltaTime: 1.0 / 90.0, tuning: tuning) }
+        #expect(abs(pose.wheelSpin - 114.59) < 0.5)
+        var still = KartRigPose()
+        still.update(drive: .stopped, speed: 0, maxSpeed: 4, acceleration: 0, wheelRadius: 0.1, deltaTime: 1, tuning: tuning)
+        #expect(still.wheelSpin == 0, "정지하면 바퀴가 멈춘다")
     }
 }
