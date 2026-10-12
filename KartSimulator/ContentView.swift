@@ -15,6 +15,9 @@ struct ContentView: View {
     #endif
     @State private var isBusy = false
     @State private var showOnboarding = false
+    #if os(iOS)
+    @State private var showRace = false
+    #endif
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
 
     private let columns = [GridItem(.adaptive(minimum: 140), spacing: 16)]
@@ -34,15 +37,19 @@ struct ContentView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("트랙")
                         .font(.headline)
-                    HStack(alignment: .top, spacing: 12) {
-                        ForEach(TrackCatalog.tracks, id: \.id) { track in
-                            TrackCard(
-                                track: track,
-                                isSelected: track.id == selection.selectedTrackID,
-                                bestTotalTime: TrackCatalog.bestTotalTime(trackID: track.id, kartID: selection.selectedKartID)
-                            )
-                            .onTapGesture { selection.selectedTrackID = track.id }
+                    // 카드 4장이 창/화면 폭보다 넓으면(iPhone 세로) 가로로 스크롤한다 — 고정 폭 HStack은 화면 밖으로 잘렸다(결정 60).
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(alignment: .top, spacing: 12) {
+                            ForEach(TrackCatalog.tracks, id: \.id) { track in
+                                TrackCard(
+                                    track: track,
+                                    isSelected: track.id == selection.selectedTrackID,
+                                    bestTotalTime: TrackCatalog.bestTotalTime(trackID: track.id, kartID: selection.selectedKartID)
+                                )
+                                .onTapGesture { selection.selectedTrackID = track.id }
+                            }
                         }
+                        .padding(.vertical, 4)
                     }
                 }
 
@@ -82,9 +89,9 @@ struct ContentView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(isBusy)
                     #else
-                    Text("박스 미리보기는 비전OS에서만 열 수 있습니다.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    // iOS/iPadOS(결정 60): 이머시브 공간 대신 전체 화면 레이스(가상 카메라 + 터치 조작).
+                    Button("레이스 시작") { showRace = true }
+                        .buttonStyle(.borderedProminent)
                     #endif
                     Button("조작법") { showOnboarding = true }
                         .buttonStyle(.bordered)
@@ -106,6 +113,12 @@ struct ContentView: View {
                 showOnboarding = false
             }
         }
+        #if os(iOS)
+        .fullScreenCover(isPresented: $showRace) {
+            RaceScreen()
+                .environment(selection)
+        }
+        #endif
     }
 
     #if os(visionOS)
@@ -165,41 +178,22 @@ private struct TrackCard: View {
         )
         .contentShape(RoundedRectangle(cornerRadius: 16))
         .hoverEffect()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("트랙 \(track.name), 난이도 \(TrackCatalog.difficultyDots(track)) / 5, 최고 기록 \(bestTotalTime.map(formatRaceTime) ?? "없음")")
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }
 
-/// 트랙 JSON의 `path`(중심선, 미터)를 카드 안에 맞춰 그린다. 디오라마 표시(`ScenePlacement` 씬 yaw π, 결정 43·44)와 같은 방향이 되도록
-/// 위아래·좌우를 뒤집어 두어 박스에서 보는 모양과 카드가 일치한다.
+/// 카드 썸네일 = 공용 평면도(`TrackPlanCanvas`). 박스가 트랙을 180° 돌려 보여 주므로 뒤집어 그린다(결정 43·44).
 private struct TrackThumbnail: View {
     let track: TrackDefinition
 
     var body: some View {
-        Canvas { context, size in
-            let points = track.path.map(\.vector)
-            guard points.count > 2,
-                  let minX = points.map(\.x).min(), let maxX = points.map(\.x).max(),
-                  let minZ = points.map(\.y).min(), let maxZ = points.map(\.y).max() else { return }
-            let inset: CGFloat = 16
-            let span = CGFloat(max(maxX - minX, maxZ - minZ, 0.001))
-            let scale = (min(size.width, size.height) - inset * 2) / span
-            let offsetX = (size.width - CGFloat(maxX - minX) * scale) / 2
-            let offsetY = (size.height - CGFloat(maxZ - minZ) * scale) / 2
-            func point(_ p: SIMD2<Float>) -> CGPoint {
-                // 박스는 트랙을 180° 돌려 보여 준다(결정 43): x·z 둘 다 뒤집는다. z는 화면 아래가 +z.
-                CGPoint(x: size.width - (offsetX + CGFloat(p.x - minX) * scale),
-                        y: size.height - (offsetY + CGFloat(p.y - minZ) * scale))
-            }
-            var path = Path()
-            path.move(to: point(points[0]))
-            for p in points.dropFirst() { path.addLine(to: point(p)) }
-            path.closeSubpath()
-            let roadWidth = max(CGFloat(track.width) * scale, 4)
-            context.stroke(path, with: .color(Color.style(StylePalette.mmEdge)), style: StrokeStyle(lineWidth: roadWidth * 1.5, lineJoin: .round))
-            context.stroke(path, with: .color(Color.style(StylePalette.mmRoad)), style: StrokeStyle(lineWidth: roadWidth, lineJoin: .round))
-            let start = point(points[min(track.start.pathIndex, points.count - 1)])
-            let dot = CGRect(x: start.x - 4, y: start.y - 4, width: 8, height: 8)
-            context.fill(Path(ellipseIn: dot), with: .color(Color.style(StylePalette.uiSky)))
-        }
+        #if os(visionOS)
+        TrackPlanCanvas(track: track, flipped: true)
+        #else
+        TrackPlanCanvas(track: track, flipped: false)
+        #endif
     }
 }
 
@@ -217,6 +211,7 @@ private struct KartCard: View {
     var body: some View {
         VStack(spacing: 8) {
             Group {
+                #if os(visionOS)
                 if isFocused {
                     Model3D(named: kart.usdzResourceName) { model in
                         model
@@ -244,6 +239,18 @@ private struct KartCard: View {
                 } else {
                     Color.clear
                 }
+                #else
+                // iOS/iPadOS(결정 60): `Model3D`가 없어 정적 썸네일만 쓴다. 라이브 3D는 레이스 화면에서 본다.
+                if let thumbnail = loadThumbnail(for: kart) {
+                    thumbnail
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: .infinity)
+                        .scaleEffect(0.6)
+                } else {
+                    Color.clear
+                }
+                #endif
             }
             .frame(maxWidth: .infinity, minHeight: 96)
             Text(kart.displayName)
@@ -259,6 +266,9 @@ private struct KartCard: View {
         .zIndex(isFocused ? 1 : 0)
         .animation(.easeOut(duration: 0.2), value: isFocused)
         .onHover { hovering in isFocused = hovering }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("카트 \(kart.displayName)")
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 
     /// 썸네일은 Asset Catalog가 아니라 `Resources/KartThumbnails/`에 낱장 PNG로 들어 있어서
@@ -334,6 +344,9 @@ private struct GestureInstruction: Identifiable {
 
     /// 그림 아래 한 줄 안내. 옛 "양손 사이 약 40 cm = 중립"은 결정 39에서 없어졌다.
     static func footnote(for mode: ExperienceMode) -> String {
+        #if os(iOS)
+        return "iPhone·iPad에서는 화면 왼쪽·오른쪽 반이 왼손·오른손 핀치입니다. 양쪽 누름 = 전진, 누른 채 아래로 끌기 = 후진, 한쪽만 = 그쪽으로 회전."
+        #endif
         switch mode {
         case .diorama: return "기준은 핀치를 시작한 순간의 손 간격입니다. 그 자리에 두면 전진, 벌리면 후진."
         case .thirdPerson: return "조작은 디오라마와 같습니다. 시점은 카트 뒤에서 카트가 가는 쪽을 보고, 고개는 자유롭게 돌려도 됩니다."
@@ -379,6 +392,8 @@ private struct ColorSwatch: View {
                     lineWidth: isSelected ? 4 : 1.5
                 )
             )
+            .accessibilityLabel("색상 \(color.displayName)")
+            .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }
 

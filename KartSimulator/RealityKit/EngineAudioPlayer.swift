@@ -1,4 +1,4 @@
-#if os(visionOS)
+#if os(visionOS) || os(iOS)
 import RealityKit
 
 /// `EngineSoundMachine`이 내놓는 명령을 실제로 재생한다. 엔진 버스(-6dB)는 `Assets/sfx/ENGINE.md`

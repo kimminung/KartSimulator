@@ -1,4 +1,4 @@
-#if os(visionOS)
+#if os(visionOS) || os(iOS)
 import RealityKit
 import simd
 
@@ -39,7 +39,7 @@ final class KartRig {
             let bounds = wheel.entity.visualBounds(relativeTo: kart)
             wheelRadius = max(bounds.extents.y / 2, 0.01)
         }
-        print("DEBUG-RIG steering=\(steering?.entity.name ?? "없음") body=\(body?.entity.name ?? "없음") frontWheels=\(frontWheels.count) rearWheels=\(rearWheels.count) r=\(wheelRadius)")
+        debugLog("DEBUG-RIG steering=\(steering?.entity.name ?? "없음") body=\(body?.entity.name ?? "없음") frontWheels=\(frontWheels.count) rearWheels=\(rearWheels.count) r=\(wheelRadius)")
     }
 
     /// 매 프레임. `speed`·`acceleration`은 트랙 단위(m/s, m/s²), `maxSpeed`는 튜닝 최고 속도.

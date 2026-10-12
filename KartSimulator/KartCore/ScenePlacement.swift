@@ -17,6 +17,9 @@ public struct CockpitTuning: Sendable {
     public var recenterThresholdDegrees: Float
     public var recenterHoldSeconds: Float
     public var recenterRate: Float
+    /// 3인칭(실제 크기)에서 격자 타일을 켜 두는 반경(m). 카트에서 이보다 먼 타일은 `isEnabled = false`(결정 59, Issue #45).
+    /// 서킷 노면은 메시 한 덩어리라 RealityKit 절두체 컬링에 맡긴다.
+    public var tileCullingRadius: Float
 
     public init(
         thirdPersonEyeAboveFloor: Float = 1.8,
@@ -26,7 +29,8 @@ public struct CockpitTuning: Sendable {
         freeLookDegrees: Float = 45,
         recenterThresholdDegrees: Float = 60,
         recenterHoldSeconds: Float = 2,
-        recenterRate: Float = 1.0
+        recenterRate: Float = 1.0,
+        tileCullingRadius: Float = 60
     ) {
         self.thirdPersonEyeAboveFloor = thirdPersonEyeAboveFloor
         self.thirdPersonKartAhead = thirdPersonKartAhead
@@ -36,6 +40,7 @@ public struct CockpitTuning: Sendable {
         self.recenterThresholdDegrees = recenterThresholdDegrees
         self.recenterHoldSeconds = recenterHoldSeconds
         self.recenterRate = recenterRate
+        self.tileCullingRadius = tileCullingRadius
     }
 }
 

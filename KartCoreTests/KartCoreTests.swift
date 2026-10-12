@@ -1074,3 +1074,63 @@ struct TrackResourceTests {
         }
     }
 }
+
+// MARK: - iOS/iPadOS 입력·카메라(결정 60)
+
+struct TouchInputResolverTests {
+    @Test func bothThumbsIsForwardAndSingleThumbTurns() {
+        var touch = TouchInputResolver()
+        #expect(touch.resolve().drive == .stopped)
+        touch.left = .init(isDown: true)
+        #expect(touch.resolve().drive == .turnLeft)
+        touch.right = .init(isDown: true)
+        #expect(touch.resolve().drive == .pedal(1))
+        touch.left = .init()
+        #expect(touch.resolve().drive == .turnRight)
+    }
+
+    @Test func draggingDownWithBothThumbsReversesPastDeadband() {
+        var touch = TouchInputResolver(tuning: .init(reverseDeadbandPoints: 40, reverseSpanPoints: 160))
+        touch.left = .init(isDown: true, dragDown: 30)
+        touch.right = .init(isDown: true, dragDown: 10)
+        #expect(touch.resolve().drive == .pedal(1), "데드밴드 안에서는 전진")
+        touch.right = .init(isDown: true, dragDown: 120)
+        guard case .pedal(let amount) = touch.resolve().drive else { Issue.record("후진이어야 한다"); return }
+        #expect(abs(amount - (-0.5)) < 1e-5, "80 pt / 160 pt = 절반 후진: \(amount)")
+        touch.right = .init(isDown: true, dragDown: 1000)
+        #expect(touch.resolve().drive == .pedal(-1), "최대 후진에서 멈춘다")
+        let hands = touch.resolve()
+        #expect(hands.left.pinching && hands.right.pinching, "HUD 핀치 표시용 손 상태도 같이 준다")
+    }
+}
+
+struct ChaseCameraRigTests {
+    @Test func chaseCameraSitsBehindAndAboveKart() {
+        let pose = KartPose(position: SIMD3(10, 0, -5), forward: SIMD3(0, 0, -1), up: SIMD3(0, 1, 0), heading: 0)
+        let cam = ChaseCameraRig.chaseTarget(pose: pose, tuning: ChaseCameraTuning())
+        #expect(abs(cam.position.z - (-5 + 2.5)) < 1e-4 && abs(cam.position.y - 1.8) < 1e-4, "북(−z)으로 가는 카트의 2.5 m 뒤(+z)·1.8 m 위: \(cam.position)")
+        #expect(cam.target.z < pose.position.z, "카트 앞을 본다")
+    }
+
+    @Test func chaseCameraFollowsHeldHeadingInsideLoop() {
+        // 루프 안: 정면이 위를 향해도 heading(평면)은 유지 → 카메라는 여전히 평면 뒤쪽에 있다
+        let pose = KartPose(position: SIMD3(0, 4, -20), forward: SIMD3(0, 1, 0), up: SIMD3(0, 0, 1), heading: 0)
+        let cam = ChaseCameraRig.chaseTarget(pose: pose, tuning: ChaseCameraTuning())
+        #expect(abs(cam.position.x) < 1e-4 && cam.position.z > pose.position.z && cam.position.y > pose.position.y)
+    }
+
+    @Test func topViewFitsTrackIntoFieldOfView() {
+        let tuning = ChaseCameraTuning(topViewMargin: 1.0, topViewTiltDegrees: 0)
+        let cam = ChaseCameraRig.topView(minXZ: SIMD2(-20, -40), maxXZ: SIMD2(20, 0), maxHeight: 0, aspect: 0.5, tuning: tuning)
+        // 세로 FOV 60°: 반폭 20 m → 높이 20 / tan 30° = 34.6; 가로 반폭 20 m, aspect 0.5 → 20 / (tan 30° × 0.5) = 69.3 → 큰 쪽
+        #expect(abs(cam.position.y - 69.28) < 0.2, "높이 \(cam.position.y)")
+        #expect(abs(cam.target.x) < 1e-4 && abs(cam.target.z - (-20)) < 1e-4, "트랙 중심을 본다")
+    }
+
+    @Test func followApproachesTargetExponentially() {
+        let a = CameraPose(position: .zero, target: .zero)
+        let b = CameraPose(position: SIMD3(10, 0, 0), target: SIMD3(10, 0, -1))
+        let mid = ChaseCameraRig.follow(current: a, target: b, rate: 6, deltaTime: 1 / 6)
+        #expect(mid.position.x > 5 && mid.position.x < 7, "1/rate 초 뒤 약 63 %: \(mid.position.x)")
+    }
+}

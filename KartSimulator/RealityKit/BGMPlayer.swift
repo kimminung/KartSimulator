@@ -1,4 +1,4 @@
-#if os(visionOS)
+#if os(visionOS) || os(iOS)
 import AVFoundation
 import Foundation
 
@@ -30,7 +30,7 @@ final class BGMPlayer {
         defaults.set((index + 1) % Self.tracks.count, forKey: Self.nextIndexKey)
         let name = Self.tracks[index]
         guard let url = Bundle.main.url(forResource: name, withExtension: "m4a") else {
-            print("DEBUG-BGM \(name).m4a 없음 — 배경음 건너뜀")
+            debugLog("DEBUG-BGM \(name).m4a 없음 — 배경음 건너뜀")
             return
         }
         fadeTask?.cancel()
@@ -43,9 +43,9 @@ final class BGMPlayer {
             newPlayer.play()
             player = newPlayer
             fade(to: busVolume, duration: fadeIn, stopAtEnd: false)
-            print("DEBUG-BGM 재생 \(name) (다음 \(defaults.integer(forKey: Self.nextIndexKey)))")
+            debugLog("DEBUG-BGM 재생 \(name) (다음 \(defaults.integer(forKey: Self.nextIndexKey)))")
         } catch {
-            print("DEBUG-BGM 로드 실패 \(name): \(error)")
+            debugLog("DEBUG-BGM 로드 실패 \(name): \(error)")
         }
     }
 
