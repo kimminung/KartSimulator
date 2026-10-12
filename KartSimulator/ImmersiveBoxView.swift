@@ -18,7 +18,10 @@ struct ImmersiveBoxView: View {
     @State private var loadedColorID: String?
     @State private var isLoading = false
 
-    @State private var motion = KartMotionState()
+    /// 레일 주행 상태(결정 58): 중심선 호 길이·가로 오프셋·상대 yaw·속도. 월드 자세는 `latestPose`.
+    @State private var rail = RailMotionState()
+    @State private var trackSpline: TrackSpline?
+    @State private var latestPose = KartPose(position: .zero, forward: SIMD3(0, 0, -1), up: SIMD3(0, 1, 0), heading: 0)
     @State private var inputResolver = HandInputResolver()
     @State private var updateSubscription: Any?
     /// 디오라마(기본) / 3인칭(추적 카메라) — 결정 39·47·49. 두 모드의 손 조작은 같다.
@@ -32,8 +35,6 @@ struct ImmersiveBoxView: View {
     /// 타일만 모아 두는 루트(씬 루트 아래). 트랙을 바꿀 때 이 아래만 비우면 카트·트레일은 그대로 남는다.
     @State private var trackTilesRoot = Entity()
     @State private var lapTracker: LapTracker?
-    @State private var offTrackMonitor = OffTrackMonitor()
-    @State private var wasAgainstWall = false
     @State private var trackDisplayScale: Float = 1
     @State private var trackWorldCenter: SIMD2<Float> = .zero
 
@@ -323,7 +324,7 @@ struct ImmersiveBoxView: View {
             // 기준 방향 = 진입 순간 머리 yaw. 들어오자마자 카트 뒤에서 앞을 보도록 씬 yaw를 바로 맞춘다.
             chaseReference = ChaseCameraReference(forwardYaw: head.yaw)
             hudFollowYaw = head.yaw
-            sceneYaw = ScenePlacement.chaseSceneYaw(kartHeading: motion.heading, referenceYaw: head.yaw)
+            sceneYaw = ScenePlacement.chaseSceneYaw(kartHeading: rail.heading, referenceYaw: head.yaw)
             sceneRoot.scale = SIMD3(repeating: 1)
             sceneRoot.orientation = simd_quatf(angle: sceneYaw, axis: [0, 1, 0])
             followKart(headYaw: head.yaw, deltaTime: 0)
@@ -389,11 +390,12 @@ struct ImmersiveBoxView: View {
         guard mode == .thirdPerson, let track else { return }
         chaseReference.update(headYaw: headYaw, deltaTime: deltaTime, tuning: cockpitTuning)
         let reference = chaseReference.forwardYaw
-        let chaseYaw = ScenePlacement.chaseSceneYaw(kartHeading: motion.heading, referenceYaw: reference)
+        let chaseYaw = ScenePlacement.chaseSceneYaw(kartHeading: rail.heading, referenceYaw: reference)
         sceneYaw = ScenePlacement.approachAngle(from: sceneYaw, to: chaseYaw, rate: cockpitTuning.thirdPersonChaseYawRate, deltaTime: deltaTime)
         sceneRoot.orientation = simd_quatf(angle: sceneYaw, axis: [0, 1, 0])
         let target = ScenePlacement.cockpitTarget(anchor: cockpitAnchor, mode: mode, referenceYaw: reference, tuning: cockpitTuning)
-        let kartLocal = SIMD3(motion.position.x, track.roadSurfaceHeight, motion.position.z)
+        // 카트의 3D 위치(루프·언덕이면 y 포함)를 콕핏 목표점에 둔다 — 세계가 평행이동만 하고(회전은 yaw뿐) 카트가 오르면 세계가 내려간다.
+        let kartLocal = latestPose.position
         sceneRoot.position = ScenePlacement.rootPosition(placing: kartLocal, at: target, yaw: sceneYaw, scale: 1)
         inputCatcher.orientation = simd_quatf(angle: reference, axis: [0, 1, 0]) // 앞 벽이 기준 방향(리센터 포함)을 따라간다
         followHUD(deltaTime: deltaTime)
@@ -405,7 +407,7 @@ struct ImmersiveBoxView: View {
     @MainActor
     private func updateExitSafetyNet(drive: DriveState, left: HandStatus, right: HandStatus, deltaTime: Float) {
         guard mode == .thirdPerson, immersiveSession.menuWindowHidden else { stoppedHandsFreeSeconds = 0; return }
-        let stopped = abs(motion.speed) < 0.05 && drive == .stopped && !left.pinching && !right.pinching
+        let stopped = abs(rail.speed) < 0.05 && drive == .stopped && !left.pinching && !right.pinching
         stoppedHandsFreeSeconds = stopped ? stoppedHandsFreeSeconds + deltaTime : 0
         if stoppedHandsFreeSeconds >= menuWindowReopenAfter {
             openWindow(id: AppScene.menuWindowID)
@@ -524,12 +526,10 @@ struct ImmersiveBoxView: View {
     /// 다시 하기(Issue #42): 출발 위치로 되돌리고 랩·이탈·트레일을 초기화한 뒤 카운트다운부터 다시 시작한다.
     @MainActor
     private func restartRace() {
-        guard let track, let trackPath else { return }
-        let startPoint = trackPath.points[track.start.pathIndex]
-        motion = KartMotionState(speed: 0, heading: track.start.heading, position: SIMD3(startPoint.x, 0, startPoint.y))
+        guard let track, let trackSpline else { return }
+        rail = RailMotionState(startOn: trackSpline, frameIndex: track.start.pathIndex)
+        latestPose = rail.pose(on: trackSpline)
         lapTracker = LapTracker(track: track)
-        offTrackMonitor = OffTrackMonitor()
-        wasAgainstWall = false
         trailRoot.children.removeAll()
         lastTrailDisplayPoint = nil
         raceResult = nil
@@ -584,7 +584,8 @@ struct ImmersiveBoxView: View {
     @MainActor
     private func loadTrack() {
         let trackID = selection.selectedTrackID
-        guard let definition = TrackCatalog.track(id: trackID) ?? TrackCatalog.tracks.first else { return }
+        guard let definition = TrackCatalog.track(id: trackID) ?? TrackCatalog.tracks.first,
+              let spline = TrackSpline(track: definition) else { return }
         let path = TrackPath(definition)
 
         let xs = path.points.map(\.x)
@@ -595,23 +596,19 @@ struct ImmersiveBoxView: View {
 
         track = definition
         trackPath = path
+        trackSpline = spline
         loadedTrackID = trackID
         lapTracker = LapTracker(track: definition)
-        offTrackMonitor = OffTrackMonitor()
-        wasAgainstWall = false
         trailRoot.children.removeAll()
         lastTrailDisplayPoint = nil
         raceResult = nil
         latestLapProgress = LapProgress()
-        trackDisplayScale = trackFootprint / worldSpan
+        // 배율: 평면 바운딩 박스가 `trackFootprint`에 맞고, 루프·다리 높이도 박스 안(`boxSize.y` 안쪽)에 들어가야 한다.
+        trackDisplayScale = min(trackFootprint / worldSpan, (boxSize.y - 0.08) / max(spline.maxHeight, 0.01))
         trackWorldCenter = SIMD2((minX + maxX) / 2, (minZ + maxZ) / 2)
 
-        let startPoint = path.points[definition.start.pathIndex]
-        motion = KartMotionState(
-            speed: 0,
-            heading: definition.start.heading,
-            position: SIMD3(startPoint.x, 0, startPoint.y)
-        )
+        rail = RailMotionState(startOn: spline, frameIndex: definition.start.pathIndex)
+        latestPose = rail.pose(on: spline)
         raceModel.start(totalLaps: definition.laps)
         applyModeLayout()
         startCountdown()
@@ -624,7 +621,18 @@ struct ImmersiveBoxView: View {
         minimap?.root.removeFromParent()
         minimap = nil
         guard let track, let trackPath else { return }
-        await buildTrackTiles(definition: track, into: trackTilesRoot)
+        if let model = track.model, let url = Bundle.main.url(forResource: model, withExtension: "usdz") {
+            // 서킷(스키마 2, 결정 58): Blender가 구운 노면 USDZ 한 덩어리(`Tools/build_circuit.py`). 트랙 좌표계 그대로.
+            do {
+                let entity = try await Entity(contentsOf: url)
+                entity.name = model
+                trackTilesRoot.addChild(entity)
+            } catch {
+                print("서킷 모델 로드 실패(\(model)): \(error)")
+            }
+        } else {
+            await buildTrackTiles(definition: track, into: trackTilesRoot)
+        }
         let built = await MinimapBuilder.make(track: track, path: trackPath, tableDiameter: minimapTableDiameter)
         worldAnchor.addChild(built.root)
         minimap = built
@@ -671,7 +679,7 @@ struct ImmersiveBoxView: View {
             if resuming {
                 isPaused = false
                 bgmPlayer.duck(false)
-                engineAudioPlayer?.run(engineMachine.resumed(pedal: 0, isHolding: false, speed: Double(abs(motion.speed))))
+                engineAudioPlayer?.run(engineMachine.resumed(pedal: 0, isHolding: false, speed: Double(abs(rail.speed))))
             } else {
                 bgmPlayer.startNextTrack(fadeIn: 1.0) // GO 효과음과 동시에 1.0초 페이드 인, 레이스마다 다음 곡
             }
@@ -795,7 +803,7 @@ struct ImmersiveBoxView: View {
 
     @MainActor
     private func tickMotion(deltaTime: Float, headYaw: Float?) {
-        guard deltaTime > 0, let track, let trackPath, let lapTracker else { return }
+        guard deltaTime > 0, let track, let trackSpline, let lapTracker else { return }
 
         // `ingest()`에서 찍는 시계(CACurrentMediaTime)와 반드시 같은 기준이어야 한다. 섞어 쓰면
         // HandInputResolver의 스테일 판정이 항상 틀어진다(결정 24번).
@@ -804,15 +812,19 @@ struct ImmersiveBoxView: View {
         // 카운트다운 중·완주 뒤에는 입력을 무시한다(결정 56). 손 상태 자체는 HUD에 그대로 보여 준다.
         let drive: DriveState = raceLocked ? .stopped : resolvedDrive
         let tuning = MotionTuning().applying(track.tuning)
-        let previousSpeed = motion.speed
-        // 일시정지 중에는 주행 시간을 0으로 흘려 속도·위치·이탈 타이머가 그대로 멈춘다(Issue #44). HUD 추종·손 상태 표시는 계속.
+        let previousSpeed = rail.speed
+        // 일시정지 중에는 주행 시간을 0으로 흘려 속도·위치가 그대로 멈춘다(Issue #44). HUD 추종·손 상태 표시는 계속.
         let motionDelta: Float = isPaused ? 0 : deltaTime
-        motion = motion.advancing(drive: drive, tuning: tuning, deltaTime: motionDelta)
+        // 레일 주행(결정 58): 중심선 호 길이·가로 오프셋·상대 yaw로 적분한다. 코너 곡률(핸들 안 꺾으면 바깥 벽), 안쪽 라인 보정,
+        // 중력(루프·언덕: 스로틀 없이는 미끄러짐), 벽 충돌은 전부 `RailMotionState` 안에서 처리된다.
+        let step = rail.advancing(drive: drive, tuning: tuning, spline: trackSpline, deltaTime: motionDelta)
+        rail = step.state
+        let pose = rail.pose(on: trackSpline)
+        latestPose = pose
         // 카트 리그(핸들·차체 기울기·바퀴, Issue #26): 손 입력과 속도 변화로 부품을 돌린다.
-        kartRig?.update(drive: drive, speed: motion.speed, maxSpeed: tuning.maxSpeed, acceleration: (motion.speed - previousSpeed) / deltaTime, deltaTime: deltaTime)
+        kartRig?.update(drive: drive, speed: rail.speed, maxSpeed: tuning.maxSpeed, acceleration: (rail.speed - previousSpeed) / deltaTime, deltaTime: deltaTime)
 
-        let positionXZ = SIMD2(motion.position.x, motion.position.z)
-        let (pathIndex, distanceFromCenterline, projectedOnCenterline) = trackPath.closestSegment(to: positionXZ)
+        let pathIndex = trackSpline.frameIndex(at: rail.s)
         let previousProgress = lapTracker.progress
         lapTracker.update(pathIndex: pathIndex)
         let newProgress = lapTracker.progress
@@ -828,39 +840,19 @@ struct ImmersiveBoxView: View {
         } else if newProgress.checkpointsPassedThisLap > previousProgress.checkpointsPassedThisLap {
             sfxPlayer?.play(.checkpoint)
         }
-
-        // 벽 콜리전: 타일 가장자리(중심선에서 tileSize/2)를 벽으로 보고 그 안쪽으로 밀어낸다 — 타일
-        // 메시로 레이캐스트하는 대신, 이미 매 프레임 계산하는 중심선 거리를 그대로 재사용한 단순 모델.
-        // 실제로는 커브 타일 안쪽 모서리엔 벽이 없다(이슈 #9)지만, 좌우를 구분 안 하는 이 모델은
-        // 양쪽을 다 막는다 — 실기기에서 커브 안쪽이 막혀 어색하면 다시 손봐야 한다.
-        let wallDistance = track.tileSize / 2
-        if distanceFromCenterline > wallDistance {
-            let outward = positionXZ - projectedOnCenterline
-            let outwardLength = simd_length(outward)
-            let direction = outwardLength > 0.0001 ? outward / outwardLength : SIMD2<Float>(1, 0)
-            let clamped = projectedOnCenterline + direction * wallDistance
-            motion.position.x = clamped.x
-            motion.position.z = clamped.y
-            if !wasAgainstWall {
-                sfxPlayer?.play(.wallBump)
-            }
-            wasAgainstWall = true
-        } else {
-            wasAgainstWall = false
+        if step.hitWall {
+            sfxPlayer?.play(.wallBump)
         }
-
-        let isOffTrack = distanceFromCenterline > (track.width / 2 + 0.5)
-        offTrackMonitor.update(isOffTrack: isOffTrack, deltaTime: TimeInterval(motionDelta), threshold: tuning.offTrackRespawn)
 
         updateExitSafetyNet(drive: drive, left: leftStatus, right: rightStatus, deltaTime: deltaTime)
 
         latestDrive = drive
         latestLeftStatus = leftStatus
         latestRightStatus = rightStatus
-        latestSpeed = motion.speed
+        latestSpeed = rail.speed
         latestLapProgress = newProgress
         latestCheckpointCount = track.checkpoints.count
-        latestIsOffTrack = isOffTrack
+        latestIsOffTrack = false // 레일 위라 트랙 이탈이 없다(벽이 막는다). 리스폰은 폐기(결정 58).
 
         // 엔진음: DriveState → 페달 크기(방향 무관)·회전 중 유지 여부로 바꿔 상태 기계에 먹인다
         // (ENGINE.md는 forwardHalf/forwardFull 2단계 기준이었는데, 지금은 연속 페달이라 크기를 그대로 쓴다).
@@ -881,37 +873,24 @@ struct ImmersiveBoxView: View {
             dt: Double(deltaTime),
             pedal: pedalMagnitude,
             isHolding: isHolding,
-            speed: Double(motion.speed),
+            speed: Double(rail.speed),
             maxSpeed: Double(tuning.maxSpeed)
         )
         engineAudioPlayer?.run(engineCommands)
 
-        if offTrackMonitor.shouldRespawn {
-            let startPoint = trackPath.points[track.start.pathIndex]
-            motion = KartMotionState(
-                speed: tuning.respawnSpeed,
-                heading: track.start.heading,
-                position: SIMD3(startPoint.x, 0, startPoint.y)
-            )
-            lapTracker.resetPosition(pathIndex: track.start.pathIndex)
-            offTrackMonitor.acknowledgeRespawn()
-            sfxPlayer?.play(.respawn)
-            engineAudioPlayer?.run(engineMachine.respawned())
-        }
-
         // 카트는 씬 루트(트랙 좌표계) 안에서 트랙 좌표 그대로 움직인다. 표시 배율·회전·콕핏 따라붙기는 씬 루트 몫.
-        // 높이는 노면 윗면(타일 바닥 + 0.25 m, Issue #23) — 전에는 0이라 모든 카트가 노면에 파묻혔다.
-        let kartTrackPosition = SIMD2(motion.position.x, motion.position.z)
-        kartSlot.position = SIMD3(kartTrackPosition.x, track.roadSurfaceHeight, kartTrackPosition.y)
-        kartSlot.orientation = simd_quatf(angle: motion.heading, axis: [0, 1, 0])
+        // 자세는 노면 프레임(위치는 노면 위, 루프에서는 높이·거꾸로까지) + 상대 yaw — `KartPose.orientation`.
+        kartSlot.position = pose.position
+        kartSlot.orientation = pose.orientation
         followKart(headYaw: headYaw, deltaTime: deltaTime)
 
         // 미니맵 동기화(테크 PRD 9장 `MinimapSyncSystem` 역할): 마커 위치·회전, 체크포인트 라벨 색, 랩 텍스트.
+        let kartTrackPosition = SIMD2(pose.position.x, pose.position.z)
         if let minimap {
-            minimap.update(kartWorldXZ: kartTrackPosition, heading: motion.heading, progress: newProgress, totalLaps: track.laps)
+            minimap.update(kartWorldXZ: kartTrackPosition, heading: pose.heading, progress: newProgress, totalLaps: track.laps)
             latestMapPosition = minimap.projection.mapPosition(kartTrackPosition)
         }
-        latestHeading = motion.heading
+        latestHeading = pose.heading
 
         // 디버그: 실제로 이동한 거리를 빨간 선으로 쌓고, 콘솔에도 주기적으로 남긴다.
         if let last = lastTrailDisplayPoint {
@@ -923,11 +902,11 @@ struct ImmersiveBoxView: View {
             lastTrailDisplayPoint = kartTrackPosition
         }
 
-        totalDistanceTraveled += motion.speed * deltaTime
+        totalDistanceTraveled += abs(rail.speed) * motionDelta
         motionLogAccumulator += deltaTime
         if motionLogAccumulator >= motionLogInterval {
             motionLogAccumulator = 0
-            print("DEBUG-MOTION drive=\(drive) speed=\(motion.speed)m/s pos=\(motion.position) totalDistance=\(totalDistanceTraveled)m")
+            print("DEBUG-MOTION drive=\(drive) speed=\(rail.speed)m/s s=\(rail.s) lateral=\(rail.lateral) yaw=\(rail.yaw * 180 / .pi) pos=\(pose.position) totalDistance=\(totalDistanceTraveled)m")
         }
     }
 

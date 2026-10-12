@@ -139,14 +139,22 @@ private struct TrackCard: View {
             HStack(spacing: 4) {
                 ForEach(0..<5, id: \.self) { index in
                     Circle()
-                        .fill(index < TrackCatalog.difficultyDots(track.difficulty) ? Color.style(StylePalette.uiGold) : Color.white.opacity(0.3))
+                        .fill(index < TrackCatalog.difficultyDots(track) ? Color.style(StylePalette.uiGold) : Color.white.opacity(0.3))
                         .frame(width: 7, height: 7)
                 }
             }
-            .accessibilityLabel("난이도 \(TrackCatalog.difficultyDots(track.difficulty)) / 5")
+            .accessibilityLabel("난이도 \(TrackCatalog.difficultyDots(track)) / 5")
             Text("최고 " + (bestTotalTime.map(formatRaceTime) ?? "—"))
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
+            // 서킷 특징 태그(결정 58): 루프·헬릭스·시케인… 어떤 스킬을 쓰는 맵인지 한눈에.
+            if let features = track.features, !features.isEmpty {
+                Text(features.filter { $0 != "직선" }.prefix(3).joined(separator: " · "))
+                    .font(.caption2)
+                    .foregroundStyle(Color.style(StylePalette.uiCyan))
+                    .lineLimit(2)
+                    .frame(width: 120, alignment: .leading)
+            }
         }
         .padding(12)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))

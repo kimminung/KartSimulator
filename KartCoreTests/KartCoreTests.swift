@@ -821,3 +821,232 @@ struct RaceModelTests {
         #expect(model.hud.phase == .countdown(3) && model.hud.totalTime == 0 && model.hud.lapTimes.isEmpty && model.hud.lap == 1)
     }
 }
+
+// MARK: - 레일 주행(결정 58): 스플라인·루프·중력·안쪽 라인
+
+/// 두 각의 차(±π).
+private func angleDiff(_ a: Float, _ b: Float) -> Float { atan2(sin(a - b), cos(a - b)) }
+
+private func makeFlatSquareSpline(side: Float = 20) -> TrackSpline {
+    // 한 변 20 m 정사각형, 위에서 보면 **반시계(좌회전)** 순회: +x → −z → −x → +z. 모서리는 격자 트랙처럼 꺾인 점.
+    var pts: [SIMD2<Float>] = []
+    let n = 10
+    for i in 0..<n { pts.append(SIMD2(Float(i) / Float(n) * side, 0)) }
+    for i in 0..<n { pts.append(SIMD2(side, -Float(i) / Float(n) * side)) }
+    for i in 0..<n { pts.append(SIMD2(side - Float(i) / Float(n) * side, -side)) }
+    for i in 0..<n { pts.append(SIMD2(0, -side + Float(i) / Float(n) * side)) }
+    let track = TrackDefinition(
+        schemaVersion: 1, id: "sq", name: "사각", difficulty: "easy", seed: 0, laps: 1, tileSize: 4, width: 3,
+        grid: TrackGrid(cols: 1, rows: 1), tiles: [], path: pts.map { TrackPathPoint(x: $0.x, z: $0.y) },
+        start: TrackStart(pathIndex: 0, heading: 3 * .pi / 2), checkpoints: [10, 20, 30], walls: true, tuning: nil
+    )
+    return TrackSpline(track: track)!
+}
+
+/// 직선 → 반지름 r 수직 루프 → 직선 (gen_circuit.py의 loop와 같은 식, shift 0)
+private func makeLoopSpline(radius r: Float = 3, approach: Float = 10) -> TrackSpline {
+    var frames: [TrackSpline.Frame] = []
+    let ds: Float = 0.25
+    let f = SIMD3<Float>(0, 0, -1), up = SIMD3<Float>(0, 1, 0)
+    var i: Float = 0
+    while i < approach { frames.append(.init(position: f * i, tangent: f, up: up, yawCurvature: 0)); i += ds }
+    let n = Int((2 * .pi * r) / ds)
+    for k in 0..<n {
+        let phi = 2 * Float.pi * Float(k) / Float(n)
+        let p = f * (approach + r * sin(phi)) + up * (r * (1 - cos(phi)))
+        frames.append(.init(position: p, tangent: f * cos(phi) + up * sin(phi), up: -f * sin(phi) + up * cos(phi), yawCurvature: 0))
+    }
+    i = 0
+    while i < approach { frames.append(.init(position: f * (approach + i), tangent: f, up: up, yawCurvature: 0)); i += ds }
+    // 닫기 위해 멀리 돌아오지는 않는다 — 마지막→첫 프레임 구간은 테스트에서 지나가지 않는다.
+    return TrackSpline(frames: frames)
+}
+
+struct TrackSplineTests {
+    @Test func arcLengthAndIndexRoundTrip() {
+        let spline = makeFlatSquareSpline()
+        #expect(abs(spline.totalLength - 80) < 0.01)
+        #expect(spline.frameIndex(at: 0) == 0)
+        #expect(spline.frameIndex(at: 21) == 10)
+        #expect(spline.frameIndex(at: 80 + 5) == 2, "s는 한 바퀴로 감긴다")
+        let f = spline.frame(at: 5)
+        #expect(abs(f.position.x - 5) < 1e-3 && abs(f.position.y - 0.25) < 1e-3, "격자 트랙은 노면 높이 0.25 m")
+        #expect(simd_length(f.tangent - SIMD3(1, 0, 0)) < 1e-3)
+    }
+
+    @Test func gridCornersCarryYawCurvature() {
+        let spline = makeFlatSquareSpline()
+        // 첫 변(+x 방향, heading 3π/2) → 둘째 변(−z 방향, heading 0): 좌회전 90°(+x를 보고 섰을 때 −z가 왼쪽) → 곡률 양수
+        let cornerTurn = spline.frames[10].yawCurvature * 2 // 꺾임 각 ≈ 곡률 × 평균 구간 길이(2 m)
+        #expect(cornerTurn > 1.4 && cornerTurn < 1.75, "모서리에서 +90° 꺾임: \(cornerTurn)")
+        #expect(abs(spline.frames[5].yawCurvature) < 1e-4, "직선은 곡률 0")
+    }
+
+    @Test func loopFramesFlipUpVectorAtTop() {
+        let spline = makeLoopSpline()
+        let top = spline.frame(at: 10 + .pi * 3)
+        #expect(top.up.y < -0.95, "루프 꼭대기에서 법선은 −Y")
+        #expect(abs(top.position.y - 6) < 0.05)
+        #expect(spline.maxHeight > 5.9)
+    }
+}
+
+struct RailMotionStateTests {
+    private let tuning = MotionTuning()
+
+    @Test func straightDriveAdvancesAlongCenterline() {
+        let spline = makeFlatSquareSpline()
+        var state = RailMotionState(startOn: spline, frameIndex: 2) // 모서리(0)가 아니라 변 중간에서
+        for _ in 0..<60 { state = state.advancing(drive: .pedal(1), tuning: tuning, spline: spline, deltaTime: 1 / 60).state }
+        #expect(state.speed > 2.5 && state.s > 5.0 && abs(state.lateral) < 1e-3, "s=\(state.s) lateral=\(state.lateral)")
+        let pose = state.pose(on: spline)
+        #expect(abs(angleDiff(pose.heading, 3 * .pi / 2)) < 1e-3, "첫 변은 +x = heading 3π/2: \(pose.heading)")
+    }
+
+    @Test func notSteeringInCornerDriftsToOuterWall() {
+        let spline = makeFlatSquareSpline()
+        var state = RailMotionState(startOn: spline, frameIndex: 8, speed: 3)
+        var hitWall = false
+        for _ in 0..<240 {
+            let step = state.advancing(drive: .pedal(1), tuning: tuning, spline: spline, deltaTime: 1 / 60)
+            state = step.state; hitWall = hitWall || step.hitWall
+        }
+        // 좌회전 모서리를 핸들 없이 지나면 바깥(오른쪽, lateral 양수) 벽에 붙고 충돌음이 난다
+        #expect(state.lateral > 1.5 && hitWall, "lateral=\(state.lateral) hit=\(hitWall)")
+    }
+
+    @Test func steeringThroughCornerStaysCentered() {
+        let spline = makeFlatSquareSpline()
+        var state = RailMotionState(startOn: spline, frameIndex: 9, speed: 3)
+        // 모서리(인덱스 10) 직전에서 좌회전 입력을 90°만큼 주면 벽에 닿지 않고 중앙 근처에 남는다
+        var turnedDegrees: Float = 0
+        for _ in 0..<120 {
+            let drive: DriveState = turnedDegrees < 90 ? .turnLeft : .pedal(1)
+            if drive == .turnLeft { turnedDegrees += tuning.turnRateHigh * (1 / 60) * 0.85 }
+            state = state.advancing(drive: drive, tuning: tuning, spline: spline, deltaTime: 1 / 60).state
+        }
+        #expect(abs(state.lateral) < 1.5 && state.s > 22, "lateral=\(state.lateral) s=\(state.s)")
+    }
+
+    @Test func insideLaneCoversMoreTrackPerMeter() {
+        var frames: [TrackSpline.Frame] = []
+        // 반지름 5 m 좌회전 원(곡률 +0.2)
+        let n = 100
+        for k in 0..<n {
+            let a = 2 * Float.pi * Float(k) / Float(n)
+            frames.append(.init(position: SIMD3(5 * cos(a), 0, -5 * sin(a)), tangent: SIMD3(-sin(a), 0, -cos(a)), up: SIMD3(0, 1, 0), yawCurvature: 0.2))
+        }
+        let spline = TrackSpline(frames: frames)
+        let inner = RailMotionState(s: 0, lateral: -1.0, yaw: 0, speed: 3).advancing(drive: .turnLeft, tuning: tuning, spline: spline, deltaTime: 0.1).state
+        let outer = RailMotionState(s: 0, lateral: 1.0, yaw: 0, speed: 3).advancing(drive: .turnLeft, tuning: tuning, spline: spline, deltaTime: 0.1).state
+        #expect(inner.s > outer.s, "안쪽(왼쪽) 라인이 중심선 진행량이 크다: \(inner.s) vs \(outer.s)")
+    }
+
+    @Test func loopNeedsThrottleOtherwiseRollsBack() {
+        let spline = makeLoopSpline()
+        // 1) 풀 스로틀로 진입 → 꼭대기를 넘어 반대편 직선까지
+        var full = RailMotionState(startOn: spline, frameIndex: 0, speed: 4)
+        for _ in 0..<(60 * 12) { full = full.advancing(drive: .pedal(1), tuning: tuning, spline: spline, deltaTime: 1 / 60).state }
+        #expect(full.s > 10 + 2 * .pi * 3 + 1, "풀 스로틀이면 루프를 넘는다: s=\(full.s)")
+        // 2) 루프 안에서 손을 떼면(가속 없음) 중력에 밀려 되돌아 내려온다
+        var coast = RailMotionState(s: 10 + 2, lateral: 0, yaw: 0, speed: 4)
+        var minSpeed: Float = 4
+        for _ in 0..<(60 * 6) {
+            coast = coast.advancing(drive: .stopped, tuning: tuning, spline: spline, deltaTime: 1 / 60).state
+            minSpeed = min(minSpeed, coast.speed)
+        }
+        #expect(minSpeed < 0 && coast.s < 10 + 2, "스로틀 없이는 미끄러져 내려온다: minSpeed=\(minSpeed) s=\(coast.s)")
+    }
+
+    @Test func headingHoldsThroughLoopAndUpFlips() {
+        let spline = makeLoopSpline()
+        var state = RailMotionState(startOn: spline, frameIndex: 0, speed: 4)
+        var headings = Set<Int>()
+        var sawInverted = false
+        for _ in 0..<(60 * 12) {
+            state = state.advancing(drive: .pedal(1), tuning: tuning, spline: spline, deltaTime: 1 / 60).state
+            headings.insert(Int((state.pose(on: spline).heading * 180 / .pi).rounded()))
+            if state.pose(on: spline).up.y < -0.9 { sawInverted = true }
+        }
+        #expect(headings.count <= 2, "루프를 도는 동안 평면 heading은 거의 고정(카메라가 돌지 않게): \(headings)")
+        #expect(sawInverted, "꼭대기에서 카트 위쪽이 −Y")
+    }
+
+    @Test func poseOrientationMapsForwardToMinusZ() {
+        let pose = KartPose(position: .zero, forward: SIMD3(1, 0, 0), up: SIMD3(0, 1, 0), heading: 3 * .pi / 2)
+        let rotated = pose.orientation.act(SIMD3<Float>(0, 0, -1))
+        #expect(simd_length(rotated - SIMD3(1, 0, 0)) < 1e-4, "모델 정면(−Z)이 forward로 간다: \(rotated)")
+        let upRotated = pose.orientation.act(SIMD3<Float>(0, 1, 0))
+        #expect(simd_length(upRotated - SIMD3(0, 1, 0)) < 1e-4)
+    }
+}
+
+// MARK: - 서킷 JSON 통합(결정 58): 저장소의 circuit_0X.json을 그대로 읽어 스플라인을 만들고 자동 조향으로 한 바퀴 돈다
+
+private func loadRepoTrack(_ id: String) -> TrackDefinition? {
+    // KartCoreTests/KartCoreTests.swift → ../Tracks/<id>.json
+    let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("Tracks").appendingPathComponent("\(id).json")
+    guard let data = try? Data(contentsOf: url) else { return nil }
+    return try? JSONDecoder().decode(TrackDefinition.self, from: data)
+}
+
+/// 단순 자동 조향: 중심선에서 벗어나거나 상대 yaw가 크면 되돌리는 쪽으로 한 손 핀치(회전, 가속 없음), 아니면 양손 핀치(전진).
+/// 루프·급경사(진행 방향 y가 큰 곳)에서는 핸들을 잡지 않는다(스로틀 유지).
+private func autopilotDrive(state: RailMotionState, spline: TrackSpline) -> DriveState {
+    let frame = spline.frame(at: state.s)
+    if abs(frame.tangent.y) > 0.35 { return .pedal(1) }
+    let desiredYaw = state.lateral * 0.35 // 오른쪽(lateral +)에 있으면 왼쪽(+yaw)으로
+    let error = desiredYaw - state.yaw
+    if abs(error) > 0.12 { return error > 0 ? .turnLeft : .turnRight }
+    return .pedal(1)
+}
+
+struct CircuitIntegrationTests {
+    @Test(arguments: ["circuit_01", "circuit_02", "circuit_03"])
+    func circuitDecodesAndClosesCleanly(id: String) throws {
+        let track = try #require(loadRepoTrack(id), "\(id).json을 저장소에서 읽을 수 있어야 한다")
+        #expect(track.isCircuit && track.model == id && (track.frames?.count ?? 0) == track.path.count)
+        let spline = try #require(TrackSpline(track: track))
+        #expect(abs(spline.totalLength - (track.length ?? 0)) < 1.0, "길이 \(spline.totalLength) vs JSON \(track.length ?? 0)")
+        // 마지막 프레임 → 첫 프레임 간격이 보통 프레임 간격(0.5 m)과 비슷해야 한다(닫힘)
+        let gap = simd_distance(spline.frames.last!.position, spline.frames[0].position)
+        #expect(gap < 1.0, "닫힘 간격 \(gap)")
+        for f in spline.frames {
+            #expect(abs(simd_length(f.tangent) - 1) < 1e-2 && abs(simd_length(f.up) - 1) < 1e-2)
+            #expect(abs(simd_dot(f.tangent, f.up)) < 0.05, "진행 방향과 법선은 직교")
+        }
+        #expect(track.checkpoints.count == 3 && track.start.pathIndex == 0)
+    }
+
+    @Test(arguments: ["circuit_01", "circuit_02", "circuit_03"])
+    func autopilotCompletesALapUnderThreeMinutes(id: String) throws {
+        let track = try #require(loadRepoTrack(id))
+        let spline = try #require(TrackSpline(track: track))
+        let tuning = MotionTuning().applying(track.tuning)
+        var state = RailMotionState(startOn: spline, frameIndex: 0)
+        let tracker = LapTracker(track: track)
+        let dt: Float = 1 / 60
+        var elapsed: Float = 0
+        var maxHeight: Float = 0
+        var hits = 0
+        var lastIndex = 0
+        var completedLap = false
+        while elapsed < 180 {
+            let drive = autopilotDrive(state: state, spline: spline)
+            let step = state.advancing(drive: drive, tuning: tuning, spline: spline, deltaTime: dt)
+            state = step.state
+            if step.hitWall { hits += 1 }
+            let index = spline.frameIndex(at: state.s)
+            tracker.update(pathIndex: index)
+            lastIndex = index
+            maxHeight = max(maxHeight, state.pose(on: spline).position.y)
+            elapsed += dt
+            if tracker.progress.currentLap >= 2 { completedLap = true; break }
+        }
+        #expect(completedLap, "\(id): \(elapsed)초 안에 한 바퀴를 못 돌았다 (index \(lastIndex)/\(spline.frames.count), speed \(state.speed))")
+        #expect(maxHeight > spline.maxHeight * 0.9, "\(id): 가장 높은 구간(루프 꼭대기·다리)까지 올라간다: \(maxHeight) / \(spline.maxHeight)")
+        #expect(hits < 40, "\(id): 자동 조향이 벽을 너무 자주 친다(\(hits)회) — 코너가 너무 급하거나 곡률 부호가 틀렸을 수 있다")
+        print("CIRCUIT \(id) lap in \(elapsed)s, wall hits \(hits), maxHeight \(maxHeight)")
+    }
+}

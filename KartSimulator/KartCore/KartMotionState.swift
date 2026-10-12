@@ -15,7 +15,7 @@ public struct KartMotionState: Equatable, Sendable {
     public func advancing(drive: DriveState, tuning: MotionTuning, deltaTime: Float) -> KartMotionState {
         var next = self
 
-        let target = Self.target(for: drive, current: speed, tuning: tuning)
+        let target = Self.targetSpeed(for: drive, current: speed, tuning: tuning)
         let rate = target > speed ? tuning.accel : Self.decelRate(for: drive, tuning: tuning)
         next.speed = Self.approach(speed, toward: target, by: rate * deltaTime)
 
@@ -32,7 +32,8 @@ public struct KartMotionState: Equatable, Sendable {
         return next
     }
 
-    private static func target(for drive: DriveState, current: Float, tuning: MotionTuning) -> Float {
+    /// 목표 속도(`RailMotionState`도 같은 규칙을 쓴다).
+    static func targetSpeed(for drive: DriveState, current: Float, tuning: MotionTuning) -> Float {
         switch drive {
         case .stopped, .waiting: return 0
         case .turnLeft, .turnRight: return current
@@ -42,11 +43,11 @@ public struct KartMotionState: Equatable, Sendable {
         }
     }
 
-    private static func decelRate(for drive: DriveState, tuning: MotionTuning) -> Float {
+    static func decelRate(for drive: DriveState, tuning: MotionTuning) -> Float {
         drive == .waiting ? tuning.brakeDecel : tuning.coastDecel
     }
 
-    private static func approach(_ value: Float, toward target: Float, by maxDelta: Float) -> Float {
+    static func approach(_ value: Float, toward target: Float, by maxDelta: Float) -> Float {
         guard maxDelta > 0 else { return value }
         if value < target { return min(value + maxDelta, target) }
         if value > target { return max(value - maxDelta, target) }

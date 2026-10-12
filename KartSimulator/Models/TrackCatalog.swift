@@ -5,8 +5,9 @@ import Foundation
 /// `TrackDefinition`의 Codable 합성이 기본 격리(main actor)라 카탈로그 전체를 main actor에 둔다 — 쓰는 곳(뷰·박스)도 모두 main actor다.
 @MainActor
 enum TrackCatalog {
-    /// 카드 순서 = 난이도 순. 첫 바퀴(easy) → 노치 하나(normal) → 두 번 꺾기(hard).
-    static let trackIDs = ["track_01", "track_02", "track_03"]
+    /// 카드 순서 = 난이도 순(결정 58 서킷 3종): 루키 오벌(easy) → 리본 루프(normal) → 스카이 스파이럴(hard).
+    /// 격자 타일 트랙(`track_0X`, 스키마 1)은 `Tracks/`에 원본만 남기고 번들에서 뺐다 — 코드는 둘 다 읽을 수 있다.
+    static let trackIDs = ["circuit_01", "circuit_02", "circuit_03"]
 
     /// 번들에서 한 번만 디코딩해 둔다(카드 썸네일·박스 로드가 같이 쓴다).
     static let tracks: [TrackDefinition] = trackIDs.compactMap(load)
@@ -28,9 +29,10 @@ enum TrackCatalog {
         }
     }
 
-    /// 난이도 점 개수(5개 중). 디자인 목업 `01_start`의 easy 1·normal 2·hard 4를 그대로 쓴다.
-    static func difficultyDots(_ difficulty: String) -> Int {
-        switch difficulty {
+    /// 난이도 점 개수(5개 중). 서킷은 JSON의 `difficultyDots`, 없으면 디자인 목업 `01_start`의 easy 1·normal 2·hard 4.
+    static func difficultyDots(_ track: TrackDefinition) -> Int {
+        if let dots = track.difficultyDots { return min(max(dots, 0), 5) }
+        switch track.difficulty {
         case "easy": return 1
         case "normal": return 2
         case "hard": return 4

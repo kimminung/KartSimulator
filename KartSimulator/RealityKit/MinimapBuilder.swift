@@ -97,10 +97,17 @@ enum MinimapBuilder {
             print("DEBUG-MINIMAP Diorama_Base.usdz 없음 — 원기둥 받침 사용")
         }
 
-        // 2. 지형 원판(디자인 PRD 6장 "평평한 원판", 색은 목업대로 ui-panel).
+        // 테마 색(결정 58, 서킷 JSON `theme.minimap`): 공원 / 네온 나이트 / 사막 협곡이 미니맵에서도 구분된다. 없으면 기본 팔레트.
+        let mm = track.theme?.minimap
+        let roadHex = mm?.road ?? StylePalette.mmRoad
+        let edgeHex = mm?.edge ?? StylePalette.mmEdge
+        let discHex = mm?.disc ?? StylePalette.uiPanel
+        let accentHex = mm?.accent ?? StylePalette.uiSky
+
+        // 2. 지형 원판(디자인 PRD 6장 "평평한 원판", 색은 목업대로 ui-panel — 테마가 있으면 테마 색).
         let disc = ModelEntity(
             mesh: .generateCylinder(height: 0.004, radius: radius * 0.94),
-            materials: [UnlitMaterial(color: .style(StylePalette.uiPanel))]
+            materials: [UnlitMaterial(color: .style(discHex))]
         )
         disc.position.y = 0.002
         minimap.mapRoot.addChild(disc)
@@ -108,13 +115,36 @@ enum MinimapBuilder {
         // 3. 노면 리본: 테두리(mm-edge) → 노면(mm-road) → 궤적(ui-sky 40 %) 세 층. 트랙 중심선 그대로.
         let roadWidth = projection.mapLength(track.width)
         let layers: [(width: Float, y: Float, material: UnlitMaterial)] = [
-            (roadWidth * 1.25, 0.0045, UnlitMaterial(color: .style(StylePalette.mmEdge))),
-            (roadWidth, 0.0055, UnlitMaterial(color: .style(StylePalette.mmRoad))),
+            (roadWidth * 1.25, 0.0045, UnlitMaterial(color: .style(edgeHex))),
+            (roadWidth, 0.0055, UnlitMaterial(color: .style(roadHex))),
             (roadWidth / 3, 0.0065, trajectoryMaterial()),
         ]
         let mapPoints = path.points.map { projection.mapPosition($0) }
         for layer in layers {
             addRibbon(points: mapPoints, width: layer.width, y: layer.y, material: layer.material, into: minimap.mapRoot)
+        }
+
+        // 3b. 서킷(결정 58): 고가 구간(노면 0.8 m 이상 — 다리·루프·헬릭스 윗부분)은 테마 강조색 띠로, 특징 구간(루프·헬릭스·
+        //     시케인·뱅크…)은 짧은 라벨로 표시해 어느 구간에서 어떤 스킬이 필요한지 미니맵만 봐도 알 수 있게 한다.
+        if let frames = track.frames, frames.count == mapPoints.count {
+            let accent = UnlitMaterial(color: .style(accentHex))
+            var run: [SIMD2<Float>] = []
+            func flush() {
+                if run.count >= 2 { addRibbon(points: run, width: roadWidth * 0.45, y: 0.0068, material: accent, into: minimap.mapRoot, closed: false) }
+                run.removeAll()
+            }
+            for (i, frame) in frames.enumerated() {
+                if frame.count > 1, frame[1] > 0.8 { run.append(mapPoints[i]) } else { flush() }
+            }
+            flush()
+            let skip: Set<String> = ["직선", "백 스트레이트"]
+            for section in track.sections ?? [] where !skip.contains(section.feature) {
+                let mid = mapPoints[min((section.from + section.to) / 2, mapPoints.count - 1)]
+                let label = makeText(section.feature, size: 0.0052, material: UnlitMaterial(color: .style(accentHex)))
+                label.wrapper.orientation = simd_quatf(angle: -.pi / 2, axis: [1, 0, 0]) // 누워서 위를 보게
+                label.wrapper.position = SIMD3(mid.x, 0.0095, mid.y)
+                minimap.mapRoot.addChild(label.wrapper)
+            }
         }
 
         // 4. 출발 깃발: 기둥 + 작은 깃발(mm-finish). 체커 무늬는 보류(결정 48).
@@ -162,10 +192,10 @@ enum MinimapBuilder {
 
     /// 닫힌 점열을 폭 `width`의 납작한 상자들로 잇는다. 꺾이는 점마다 정사각 조각을 두어 틈을 메운다.
     @MainActor
-    private static func addRibbon(points: [SIMD2<Float>], width: Float, y: Float, material: UnlitMaterial, into parent: Entity) {
+    private static func addRibbon(points: [SIMD2<Float>], width: Float, y: Float, material: UnlitMaterial, into parent: Entity, closed: Bool = true) {
         guard points.count >= 2 else { return }
         let thickness: Float = 0.001
-        for i in 0..<points.count {
+        for i in 0..<(closed ? points.count : points.count - 1) {
             let a = points[i], b = points[(i + 1) % points.count]
             let delta = b - a
             let length = simd_length(delta)
