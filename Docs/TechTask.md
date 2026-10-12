@@ -106,6 +106,7 @@ Oct 10, 2026 · @Coulson 기준, `Docs/tech-prd.md`에서 파생. 마일스톤 �
 - [x] HUD를 2D `.overlay`에서 `RealityView`의 3D attachment(entity에 붙는 SwiftUI 뷰)로 교체 (결정 25·26번)
 - [x] 카운트다운 대기(3·2·1·GO 입력 잠금, HUD 큰 숫자) — Issue #41, 결정 56
 - [x] 결과 화면(총 시간·랩별·신기록·다시 하기) — Issue #42, 결정 56
+- [x] 배경음 3곡 연결(`Resources/BGM/`, `BGMPlayer` 머리 고정 재생, GO 1.0초 페이드 인 → 반복 → 완주 2.0초/종료 0.5초 페이드 아웃, 레이스마다 곡 순환, 버스 −6 dB) — 디자인 결정 55-1, 결정 56. 일시정지 덕킹(−10 dB)은 #44에서
 - [ ] 시작 화면 트랙 선택(track_01·02·03) — Issue #43
 - [ ] 일시정지 패널 — Issue #44
 - [ ] HUD 속도계 교체 — Issue #28(디자인 리소스 대기)

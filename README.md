@@ -77,7 +77,7 @@ Apple Vision Pro 실기기에서 플레이한 영상입니다. 썸네일을 누�
 | 트랙 | 타일 4종(`straight`/`curve`/`start`/`grass`)을 JSON 정의대로 3D 배치. 벽 콜리전 + `wallBump` 효과음, 트랙 이탈 감지 |
 | 입력 | 양손 핀치 유지=전진, 핀치한 채 벌리면 후진, 한손만 핀치=반대쪽 회전. 디오라마·3인칭 두 모드가 같은 조작(결정 49). HUD 버튼으로 즉시 전환 |
 | HUD | 랩·타임·속도 패널, 양손 핀치 상태 + 세로 페달 게이지, 모드 전환 버튼, 카운트다운 3·2·1·GO, 완주 결과(총 시간·랩별·신기록·다시 하기) (RealityView attachment) |
-| 소리 | 효과음 7종(자체 합성) + 엔진음 5종(시동·가속·루프·감속·공회전) 상태 기계 |
+| 소리 | 효과음 7종(자체 합성) + 엔진음 5종(시동·가속·루프·감속·공회전) 상태 기계 + 배경음 3곡(iMasterProX 작곡, GO 페이드 인 → 완주 페이드 아웃, 머리 고정 재생) |
 | 온보딩 | 첫 실행 시 조작법 시트. 두 모드가 같은 손 그림 5장을 쓴다 |
 | 미니맵 | Diorama 테이블 위에 트랙 JSON에서 만든 노면·궤적·출발 깃발·체크포인트 라벨·카트 마커·랩 텍스트. 디오라마는 박스 모서리, 3인칭은 HUD 오른쪽 아래에서 머리를 따라옴 (M4 1차) |
 | 카트 리그 | 핸들 82° 핀치 연동, 코너 바깥 차체 기울기·가감속 피치 (바퀴 굴림은 재내보내기 대기) |
@@ -215,7 +215,7 @@ sequenceDiagram
 | `KartSimulator/KartCore/` | 입력 해석, 주행 물리, 트랙 경로, 랩·HUD 상태, 엔진음 상태 기계, 카트 정면 보정, 씬 배치(콕핏) |
 | `KartSimulator/RealityKit/` | 박스 프레임, 타일 라이브러리, 카트 맞춤·도색, 오디오 재생, 미니맵 빌더 |
 | `KartSimulator/Models/` | 카트 카탈로그·선택 상태, 이머시브 세션 상태 |
-| `KartSimulator/Resources/` | 카트 USDZ·텍스처, 타일 USDZ, 효과음·엔진음, Galmuri 폰트 |
+| `KartSimulator/Resources/` | 카트 USDZ·텍스처, 타일 USDZ, 효과음·엔진음·배경음, Galmuri 폰트 |
 | `KartCoreTests/` | Swift Testing 63개 (입력 해석·조향·정면 보정·씬 배치·추적 카메라·미니맵 투영·카트 리그·트랙 경로·랩) |
 | `Tracks/`, `Tools/` | 트랙 JSON 2개 + 생성·검증 스크립트, glb→USDZ 변환 |
 
@@ -251,6 +251,7 @@ flowchart LR
 | 온보딩 그림 11장 | `Design/onboarding/gesture_*.svg` | 디오라마 5·1인칭 2·3인칭 4, 240×240 |
 | 화면 목업 8장 | `Design/mockups/` | 시작·조작법·대기·카운트다운·주행·일시정지·결과·미니맵 |
 | 효과음·엔진음 | `Assets/sfx/` | 출처·라이선스는 `Assets/sfx/LICENSES.md` |
+| 배경음 3곡 | `Assets/bgm/` | iMasterProX 원곡(공동 저작물), 재생 규칙은 `Assets/bgm/README.md` |
 | 폰트 | `Design/fonts/` | Galmuri (SIL OFL 1.1) |
 
 ## 테크 × 디자인 협업 흐름

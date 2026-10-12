@@ -88,6 +88,8 @@ struct ImmersiveBoxView: View {
     @State private var engineMachine = EngineSoundMachine()
     @State private var engineAudioPlayer: EngineAudioPlayer?
     @State private var sfxPlayer: SFXPlayer?
+    // 배경음 3곡(디자인 결정 55, `Assets/bgm/README.md`): 머리 고정 앰비언트라 RealityKit 밖에서 `AVAudioPlayer`로 튼다.
+    @State private var bgmPlayer = BGMPlayer()
 
     // RealityKit의 매 프레임 콜백에서 안전하게 쓸 수 있는 평범한 스냅샷. `raceModel`은 HUD가
     // 직접 읽으므로, 프레임 콜백에서 바로 건드리면 "Modifying state during view update"가 난다.
@@ -256,6 +258,7 @@ struct ImmersiveBoxView: View {
             Attachment(id: "hud") {
                 RaceHUDOverlay(hud: raceModel.hud, mode: mode, showsGoFlash: showsGoFlash, result: raceResult, onModeChange: { mode = $0 }, onRestart: { restartRace() }) {
                     Task {
+                        bgmPlayer.stop(fadeOut: 0.5) // 앱·박스 종료는 0.5초 페이드(배경음 규칙 2)
                         // 3인칭에서 숨긴 메뉴 창을 먼저 사용자 정면에 다시 연다(Issue #27). 창이 하나도 없으면 공간을 닫는 순간 앱이 사라진다.
                         if immersiveSession.menuWindowHidden { openWindow(id: AppScene.menuWindowID); immersiveSession.menuWindowHidden = false }
                         await dismissImmersiveSpace()
@@ -270,6 +273,9 @@ struct ImmersiveBoxView: View {
         }
         .task {
             await runHUDUpdateLoop()
+        }
+        .onDisappear {
+            bgmPlayer.stop(fadeOut: 0.5)
         }
     }
 
@@ -592,6 +598,7 @@ struct ImmersiveBoxView: View {
         raceLocked = true
         showsGoFlash = false
         countdownTask?.cancel()
+        bgmPlayer.stop(fadeOut: 0.5) // 카운트다운 동안은 배경음 없음(다시 하기로 들어와도 마찬가지)
         engineAudioPlayer?.run(engineMachine.countdownStarted())
         countdownTask = Task { @MainActor in
             for remaining in [3, 2, 1] {
@@ -603,6 +610,7 @@ struct ImmersiveBoxView: View {
             guard !Task.isCancelled else { return }
             raceModel.go()
             sfxPlayer?.play(.go)
+            bgmPlayer.startNextTrack(fadeIn: 1.0) // GO 효과음과 동시에 1.0초 페이드 인, 레이스마다 다음 곡
             raceLocked = false
             showsGoFlash = true
             try? await Task.sleep(for: .seconds(0.6))
@@ -747,6 +755,7 @@ struct ImmersiveBoxView: View {
         if !previousProgress.isFinished && newProgress.isFinished {
             sfxPlayer?.play(.finish)
             engineAudioPlayer?.run(engineMachine.finished())
+            bgmPlayer.stop(fadeOut: 2.0) // 완주: `finish` 효과음과 동시에 2.0초 페이드 아웃
             raceLocked = true // 완주: 입력 무시, 관성으로 서서히 정지. 결과 패널은 HUD 루프가 띄운다.
         } else if newProgress.currentLap != previousProgress.currentLap {
             sfxPlayer?.play(.lapComplete)
