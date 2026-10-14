@@ -138,6 +138,13 @@ Oct 10, 2026 · @Coulson 기준, `Docs/tech-prd.md`에서 파생. 마일스톤 �
 - [x] #63 운전자 kart_idle 클립 USDZ, 가스펠 착석 부착(배율 한 번) — 조향 연동·4종 피팅은 후속
 - [ ] 실기기: 준비음 간격·음량, 속도계 가독성, 풍차 회전 방향, 운전자 좌석 정렬, Vision Pro 홈 화면 아이콘
 
+## 속도계 가운데 아래 · 데모 실행 모드 · 시뮬레이터 캡처 (2026-10-14, 결정 66)
+
+- [x] 속도계를 visionOS HUD 패널·iOS 화면 모두 가운데 아래로(랩 패널에서 분리)
+- [x] DEBUG 데모 실행 인자(`-demoTrack -demoMode -demoAutopilot`), `Autopilot` 공용화(테스트·visionOS·iOS), 시뮬레이터 3인칭 데모 카메라
+- [x] Vision Pro 시뮬레이터 캡처 6장(`Docs/review/vision-sim/`) — 리본 루프 360° 루프 4장, 스카이 스파이럴 헬릭스 2장 → README "서킷 3종" 절
+- [ ] 실기기: 속도계 위치·크기 체감(Vision Pro·iPhone), 디오라마 모드 캡처는 실기기로
+
 ## M6 — 폴리시 · 출시 준비 (GitHub 마일스톤 "M6 — 출시 준비": Issue #45·#46)
 
 - [x] 성능 예산 측정 — 자체 측정기(`FrameTimeSampler`+`MemoryFootprint` PERF 로그, 결정 61)로 시뮬레이터 수치 기록(`Docs/review/perf_2026-10-12.md`), 미니맵 리본 메시 병합·타일 반경 컬링(결정 59). 실기기 Instruments 표는 후속(다듬기)

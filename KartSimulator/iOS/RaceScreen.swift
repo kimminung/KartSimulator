@@ -69,11 +69,7 @@ struct RaceScreen: View {
         let hud = controller.raceModel.hud
         VStack {
             HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 8) {
-                    hudPanel(hud)
-                    // 속도계(결정 63·65): 103×79 레이어 + 연속 게이지 + 부스트 프레임
-                    SpeedometerView(speedKmh: hud.speedKmh, boostThresholdKmh: controller.boostThresholdKmh, scale: 1.4)
-                }
+                hudPanel(hud)
                 Spacer()
                 VStack(alignment: .trailing, spacing: 8) {
                     Picker("시점", selection: Binding(get: { controller.cameraMode }, set: { controller.setCameraMode($0) })) {
@@ -101,6 +97,10 @@ struct RaceScreen: View {
             Spacer()
             HStack(alignment: .bottom) {
                 PinchHintView(left: hud.left.pinching, right: hud.right.pinching, drive: hud.drive)
+                Spacer()
+                // 속도계(결정 63·65·66): 화면 **가운데 하단**(사용자 요청). 엄지 존 위에 떠 있고 터치는 통과시킨다.
+                SpeedometerView(speedKmh: hud.speedKmh, boostThresholdKmh: controller.boostThresholdKmh, scale: 1.6)
+                    .allowsHitTesting(false)
                 Spacer()
                 if let track = controller.track {
                     TrackPlanCanvas(

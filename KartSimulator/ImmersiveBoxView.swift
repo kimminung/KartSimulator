@@ -82,7 +82,7 @@ struct ImmersiveBoxView: View {
     /// 종료 안전망: 3인칭에서 정지 + 양손 해제가 이만큼 이어지면 메뉴 창을 다시 연다(결정 53 추가).
     @State private var stoppedHandsFreeSeconds: Float = 0
     private let menuWindowReopenAfter: Float = 4
-    private let cockpitTuning = CockpitTuning()
+    @State private var cockpitTuning = CockpitTuning()
     /// 디오라마: 트랙 JSON의 출발 방향은 랩·체크포인트 판정 기준이라 건드리지 않고, 박스 안의 트랙 전체를
     /// 180° 돌려 사용자 쪽에서 볼 때 카트가 반대쪽을 보고 출발하게 한다(결정 43번).
     private let dioramaYaw: Float = .pi
@@ -333,6 +333,11 @@ struct ImmersiveBoxView: View {
         } else {
             // 모드에 들어온 순간의 머리 위치·방향을 기준으로 잡는다(시뮬레이터처럼 못 읽으면 기본값).
             let head = currentHeadPose() ?? (position: SIMD3<Float>(0, 1.2, 0), yaw: Float(0))
+            if DemoLaunch.isActive, currentHeadPose() == nil {
+                // 데모 촬영(결정 66): 시뮬레이터는 머리 자세가 없어 기본 눈높이로는 카트가 화면 아래로 빠진다 → 카트를 더 앞·덜 아래에.
+                cockpitTuning.thirdPersonKartAhead = 4.5
+                cockpitTuning.thirdPersonEyeAboveFloor = 1.3
+            }
             cockpitAnchor = head.position
             // 기준 방향 = 진입 순간 머리 yaw. 들어오자마자 카트 뒤에서 앞을 보도록 씬 yaw를 바로 맞춘다.
             chaseReference = ChaseCameraReference(forwardYaw: head.yaw)
@@ -657,6 +662,7 @@ struct ImmersiveBoxView: View {
         rail = RailMotionState(startOn: spline, frameIndex: definition.start.pathIndex)
         latestPose = rail.pose(on: spline)
         raceModel.start(totalLaps: definition.laps)
+        if DemoLaunch.modeName == "thirdPerson" { mode = .thirdPerson }
         applyModeLayout()
         startCountdown()
     }
@@ -872,7 +878,14 @@ struct ImmersiveBoxView: View {
         // `ingest()`에서 찍는 시계(CACurrentMediaTime)와 반드시 같은 기준이어야 한다. 섞어 쓰면
         // HandInputResolver의 스테일 판정이 항상 틀어진다(결정 24번).
         let now = CACurrentMediaTime()
-        let (resolvedDrive, leftStatus, rightStatus) = inputResolver.resolve(now: now, mode: mode)
+        var (resolvedDrive, leftStatus, rightStatus) = inputResolver.resolve(now: now, mode: mode)
+        if DemoLaunch.autopilot {
+            // 데모 촬영(결정 66): 손 대신 자동 조향으로 달린다(시뮬레이터 README 캡처용, DEBUG 전용).
+            resolvedDrive = Autopilot.drive(state: rail, spline: trackSpline)
+            let pinching = resolvedDrive != .stopped
+            leftStatus = HandStatus(tracked: true, pinching: pinching && resolvedDrive != .turnRight)
+            rightStatus = HandStatus(tracked: true, pinching: pinching && resolvedDrive != .turnLeft)
+        }
         // 카운트다운 중·완주 뒤에는 입력을 무시한다(결정 56). 손 상태 자체는 HUD에 그대로 보여 준다.
         let drive: DriveState = raceLocked ? .stopped : resolvedDrive
         // 출발 전(카운트다운)에 페달·회전을 넣으면 오류음 한 번(결정 65, `cue_error`).
@@ -1098,8 +1111,6 @@ private struct RaceHUDOverlay: View {
             }
             .font(.caption.monospacedDigit())
             .foregroundStyle(Color.style(StylePalette.uiInk).opacity(0.8))
-            // 속도계(결정 63·65, Issue #59): 103×79 레이어 + 연속 게이지, 부스트 프레임 전환.
-            SpeedometerView(speedKmh: hud.speedKmh, boostThresholdKmh: boostThresholdKmh, scale: 1.6)
             if hud.respawning {
                 Text("트랙 이탈")
                     .font(.caption.bold())
@@ -1107,6 +1118,8 @@ private struct RaceHUDOverlay: View {
             }
         }
         PinchStatusView(drive: hud.drive, left: hud.left, right: hud.right)
+        // 속도계(결정 63·65·66, Issue #59): 패널 **가운데 아래**(사용자 요청) — 103×79 레이어 + 연속 게이지, 부스트 프레임 전환.
+        SpeedometerView(speedKmh: hud.speedKmh, boostThresholdKmh: boostThresholdKmh, scale: 1.6)
         if hud.phase == .racing {
             Button("일시정지", action: onPause)
                 .buttonStyle(.bordered)

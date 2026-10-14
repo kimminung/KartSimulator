@@ -105,7 +105,20 @@ struct ContentView: View {
             .padding(24)
         }
         .onAppear {
-            if !hasSeenOnboarding { showOnboarding = true }
+            if let demoTrack = DemoLaunch.trackID, TrackCatalog.track(id: demoTrack) != nil {
+                // 데모 촬영(결정 66): 온보딩 없이 트랙을 고르고 1초 뒤 박스를 연다.
+                selection.selectedTrackID = demoTrack
+                Task {
+                    try? await Task.sleep(for: .seconds(1))
+                    #if os(visionOS)
+                    if !immersiveSession.isOpen { await toggleImmersiveSpace() }
+                    #else
+                    showRace = true
+                    #endif
+                }
+            } else if !hasSeenOnboarding {
+                showOnboarding = true
+            }
         }
         .sheet(isPresented: $showOnboarding) {
             OnboardingView {
