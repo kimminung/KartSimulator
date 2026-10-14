@@ -55,6 +55,7 @@ struct ImmersiveBoxView: View {
     @State private var boxFrame = Entity()
     @State private var boxFloor = Entity()
     @State private var hudEntity: Entity?
+    @State private var speedometerEntity: Entity?
     @State private var loadedKartEntity: Entity?
     /// 카트 움직이는 부품(핸들·차체·바퀴) 리그(Issue #26, 결정 51). 카트를 로드할 때마다 새로 만든다.
     @State private var kartRig: KartRig?
@@ -146,6 +147,25 @@ struct ImmersiveBoxView: View {
     /// HUD(속도/랩 표시)를 발밑이 아니라 박스 바로 위에 띄우기 위한 위치.
     private var hudPosition: SIMD3<Float> {
         boxPosition + SIMD3(0, boxSize.y / 2 + 0.15, 0)
+    }
+    /// 속도계(결정 66, 사용자: "비전프로에서도 계기판은 내가 바라보는 중심 하단"): HUD 패널과 별개 attachment.
+    /// 디오라마 = 박스 앞면 아래 가운데(박스를 보는 시선의 하단 중앙). 3인칭 = **카트를 가리지 않고 카트보다 아래, 시야 최하단 중앙**
+    /// (사용자 지시): 눈에서 카트까지의 내림각(기본 튜닝 atan(1.8/2.5) ≈ 36°, 데모 카메라 ≈ 16°)에 16°를 더한 방향으로 1 m 앞에 두고
+    /// HUD처럼 머리 yaw를 따라온다. 카트 반높이는 2.5 m 거리에서 10° 미만이라 겹치지 않는다.
+    private var speedometerDioramaPosition: SIMD3<Float> {
+        boxPosition + SIMD3(0, -boxSize.y / 2 - 0.03, boxSize.z / 2 + 0.08)
+    }
+    private let speedometerBelowKartDegrees: Float = 16
+    private let speedometerDistance: Float = 1.0
+
+    /// 3인칭 속도계 목표 위치: 머리에서 `yaw` 방향, 카트 내림각 + 여유각만큼 아래.
+    private func thirdPersonSpeedometerGoal(head: SIMD3<Float>, yaw: Float) -> SIMD3<Float> {
+        let kartPitch = atan2(cockpitTuning.thirdPersonEyeAboveFloor, cockpitTuning.thirdPersonKartAhead)
+        // 시뮬레이터 데모(머리 자세 없음)는 화면 아래 끝이 약 32° 아래라 여유각을 줄여야 캡처에 들어온다. 실기기는 16°.
+        let extraDegrees: Float = (DemoLaunch.isActive && currentHeadPose() == nil) ? 8.5 : speedometerBelowKartDegrees
+        let pitch = kartPitch + extraDegrees * .pi / 180
+        let forward = ScenePlacement.forward(heading: yaw)
+        return head + forward * (speedometerDistance * cos(pitch)) + SIMD3(0, -speedometerDistance * sin(pitch), 0)
     }
     /// 속도계 부스트 프레임 기준(결정 63): 튜닝 최고 속도의 90 %(km/h). 기본 4.0 m/s → 12.96.
     private var boostThresholdKmh: Double {
@@ -247,6 +267,15 @@ struct ImmersiveBoxView: View {
                 content.add(hudAttachment)
                 hudEntity = hudAttachment
             }
+            if let speedometerAttachment = attachments.entity(for: "speedometer") {
+                speedometerAttachment.position = speedometerDioramaPosition
+                speedometerAttachment.components.set(BillboardComponent())
+                content.add(speedometerAttachment)
+                speedometerEntity = speedometerAttachment
+            }
+            // `loadTrack()`(위)이 attachment보다 먼저 `applyModeLayout()`을 돌려 HUD·속도계 위치를 못 잡는다. 데모 실행처럼
+            // 처음부터 3인칭이면 attachment가 생긴 지금 한 번 더 배치한다(디오라마는 위에서 넣은 기본 위치가 그대로 맞다).
+            if mode != .diorama { applyModeLayout() }
 
             updateSubscription = content.subscribe(to: SceneEvents.Update.self) { event in
                 let headYaw = updateHeadDebugGizmo()
@@ -273,8 +302,13 @@ struct ImmersiveBoxView: View {
             // "박스 닫기"를 창(ContentView)의 버튼이 아니라 이 패널에도 넣어 둔다. 창 버튼은
             // `inputCatcher`와 같은 공간을 공유해 호버가 불안정했는데(결정 26번), 박스 바로 위에
             // 떠 있는 이 패널은 겹치는 엔티티가 없어 바라보고 누르기 훨씬 쉽다.
+            // 속도계(결정 66): 패널에서 떼어 시선 **하단 중앙**에 따로 띄운다(배치는 `applyModeLayout`·`followHUD`).
+            Attachment(id: "speedometer") {
+                SpeedometerView(speedKmh: raceModel.hud.speedKmh, boostThresholdKmh: boostThresholdKmh, scale: 1.6)
+                    .padding(6)
+            }
             Attachment(id: "hud") {
-                RaceHUDOverlay(hud: raceModel.hud, mode: mode, showsGoFlash: showsGoFlash, result: raceResult, lapBanner: lapBanner, boostThresholdKmh: boostThresholdKmh, onModeChange: { mode = $0 }, onRestart: { restartRace() }, onPause: { pauseRace() }, onResume: { resumeRace() }, onTrackSelect: {
+                RaceHUDOverlay(hud: raceModel.hud, mode: mode, showsGoFlash: showsGoFlash, result: raceResult, lapBanner: lapBanner, onModeChange: { mode = $0 }, onRestart: { restartRace() }, onPause: { pauseRace() }, onResume: { resumeRace() }, onTrackSelect: {
                     // 트랙 카드는 메뉴 창에 있다. 3인칭에서 숨긴 창을 정면에 다시 열면 고르는 즉시 박스가 새 트랙으로 바뀐다(`reloadTrack`).
                     if immersiveSession.menuWindowHidden { openWindow(id: AppScene.menuWindowID); immersiveSession.menuWindowHidden = false }
                 }) {
@@ -328,6 +362,7 @@ struct ImmersiveBoxView: View {
                 at: boxFloorWorld, yaw: sceneYaw, scale: trackDisplayScale
             )
             hudEntity?.position = hudPosition
+            speedometerEntity?.position = speedometerDioramaPosition
             inputCatcher.position = boxPosition
             inputCatcher.components.set(CollisionComponent(shapes: [.generateBox(size: boxSize * 1.4)]))
         } else {
@@ -336,7 +371,7 @@ struct ImmersiveBoxView: View {
             if DemoLaunch.isActive, currentHeadPose() == nil {
                 // 데모 촬영(결정 66): 시뮬레이터는 머리 자세가 없어 기본 눈높이로는 카트가 화면 아래로 빠진다 → 카트를 더 앞·덜 아래에.
                 cockpitTuning.thirdPersonKartAhead = 4.5
-                cockpitTuning.thirdPersonEyeAboveFloor = 1.3
+                cockpitTuning.thirdPersonEyeAboveFloor = 1.1
             }
             cockpitAnchor = head.position
             // 기준 방향 = 진입 순간 머리 yaw. 들어오자마자 카트 뒤에서 앞을 보도록 씬 yaw를 바로 맞춘다.
@@ -349,6 +384,7 @@ struct ImmersiveBoxView: View {
             // HUD는 들어온 순간 머리 앞 1.2 m, 약간 아래에 고정(빌보드라 방향은 알아서 사용자를 본다).
             let hudForward = ScenePlacement.forward(heading: head.yaw)
             hudEntity?.position = head.position + hudForward * 1.2 + SIMD3(0, -0.15, 0)
+            speedometerEntity?.position = thirdPersonSpeedometerGoal(head: head.position, yaw: head.yaw)
             // 핀치는 `inputCatcher`를 봐야만 잡히므로(결정 26·33) 실제 크기 모드에서는 넓게 덮되, **머리를 콜라이더 안에
             // 넣지 않는다**(결정 53 추가): 머리가 40 m 상자 안에 있으면 시선 레이가 상자를 거리 0에서 맞춰 HUD 버튼이
             // 호버되지 않았다(실기기: 디오라마·3인칭·박스 닫기 버튼 먹통). 눈높이 1.1 m 아래의 바닥 슬래브(트랙·카트를
@@ -362,7 +398,7 @@ struct ImmersiveBoxView: View {
             fitKart(kart)
         }
         layoutMinimap()
-        debugLog("DEBUG-LAYOUT mode=\(mode) sceneYaw=\(sceneYaw * 180 / .pi)도 scale=\(sceneRoot.scale.x) anchor=\(cockpitAnchor)")
+        debugLog("DEBUG-LAYOUT mode=\(mode) sceneYaw=\(sceneYaw * 180 / .pi)도 scale=\(sceneRoot.scale.x) anchor=\(cockpitAnchor) hud=\(hudEntity?.position.description ?? "nil") speedo=\(speedometerEntity?.position.description ?? "nil")")
     }
 
     /// 3인칭 입력 캐처 조각(결정 53 추가). 캐처 로컬: 원점 = 머리, −Z = 기준 방향.
@@ -471,6 +507,10 @@ struct ImmersiveBoxView: View {
         if let hudEntity {
             let goal = head.position + forward * 1.2 + SIMD3(0, -0.15, 0)
             hudEntity.position += (goal - hudEntity.position) * alpha
+        }
+        if let speedometerEntity {
+            let goal = thirdPersonSpeedometerGoal(head: head.position, yaw: hudFollowYaw)
+            speedometerEntity.position += (goal - speedometerEntity.position) * alpha
         }
         if let minimap {
             let goal = head.position + forward * 1.2 + right * thirdPersonMinimapRight + SIMD3(0, -thirdPersonMinimapDown, 0)
@@ -1047,7 +1087,6 @@ private struct RaceHUDOverlay: View {
     let showsGoFlash: Bool
     let result: RaceResult?
     let lapBanner: String?
-    let boostThresholdKmh: Double
     let onModeChange: (ExperienceMode) -> Void
     let onRestart: () -> Void
     let onPause: () -> Void
@@ -1118,8 +1157,7 @@ private struct RaceHUDOverlay: View {
             }
         }
         PinchStatusView(drive: hud.drive, left: hud.left, right: hud.right)
-        // 속도계(결정 63·65·66, Issue #59): 패널 **가운데 아래**(사용자 요청) — 103×79 레이어 + 연속 게이지, 부스트 프레임 전환.
-        SpeedometerView(speedKmh: hud.speedKmh, boostThresholdKmh: boostThresholdKmh, scale: 1.6)
+        // 속도계는 패널 밖, 시선 하단 중앙의 별도 attachment(결정 66).
         if hud.phase == .racing {
             Button("일시정지", action: onPause)
                 .buttonStyle(.bordered)
