@@ -1,0 +1,80 @@
+{
+  "repository": "kimminung/KartSimulator",
+  "preparedAt": "2026-10-14",
+  "state": "게시 전 초안",
+  "issues": [
+    {
+      "file": "01-app-icon",
+      "title": "[디자인→테크] 승인된 가스펠 앱 아이콘을 visionOS·iOS에 적용",
+      "labels": [
+        "design",
+        "ios"
+      ],
+      "related": [
+        46
+      ],
+      "bodyFile": "01-app-icon.md"
+    },
+    {
+      "file": "02-speedometer",
+      "title": "[디자인→테크] 속도계 원본 레이어와 연속 게이지 연결",
+      "labels": [
+        "design",
+        "tech",
+        "ios"
+      ],
+      "related": [
+        28
+      ],
+      "bodyFile": "02-speedometer.md"
+    },
+    {
+      "file": "03-countdown-audio",
+      "title": "[디자인→테크] 준비음 3회와 3.1초 카운트다운·GO 음원 연결",
+      "labels": [
+        "design",
+        "tech",
+        "ios"
+      ],
+      "related": [
+        41
+      ],
+      "bodyFile": "03-countdown-audio.md"
+    },
+    {
+      "file": "04-windmill",
+      "title": "[디자인→테크] 승인 풍차 모델·두 도색·회전 애니메이션 도입",
+      "labels": [
+        "design",
+        "tech"
+      ],
+      "related": [],
+      "bodyFile": "04-windmill.md"
+    },
+    {
+      "file": "05-race-resources",
+      "title": "[디자인→테크] 승인 랩 2~99·FINAL LAP 및 레이스 안내 리소스 연결",
+      "labels": [
+        "design",
+        "tech",
+        "ios"
+      ],
+      "related": [],
+      "bodyFile": "05-race-resources.md"
+    },
+    {
+      "file": "06-driver",
+      "title": "[디자인→테크] 승인 driver_01 USDZ 변환·5종 카트 피팅·조향 연동",
+      "labels": [
+        "design",
+        "tech",
+        "ios"
+      ],
+      "related": [
+        29,
+        26
+      ],
+      "bodyFile": "06-driver.md"
+    }
+  ]
+}
