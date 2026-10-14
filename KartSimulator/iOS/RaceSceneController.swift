@@ -25,6 +25,10 @@ final class RaceSceneController {
     private(set) var displayPose = KartPose(position: .zero, forward: SIMD3(0, 0, -1), up: SIMD3(0, 1, 0), heading: 0)
     private(set) var displayCheckpoints = 0
     private(set) var loadError: String?
+    /// 랩 진입 배너 파일 이름(결정 65). 1.8초 뒤 사라진다.
+    private(set) var lapBanner: String?
+    /// 속도계 부스트 기준(km/h, 결정 63).
+    private(set) var boostThresholdKmh: Double = 12.96
 
     // MARK: 입력(터치 존이 쓴다)
     @ObservationIgnored var touch = TouchInputResolver()
@@ -40,6 +44,11 @@ final class RaceSceneController {
     @ObservationIgnored private var spatialSession: SpatialTrackingSession?
     @ObservationIgnored private var sceneStarted = false
     @ObservationIgnored private var frameSampler = FrameTimeSampler(interval: 5)
+    @ObservationIgnored private let trackProps = TrackProps()
+    @ObservationIgnored private var lapBannerTask: Task<Void, Never>?
+    @ObservationIgnored private var playedCountdownErrorCue = false
+    /// 카운트다운 그림 텍스처(count_3/2/1·go) — 장면 안 평면에 붙인다(결정 65). 없으면 3D 텍스트로 대체.
+    @ObservationIgnored private var countdownTextures: [String: TextureResource] = [:]
     /// 카운트다운 숫자를 **장면 안**(카메라 앞 1.2 m)에 3D 텍스트로 띄운다 — SwiftUI 오버레이는 RealityView가 첫 프레임을 그리기
     /// 전(검은 자리표시자) 위에도 보여서 "검은 화면에 3"이 떴다. 장면 안 텍스트는 장면이 보일 때만 보인다(결정 60).
     @ObservationIgnored private let countdownEntity = ModelEntity()
@@ -121,6 +130,11 @@ final class RaceSceneController {
         loadTrack()
         await buildTrackScenery()
         await loadKart()
+        for name in ["count_3", "count_2", "count_1", "go"] {
+            if let cg = RaceBanners.cgImage(named: name), let texture = try? await TextureResource(image: cg, options: .init(semantic: .color)) {
+                countdownTextures[name] = texture
+            }
+        }
         updateSubscription = content.subscribe(to: SceneEvents.Update.self) { [weak self] event in
             self?.tick(deltaTime: Float(event.deltaTime))
         }
@@ -184,6 +198,7 @@ final class RaceSceneController {
 
     func teardown() {
         if let spatialSession { Task { await spatialSession.stop() } }
+        sfxPlayer?.stopAll()
         countdownTask?.cancel()
         hudTask?.cancel()
         updateSubscription?.cancel()
@@ -202,6 +217,7 @@ final class RaceSceneController {
         }
         track = definition
         trackSpline = spline
+        boostThresholdKmh = Double(MotionTuning().applying(definition.tuning).maxSpeed) * 0.9 * 3.6
         lapTracker = LapTracker(track: definition)
         rail = RailMotionState(startOn: spline, frameIndex: definition.start.pathIndex)
         latestPose = rail.pose(on: spline)
@@ -236,6 +252,7 @@ final class RaceSceneController {
         } else {
             await buildTrackTiles(definition: track)
         }
+        await trackProps.build(for: track.id, into: trackRoot)
     }
 
     /// 격자 타일 트랙(스키마 1): `ImmersiveBoxView.buildTrackTiles`와 같은 배치.
@@ -279,6 +296,7 @@ final class RaceSceneController {
             kartSlot.addChild(entity)
             loadedKartEntity = entity
             kartRig = KartRig(kart: entity)
+            await DriverRig.attach(to: entity, kartID: kart.id)
         } catch {
             loadError = "카트 로드 실패: \(error.localizedDescription)"
         }
@@ -299,6 +317,9 @@ final class RaceSceneController {
         raceLocked = true
         showsGoFlash = false
         countdownTask?.cancel()
+        sfxPlayer?.stopAll()
+        playedCountdownErrorCue = false
+        lapBanner = nil
         if !resuming {
             isPaused = false
             bgmPlayer.stop(fadeOut: 0.5)
@@ -311,7 +332,7 @@ final class RaceSceneController {
                 raceModel.countdown(remaining)
                 showCountdown("\(remaining)", go: false)
                 sfxPlayer?.play(.countdownTick)
-                try? await Task.sleep(for: .seconds(1))
+                try? await Task.sleep(for: .seconds(RaceTiming.countdownStepSeconds))
             }
             guard !Task.isCancelled else { return }
             raceModel.go()
@@ -326,15 +347,38 @@ final class RaceSceneController {
             }
             raceLocked = false
             showsGoFlash = true
-            try? await Task.sleep(for: .seconds(0.6))
+            try? await Task.sleep(for: .seconds(RaceTiming.goFlashSeconds))
             showsGoFlash = false
             showCountdown(nil, go: false)
+        }
+    }
+
+    private func showLapBanner(lap: Int, totalLaps: Int) {
+        guard let name = RaceBanners.lapBannerName(lap: lap, totalLaps: totalLaps) else { return }
+        lapBanner = name
+        lapBannerTask?.cancel()
+        lapBannerTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(RaceTiming.lapBannerSeconds))
+            if !Task.isCancelled { self?.lapBanner = nil }
         }
     }
 
     /// 카메라 앞 3D 텍스트 갱신. `nil`이면 숨긴다. 글꼴은 HUD와 같은 Galmuri14(없으면 시스템 볼드).
     private func showCountdown(_ text: String?, go: Bool) {
         guard let text else { countdownEntity.isEnabled = false; return }
+        if let name = RaceBanners.countdownImageName(for: text), let texture = countdownTextures[name] {
+            // 디자인 전달 픽셀 그림(결정 65): 카메라 앞 1.2 m에 높이 0.32 m 평면으로.
+            let aspect = Float(texture.width) / Float(max(texture.height, 1))
+            let height: Float = go ? 0.26 : 0.32
+            var material = UnlitMaterial()
+            material.color = .init(tint: .white, texture: .init(texture))
+            material.blending = .transparent(opacity: 1.0)
+            material.opacityThreshold = 0.5
+            countdownEntity.model = ModelComponent(mesh: .generatePlane(width: height * aspect, height: height), materials: [material])
+            countdownEntity.position = SIMD3(0, 0.08, -1.2)
+            countdownEntity.isEnabled = true
+            return
+        }
         let size: CGFloat = go ? 0.22 : 0.3
         let font = UIFont(name: "Galmuri14", size: size) ?? .systemFont(ofSize: size, weight: .bold)
         let mesh = MeshResource.generateText(text, extrusionDepth: 0.01, font: font, containerFrame: .zero, alignment: .center, lineBreakMode: .byClipping)
@@ -383,7 +427,10 @@ final class RaceSceneController {
         let key = TrackCatalog.bestTotalTimeKey(trackID: track.id, kartID: selection.selectedKartID)
         let previousBest = UserDefaults.standard.object(forKey: key) as? Double
         let isNewRecord = previousBest.map { hud.totalTime < $0 } ?? true
-        if isNewRecord { UserDefaults.standard.set(hud.totalTime, forKey: key) }
+        if isNewRecord {
+            UserDefaults.standard.set(hud.totalTime, forKey: key)
+            sfxPlayer?.play(.record)
+        }
         raceResult = RaceResult(
             totalTime: hud.totalTime, lapTimes: hud.lapTimes, bestLapTime: hud.bestLapTime,
             previousBestTotalTime: previousBest, isNewRecord: isNewRecord,
@@ -430,9 +477,14 @@ final class RaceSceneController {
         }
         let (resolvedDrive, left, right) = touch.resolve()
         let drive: DriveState = raceLocked ? .stopped : resolvedDrive
+        if raceLocked, !isPaused, !raceModel.isFinished, resolvedDrive != .stopped, !playedCountdownErrorCue {
+            playedCountdownErrorCue = true
+            sfxPlayer?.play(.error)
+        }
         let tuning = MotionTuning().applying(track.tuning)
         let previousSpeed = rail.speed
         let motionDelta: Float = isPaused ? 0 : deltaTime
+        trackProps.update(deltaTime: motionDelta)
         let step = rail.advancing(drive: drive, tuning: tuning, spline: trackSpline, deltaTime: motionDelta)
         rail = step.state
         let pose = rail.pose(on: trackSpline)
@@ -449,6 +501,7 @@ final class RaceSceneController {
             raceLocked = true
         } else if progress.currentLap != previous.currentLap {
             sfxPlayer?.play(.lapComplete)
+            showLapBanner(lap: progress.currentLap, totalLaps: track.laps)
         } else if progress.checkpointsPassedThisLap > previous.checkpointsPassedThisLap {
             sfxPlayer?.play(.checkpoint)
         }
