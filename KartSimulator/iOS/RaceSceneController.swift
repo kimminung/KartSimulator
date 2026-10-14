@@ -217,6 +217,8 @@ final class RaceSceneController {
         }
         track = definition
         trackSpline = spline
+        // 데모 촬영(결정 66): `-demoMode topView|chase`로 시작 시점을 고른다(DEBUG 전용).
+        if let demoMode = DemoLaunch.modeName, let mode = CameraViewMode(rawValue: demoMode), mode != .ar { cameraMode = mode }
         boostThresholdKmh = Double(MotionTuning().applying(definition.tuning).maxSpeed) * 0.9 * 3.6
         lapTracker = LapTracker(track: definition)
         rail = RailMotionState(startOn: spline, frameIndex: definition.start.pathIndex)
