@@ -1,0 +1,6 @@
+*.bbmodel -text
+*.png binary
+*.json text eol=lf
+*.md text eol=lf
+manifest.sha256 text eol=lf
+.gitattributes text eol=lf

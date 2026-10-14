@@ -1,0 +1,9 @@
+{
+  "note": "생성 도구의 자동 덮어쓰기 보호 기준. 수작업 수정본이 있으면 도구가 중단한다.",
+  "files": {
+    "Assets/blockbench/driver/driver_01.bbmodel": "4940efb268fb8ec9ea1d12a50034372445e6593aae1f86c86b06931d927ddedd",
+    "Assets/blockbench/driver/driver_01_skin.png": "dea5d2d581c1a1017311a49ec5e4f2a8290cd892e34eb4be944446d9b44fb110",
+    "Assets/blockbench/driver/driver_01_skin_night.png": "e65fcb7bf2d6ee53bdbf5e6cc0f1a332ce1075f11c13525dea11ff62b2a26f5f",
+    "Assets/export/glb/driver_01.glb": "1095dfb9aea886230ee4d160f19ae2dd335b1554445a356be29bdd920cbb6163"
+  }
+}

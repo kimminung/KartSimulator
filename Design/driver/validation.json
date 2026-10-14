@@ -1,0 +1,79 @@
+{
+  "nativeGeometry": {
+    "meshes": 28,
+    "closedManifold": true,
+    "supportedFacesOnly": true,
+    "faces": 778,
+    "uvBounds": true
+  },
+  "animation": {
+    "clips": 7,
+    "allKeyframePosesSampled": 247,
+    "loopContinuity": true,
+    "ankleMaximumDegrees": 20,
+    "minimumYByClip": [
+      {
+        "name": "idle",
+        "minY": 0
+      },
+      {
+        "name": "walk",
+        "minY": 0
+      },
+      {
+        "name": "run",
+        "minY": 0
+      },
+      {
+        "name": "floor_sit",
+        "minY": 0.05
+      },
+      {
+        "name": "sit_down",
+        "minY": 0
+      },
+      {
+        "name": "kart_idle",
+        "minY": 9.68487
+      },
+      {
+        "name": "kart_steer",
+        "minY": 9.68487
+      }
+    ]
+  },
+  "gltf": {
+    "bytes": 286676,
+    "meshes": 28,
+    "nodes": 45,
+    "clips": [
+      "animation.idle",
+      "animation.walk",
+      "animation.run",
+      "animation.floor_sit",
+      "animation.sit_down",
+      "animation.kart_idle",
+      "animation.kart_steer"
+    ],
+    "errors": 0,
+    "warnings": 0
+  },
+  "faultInjection": [
+    {
+      "name": "missing helmet roof",
+      "rejected": true
+    },
+    {
+      "name": "unsupported five-vertex cap",
+      "rejected": true
+    },
+    {
+      "name": "UV beyond atlas",
+      "rejected": true
+    }
+  ],
+  "limitations": [
+    "Blockbench 원본 및 내보낸 GLB 형식 검증. 실제 앱·USDZ 변환·실기기 검증 전.",
+    "가스펠 피팅 검토본. 나머지 카트별 피팅은 테크 후속."
+  ]
+}
