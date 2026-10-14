@@ -37,6 +37,11 @@ struct ImmersiveBoxView: View {
     @State private var tileCullAccumulator: Float = 0
     /// 프레임 시간 측정(결정 61, Issue #45): 5초마다 `PERF` 로그. Release에서는 `debugLog`가 비어 비용이 없다.
     @State private var frameSampler = FrameTimeSampler(interval: 5)
+    /// 트랙 소품(풍차, 결정 65)과 HUD 배너 상태.
+    @State private var trackProps = TrackProps()
+    @State private var lapBanner: String?
+    @State private var lapBannerTask: Task<Void, Never>?
+    @State private var playedCountdownErrorCue = false
     @State private var lapTracker: LapTracker?
     @State private var trackDisplayScale: Float = 1
     @State private var trackWorldCenter: SIMD2<Float> = .zero
@@ -141,6 +146,10 @@ struct ImmersiveBoxView: View {
     /// HUD(속도/랩 표시)를 발밑이 아니라 박스 바로 위에 띄우기 위한 위치.
     private var hudPosition: SIMD3<Float> {
         boxPosition + SIMD3(0, boxSize.y / 2 + 0.15, 0)
+    }
+    /// 속도계 부스트 프레임 기준(결정 63): 튜닝 최고 속도의 90 %(km/h). 기본 4.0 m/s → 12.96.
+    private var boostThresholdKmh: Double {
+        Double(MotionTuning().applying(track?.tuning).maxSpeed) * 0.9 * 3.6
     }
     /// 박스 바닥에서 트랙 전체(바운딩 박스)가 차지할 폭. 나머지는 여백.
     private let trackFootprint: Float = 0.6
@@ -265,11 +274,12 @@ struct ImmersiveBoxView: View {
             // `inputCatcher`와 같은 공간을 공유해 호버가 불안정했는데(결정 26번), 박스 바로 위에
             // 떠 있는 이 패널은 겹치는 엔티티가 없어 바라보고 누르기 훨씬 쉽다.
             Attachment(id: "hud") {
-                RaceHUDOverlay(hud: raceModel.hud, mode: mode, showsGoFlash: showsGoFlash, result: raceResult, onModeChange: { mode = $0 }, onRestart: { restartRace() }, onPause: { pauseRace() }, onResume: { resumeRace() }, onTrackSelect: {
+                RaceHUDOverlay(hud: raceModel.hud, mode: mode, showsGoFlash: showsGoFlash, result: raceResult, lapBanner: lapBanner, boostThresholdKmh: boostThresholdKmh, onModeChange: { mode = $0 }, onRestart: { restartRace() }, onPause: { pauseRace() }, onResume: { resumeRace() }, onTrackSelect: {
                     // 트랙 카드는 메뉴 창에 있다. 3인칭에서 숨긴 창을 정면에 다시 열면 고르는 즉시 박스가 새 트랙으로 바뀐다(`reloadTrack`).
                     if immersiveSession.menuWindowHidden { openWindow(id: AppScene.menuWindowID); immersiveSession.menuWindowHidden = false }
                 }) {
                     Task {
+                        sfxPlayer?.stopAll()
                         bgmPlayer.stop(fadeOut: 0.5) // 앱·박스 종료는 0.5초 페이드(배경음 규칙 2)
                         // 3인칭에서 숨긴 메뉴 창을 먼저 사용자 정면에 다시 연다(Issue #27). 창이 하나도 없으면 공간을 닫는 순간 앱이 사라진다.
                         if immersiveSession.menuWindowHidden { openWindow(id: AppScene.menuWindowID); immersiveSession.menuWindowHidden = false }
@@ -520,7 +530,10 @@ struct ImmersiveBoxView: View {
         let key = "bestTotalTime.\(track.id).\(selection.selectedKartID)"
         let previousBest = UserDefaults.standard.object(forKey: key) as? Double
         let isNewRecord = previousBest.map { hud.totalTime < $0 } ?? true
-        if isNewRecord { UserDefaults.standard.set(hud.totalTime, forKey: key) }
+        if isNewRecord {
+            UserDefaults.standard.set(hud.totalTime, forKey: key)
+            sfxPlayer?.play(.record) // 신기록 효과음(결정 65, `cue_record`)
+        }
         raceResult = RaceResult(
             totalTime: hud.totalTime, lapTimes: hud.lapTimes, bestLapTime: hud.bestLapTime,
             previousBestTotalTime: previousBest, isNewRecord: isNewRecord,
@@ -667,6 +680,7 @@ struct ImmersiveBoxView: View {
         } else {
             await buildTrackTiles(definition: track, into: trackTilesRoot)
         }
+        await trackProps.build(for: track.id, into: trackTilesRoot)
         let built = await MinimapBuilder.make(track: track, path: trackPath, tableDiameter: minimapTableDiameter)
         worldAnchor.addChild(built.root)
         minimap = built
@@ -695,17 +709,21 @@ struct ImmersiveBoxView: View {
         raceLocked = true
         showsGoFlash = false
         countdownTask?.cancel()
+        sfxPlayer?.stopAll() // 이전 카운트다운의 준비음 인스턴스 정리(결정 63)
+        playedCountdownErrorCue = false
+        lapBanner = nil
         if !resuming {
             isPaused = false
             bgmPlayer.stop(fadeOut: 0.5) // 카운트다운 동안은 배경음 없음(다시 하기·트랙 선택으로 들어와도 마찬가지)
             engineAudioPlayer?.run(engineMachine.countdownStarted())
         }
         countdownTask = Task { @MainActor in
+            // 숫자마다 3.1초(결정 63·65): 준비음 `stttt`(약 3.0초)가 끝난 뒤 다음 숫자. 0초 3 → 3.1초 2 → 6.2초 1 → 9.3초 GO.
             for remaining in [3, 2, 1] {
                 guard !Task.isCancelled else { return }
                 raceModel.countdown(remaining)
                 sfxPlayer?.play(.countdownTick)
-                try? await Task.sleep(for: .seconds(1))
+                try? await Task.sleep(for: .seconds(RaceTiming.countdownStepSeconds))
             }
             guard !Task.isCancelled else { return }
             raceModel.go()
@@ -719,8 +737,20 @@ struct ImmersiveBoxView: View {
             }
             raceLocked = false
             showsGoFlash = true
-            try? await Task.sleep(for: .seconds(0.6))
+            try? await Task.sleep(for: .seconds(RaceTiming.goFlashSeconds))
             showsGoFlash = false
+        }
+    }
+
+    /// 랩 진입 배너(결정 65, Issue #62): 2랩부터 일반 랩 그림, 마지막 랩은 FINAL LAP. 완주에는 띄우지 않는다.
+    @MainActor
+    private func showLapBanner(lap: Int, totalLaps: Int) {
+        guard let name = RaceBanners.lapBannerName(lap: lap, totalLaps: totalLaps) else { return }
+        lapBanner = name
+        lapBannerTask?.cancel()
+        lapBannerTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(RaceTiming.lapBannerSeconds))
+            if !Task.isCancelled { lapBanner = nil }
         }
     }
 
@@ -845,10 +875,16 @@ struct ImmersiveBoxView: View {
         let (resolvedDrive, leftStatus, rightStatus) = inputResolver.resolve(now: now, mode: mode)
         // 카운트다운 중·완주 뒤에는 입력을 무시한다(결정 56). 손 상태 자체는 HUD에 그대로 보여 준다.
         let drive: DriveState = raceLocked ? .stopped : resolvedDrive
+        // 출발 전(카운트다운)에 페달·회전을 넣으면 오류음 한 번(결정 65, `cue_error`).
+        if raceLocked, !isPaused, !raceModel.isFinished, resolvedDrive != .stopped, !playedCountdownErrorCue {
+            playedCountdownErrorCue = true
+            sfxPlayer?.play(.error)
+        }
         let tuning = MotionTuning().applying(track.tuning)
         let previousSpeed = rail.speed
         // 일시정지 중에는 주행 시간을 0으로 흘려 속도·위치가 그대로 멈춘다(Issue #44). HUD 추종·손 상태 표시는 계속.
         let motionDelta: Float = isPaused ? 0 : deltaTime
+        trackProps.update(deltaTime: motionDelta)
         // 레일 주행(결정 58): 중심선 호 길이·가로 오프셋·상대 yaw로 적분한다. 코너 곡률(핸들 안 꺾으면 바깥 벽), 안쪽 라인 보정,
         // 중력(루프·언덕: 스로틀 없이는 미끄러짐), 벽 충돌은 전부 `RailMotionState` 안에서 처리된다.
         let step = rail.advancing(drive: drive, tuning: tuning, spline: trackSpline, deltaTime: motionDelta)
@@ -871,6 +907,7 @@ struct ImmersiveBoxView: View {
             raceLocked = true // 완주: 입력 무시, 관성으로 서서히 정지. 결과 패널은 HUD 루프가 띄운다.
         } else if newProgress.currentLap != previousProgress.currentLap {
             sfxPlayer?.play(.lapComplete)
+            showLapBanner(lap: newProgress.currentLap, totalLaps: track.laps)
         } else if newProgress.checkpointsPassedThisLap > previousProgress.checkpointsPassedThisLap {
             sfxPlayer?.play(.checkpoint)
         }
@@ -979,6 +1016,7 @@ struct ImmersiveBoxView: View {
             loadedKartEntity = entity
             kartRig = KartRig(kart: entity)
             minimap?.setMarker(cloneOf: entity, markerLength: minimapMarkerLength)
+            await DriverRig.attach(to: entity, kartID: kart.id) // 결정 65: 가스펠에 승인 운전자(kart_idle) 부착
 
             loadedKartID = kart.id
             loadedColorID = colorID
@@ -995,6 +1033,8 @@ private struct RaceHUDOverlay: View {
     let mode: ExperienceMode
     let showsGoFlash: Bool
     let result: RaceResult?
+    let lapBanner: String?
+    let boostThresholdKmh: Double
     let onModeChange: (ExperienceMode) -> Void
     let onRestart: () -> Void
     let onPause: () -> Void
@@ -1028,12 +1068,22 @@ private struct RaceHUDOverlay: View {
     @ViewBuilder
     private var racingPanel: some View {
         if let countdownText {
-            // 카운트다운(목업 04): 숫자는 ui-ink, GO는 ui-cyan. 픽셀 폰트(Galmuri14)로 크게.
-            Text(countdownText)
-                .font(.custom("Galmuri14", size: countdownText == "GO" ? 56 : 72, relativeTo: .largeTitle))
-                .foregroundStyle(countdownText == "GO" ? Color.style(StylePalette.uiCyan) : Color.style(StylePalette.uiInk))
-                .frame(minHeight: 80)
-                .accessibilityLabel(countdownText == "GO" ? "출발" : "카운트다운 \(countdownText)")
+            // 카운트다운: 디자인 전달 픽셀 그림(count_3/2/1·go, 결정 65). 그림이 없으면 Galmuri 숫자(목업 04).
+            Group {
+                if let name = RaceBanners.countdownImageName(for: countdownText), RaceBanners.image(named: name) != nil {
+                    BannerImage(name: name, height: countdownText == "GO" ? 64 : 80)
+                } else {
+                    Text(countdownText)
+                        .font(.custom("Galmuri14", size: countdownText == "GO" ? 56 : 72, relativeTo: .largeTitle))
+                        .foregroundStyle(countdownText == "GO" ? Color.style(StylePalette.uiCyan) : Color.style(StylePalette.uiInk))
+                }
+            }
+            .frame(minHeight: 80)
+            .accessibilityLabel(countdownText == "GO" ? "출발" : "카운트다운 \(countdownText)")
+        } else if let lapBanner {
+            BannerImage(name: lapBanner, height: 44)
+                .frame(minHeight: 48)
+                .accessibilityLabel(lapBanner == "final_lap" ? "마지막 랩" : "랩 \(hud.lap)")
         }
         VStack(spacing: 4) {
             Text("LAP \(hud.lap) / \(hud.totalLaps)")
@@ -1048,9 +1098,8 @@ private struct RaceHUDOverlay: View {
             }
             .font(.caption.monospacedDigit())
             .foregroundStyle(Color.style(StylePalette.uiInk).opacity(0.8))
-            Text(String(format: "%.0f km/h", hud.speedKmh))
-                .font(.subheadline.monospacedDigit())
-                .foregroundStyle(Color.style(StylePalette.uiInk))
+            // 속도계(결정 63·65, Issue #59): 103×79 레이어 + 연속 게이지, 부스트 프레임 전환.
+            SpeedometerView(speedKmh: hud.speedKmh, boostThresholdKmh: boostThresholdKmh, scale: 1.6)
             if hud.respawning {
                 Text("트랙 이탈")
                     .font(.caption.bold())

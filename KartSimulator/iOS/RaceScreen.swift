@@ -69,7 +69,11 @@ struct RaceScreen: View {
         let hud = controller.raceModel.hud
         VStack {
             HStack(alignment: .top) {
-                hudPanel(hud)
+                VStack(alignment: .leading, spacing: 8) {
+                    hudPanel(hud)
+                    // 속도계(결정 63·65): 103×79 레이어 + 연속 게이지 + 부스트 프레임
+                    SpeedometerView(speedKmh: hud.speedKmh, boostThresholdKmh: controller.boostThresholdKmh, scale: 1.4)
+                }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 8) {
                     Picker("시점", selection: Binding(get: { controller.cameraMode }, set: { controller.setCameraMode($0) })) {
@@ -113,7 +117,14 @@ struct RaceScreen: View {
         }
         .allowsHitTesting(true)
 
-        // 카운트다운 숫자는 장면 안 3D 텍스트(`RaceSceneController.showCountdown`)로 그린다. 여기서는 VoiceOver용 라벨만 둔다.
+        if let lapBanner = controller.lapBanner {
+            BannerImage(name: lapBanner, height: 56)
+                .frame(maxHeight: .infinity, alignment: .top)
+                .padding(.top, 150)
+                .allowsHitTesting(false)
+                .accessibilityLabel(lapBanner == "final_lap" ? "마지막 랩" : "랩 \(hud.lap)")
+        }
+        // 카운트다운 숫자는 장면 안 3D 그림/텍스트(`RaceSceneController.showCountdown`)로 그린다. 여기서는 VoiceOver용 라벨만 둔다.
         if let text = countdownText(hud, go: controller.showsGoFlash) {
             Color.clear
                 .frame(width: 1, height: 1)
@@ -156,8 +167,6 @@ struct RaceScreen: View {
             }
             .font(.caption.monospacedDigit())
             .opacity(0.8)
-            Text(String(format: "%.0f km/h", hud.speedKmh))
-                .font(.subheadline.monospacedDigit())
         }
         .foregroundStyle(Color.style(StylePalette.uiInk))
         .padding(10)

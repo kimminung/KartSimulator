@@ -4,9 +4,9 @@
 
 ## 앱 아이콘
 
-`Tools/make_app_icon.py`가 만든 자리표시자(픽셀 카트 + 트랙 링 + 격자 바탕). visionOS 3층(`AppIcon.solidimagestack`: 뒤 바탕, 가운데 트랙 링, 앞 카트)과 iOS 1024(`AppIcon.appiconset`). 미리보기: `Docs/review/app-icon-preview.png`.
+디자인 정식 아이콘(결정 62·65): 대표 카트 가스펠 정면 렌더, visionOS 3층(`AppIcon.solidimagestack`: 배경·뒤 차체·앞 차체)과 iOS 1024(`AppIcon.appiconset`). 원본과 재생성 도구는 `Design/app-icon/`. 미리보기: `Design/app-icon/preview.png`.
 
-![앱 아이콘 미리보기](../review/app-icon-preview.png)
+![앱 아이콘 미리보기](../../Design/app-icon/preview.png)
 
 ## 부제 / 설명 (한국어)
 
