@@ -34,6 +34,18 @@ Apple Vision Pro 실기기에서 플레이한 영상입니다. 썸네일을 누�
 | [![비전프로용 카트 시뮬레이터 앱 1인칭, 3인칭, 디오라마 모드 (YouTube)](Docs/review/demo-video-phase2-thumb.jpg)](https://youtu.be/PIXJQDFln3s) | [![비전프로 카트 시뮬레이터 프로젝트 — 실기기 시연 (YouTube)](Docs/review/demo-video-thumb.jpg)](https://youtu.be/Xv__kSJXJ0I) |
 | ▶ https://youtu.be/PIXJQDFln3s | ▶ https://youtu.be/Xv__kSJXJ0I |
 
+### 플레이 촬영컷 — Vision Pro · iPhone
+
+최신 빌드(결정 65·66)를 두 플랫폼 시뮬레이터에서 자동 주행 데모로 찍은 장면입니다. 전체 갤러리는 [서킷 3종 → Vision Pro 캡처](#vision-pro-시뮬레이터-캡처--360-루프헬릭스)와 [iPhone·iPad 버전 → iPhone 캡처](#iphone-플레이-캡처)에 있습니다.
+
+| Vision Pro — 리본 루프 360° 루프 안쪽 | Vision Pro — 스카이 스파이럴 헬릭스 | Vision Pro — 루프 꼭대기, 마지막 랩 |
+| --- | --- | --- |
+| ![Vision Pro 3인칭, 루프 안쪽을 도는 카트](Docs/review/vision-sim/loop-inside.jpg) | ![Vision Pro 3인칭, 브리지 아래에서 본 헬릭스](Docs/review/vision-sim/helix-overview.jpg) | ![Vision Pro 3인칭, 루프 꼭대기 LAP 3/3](Docs/review/vision-sim/loop-top.jpg) |
+
+| iPhone — 루프 출발 GO! | iPhone — 루프 오르기 | iPhone — 루키 오벌 탑뷰 | iPhone — 헬릭스 진입 |
+| --- | --- | --- | --- |
+| ![iPhone 추적 시점, 출발선 GO 배너와 정면의 루프](Docs/review/ios/iphone-loop-go.jpg) | ![iPhone 추적 시점, 루프를 오르는 카트](Docs/review/ios/iphone-loop-climb.jpg) | ![iPhone 탑뷰, 루키 오벌과 풍차, LAP 2 배너](Docs/review/ios/iphone-topview-lap2.jpg) | ![iPhone 추적 시점, 협곡 헬릭스를 앞에 두고](Docs/review/ios/iphone-helix-ahead.jpg) |
+
 > **현재 단계: M5 완료 + 서킷 3종(결정 58)** — 운전 모드는 디오라마와 3인칭(실제 크기 트랙, 카트 뒤 추적 카메라) 2종이고(1인칭은 멀미로 폐기, 결정 47·49), 맵은 격자 타일 트랙 1종 + 3D 서킷 3종(360° 루프·헬릭스·뱅크·언덕)입니다. 카운트다운·일시정지·결과·배경음·미니맵·디자인 전달 속도계·풍차·운전자까지 들어갔고(결정 65), 남은 것은 실기기 다듬기입니다. 위 영상·스크린샷은 Phase 1~2 시점이고, 새 서킷의 시뮬레이터 캡처는 아래 [서킷 3종](#서킷-3종)에 있습니다.
 
 | 플랫폼 | 언어·프레임워크 | 테스트 | 상태 |
@@ -140,6 +152,18 @@ visionOS 시뮬레이터(3인칭 모드, 자동 주행 데모 실행)에서 찍�
 | 흐름 | 카운트다운 → 주행 → 일시정지 → 결과 | 같음(배경음·최고 기록 포함) |
 
 실행 대상으로 iPhone/iPad 시뮬레이터나 실기기를 고르면 됩니다. 메뉴의 **레이스 시작**이 전체 화면 레이스를 엽니다. iPhone 16 시뮬레이터에서 메뉴·레이스·탑뷰·일시정지·결과 흐름을 확인했고, AR과 두 엄지 조작 감각은 실기기 확인이 필요합니다.
+
+### iPhone 플레이 캡처
+
+iPhone 16 시뮬레이터(자동 주행 데모, `-demoMode chase|topView`)에서 찍은 장면입니다. 속도계는 화면 가운데 아래, 미니맵은 오른쪽 아래, 핀치 상태 점은 왼쪽 아래에 있습니다.
+
+| 리본 루프 — 출발 GO! | 리본 루프 — 루프 오르기 | 리본 루프 — FINAL LAP 배너 |
+| --- | --- | --- |
+| ![출발선의 GO 배너, 정면에 360° 루프](Docs/review/ios/iphone-loop-go.jpg) | ![루프를 오르는 카트, 추적 카메라는 뒤집히지 않음](Docs/review/ios/iphone-loop-climb.jpg) | ![마지막 랩 진입 FINAL LAP 배너](Docs/review/ios/iphone-final-lap.jpg) |
+
+| 루키 오벌 — 탑뷰, LAP 2 | 스카이 스파이럴 — 브리지 아래 | 스카이 스파이럴 — 헬릭스 진입 |
+| --- | --- | --- |
+| ![탑뷰 카메라로 본 루키 오벌 전체와 풍차 2기, LAP 2 배너](Docs/review/ios/iphone-topview-lap2.jpg) | ![브리지 아래를 지나는 카트](Docs/review/ios/iphone-helix-bridge.jpg) | ![헬릭스를 앞에 둔 카트, 뱅크 커브](Docs/review/ios/iphone-helix-ahead.jpg) |
 
 ## 시작하기
 

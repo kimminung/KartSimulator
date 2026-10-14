@@ -46,8 +46,8 @@ Pinch Rover is a one-player time-attack kart game driven entirely by hand-tracke
 | 서킷 렌더 | `Docs/review/circuits/circuit_02_persp.png` | 리본 루프(네온) |
 | visionOS 시뮬레이터 | `Docs/review/vision-sim/loop-inside.jpg` | 리본 루프 360° 루프 안쪽(3인칭, 결정 66) |
 | visionOS 시뮬레이터 | `Docs/review/vision-sim/helix-overview.jpg` | 스카이 스파이럴 헬릭스 전경 |
-| iOS | `Docs/review/ios/race-chase.png` | iPhone 추적 시점 |
-| iOS | `Docs/review/ios/race-topview.png` | iPhone 탑뷰 |
+| iOS | `Docs/review/ios/iphone-loop-climb.jpg` | iPhone 추적 시점, 리본 루프 오르기(결정 66) |
+| iOS | `Docs/review/ios/iphone-topview-lap2.jpg` | iPhone 탑뷰, 루키 오벌·풍차 |
 
 실기기 스크린샷(visionOS 최신 빌드, iPad)은 출시 전 디자인과 함께 다시 찍는다. 스토어 규격: visionOS 3840×2160, iPhone 6.9" 1320×2868, iPad 13" 2064×2752.
 

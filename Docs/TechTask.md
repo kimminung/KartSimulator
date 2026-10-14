@@ -143,6 +143,8 @@ Oct 10, 2026 · @Coulson 기준, `Docs/tech-prd.md`에서 파생. 마일스톤 �
 - [x] 속도계를 visionOS HUD 패널·iOS 화면 모두 가운데 아래로(랩 패널에서 분리)
 - [x] DEBUG 데모 실행 인자(`-demoTrack -demoMode -demoAutopilot`), `Autopilot` 공용화(테스트·visionOS·iOS), 시뮬레이터 3인칭 데모 카메라
 - [x] Vision Pro 시뮬레이터 캡처 6장(`Docs/review/vision-sim/`) — 리본 루프 360° 루프 4장, 스카이 스파이럴 헬릭스 2장 → README "서킷 3종" 절
+- [x] iPhone 시뮬레이터 플레이 캡처 6장(`Docs/review/ios/iphone-*.jpg`, `-demoMode topView|chase`) → README 상단 "플레이 촬영컷" 요약 + "iPhone 플레이 캡처" 갤러리
+- [x] iPhone 시뮬레이터 플레이 캡처 6장(`Docs/review/ios/iphone-*.jpg`, `-demoMode topView|chase`) → README 상단 "플레이 촬영컷" 요약 + "iPhone 플레이 캡처" 갤러리
 - [ ] 실기기: 속도계 위치·크기 체감(Vision Pro·iPhone), 디오라마 모드 캡처는 실기기로
 
 ## M6 — 폴리시 · 출시 준비 (GitHub 마일스톤 "M6 — 출시 준비": Issue #45·#46)
