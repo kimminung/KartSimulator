@@ -568,3 +568,13 @@
 - **스토어 자산 초안**: `Docs/store/listing.md` — 부제·설명(한/영)·키워드·스크린샷 후보(실기기 캡처·서킷 렌더·iOS 시뮬레이터)·개인정보 문구. 실기기 스크린샷은 출시 전 재촬영.
 - **이슈 처리**: #45(성능 측정)·#46(출시 정리)은 이 결정으로 닫는다. 실기기 Instruments 표·정식 아이콘은 `perf_2026-10-12.md`·`listing.md`의 후속 항목으로 남긴다.
 - **영향받는 절**: `KartCore/FrameTimeSampler.swift`·`Utilities/MemoryFootprint.swift`·`Tools/make_app_icon.py`·`Assets.xcassets/AppIcon.*`·`Docs/store/listing.md`(신규), `Utilities/DebugLog.swift`(Logger), `ImmersiveBoxView`·`RaceSceneController` PERF 로그, `Docs/review/perf_2026-10-12.md`, `.gitignore`(.perf/)
+
+## 62. [디자인] 가스펠 정면 앱 아이콘 전달본 — visionOS 3층·iOS 1024 px
+
+- **날짜**: 2026-10-14
+- **배경**: 사용자 요청 — 앱의 대표 카트 `gospel` 앞모습을 바탕화면 `1.png`·`2.png`와 `gospel.bbmodel` 원본으로 아이콘에 사용한다. 결정 59·61의 정식 아이콘 디자인 작업이다.
+- **산출물**: `Design/app-icon/visionos/AppIcon.solidimagestack/`(배경·뒤쪽 차체·앞쪽 차체 3층, 각 1024 px), `Design/app-icon/ios/AppIcon.appiconset/`(1024 px RGB). `preview.png`·마스터·배경 SVG·구도 설정·재생성 도구·README를 함께 준비했다.
+- **방식**: 원본 bbmodel을 직접 렌더링했다. 검정 도색과 시안 라인, 정면 실루엣을 유지한다. 카메라는 위로 33°인 정면 구도. 배경은 기존 스타일 가이드의 `ui-rim`·`ui-night`·`ui-sky`. 원본 모델·UV·텍스처는 수정하지 않았다. AI 이미지 생성은 쓰지 않았다.
+- **확인**: 입력 사본 SHA-256 일치, 1024 px·sRGB·iOS/Back 알파 없음·Middle/Front 투명 배경, 원형 마스크 밖 차체 픽셀 0, 작은 크기·레이어 미리보기 확인. 자세한 수치는 `Design/app-icon/validation.json`.
+- **상태**: 디자인 검토 대기. 앱의 기존 자리표시자 교체, Xcode 컴파일·실기기 홈 화면 확인은 테크 후속 작업이다. GitHub 게시·새 Issue는 아직 없다.
+- **영향받는 절**: `Design/app-icon/`(신규), 디자인 PRD 15장 앱 아이콘 전달 항목

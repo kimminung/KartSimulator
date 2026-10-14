@@ -1,0 +1,15 @@
+{
+  "size": 1024,
+  "supersampling": 2,
+  "cameraElevationDegrees": 33,
+  "kartWidth": 690,
+  "kartHeight": 750,
+  "kartCenterY": 518,
+  "texture": "gospel_black.png",
+  "frontSplitZ": -8,
+  "background": {
+    "top": "#223A60",
+    "bottom": "#000918",
+    "halo": "#1DB8E6"
+  }
+}

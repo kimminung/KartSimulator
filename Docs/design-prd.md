@@ -518,6 +518,7 @@ Design/onboarding/에 저장해 주세요. 손은 1인칭 시점, 핀치 지점�
 - [x] 1인칭·3인칭 전용 그림 `gesture_fp_*`·`gesture_tp_*` 삭제, 디오라마 5장 공용 (결정 55, Issue #24)
 - [x] `icon_pinch_in` 폐기 (결정 55, Issue #31)
 - [x] 배경음 3곡 `Assets/bgm/` (결정 55)
+- [ ] 정식 앱 아이콘 — 가스펠 정면 전달본 `Design/app-icon/` 준비, 사용자 검토·테크 적용 대기 (2026-10-14, 결정 62; visionOS 3층·iOS 1024 px)
 
 **열린 질문 (결정되면 `Docs/decisions.md`에 기록)**
 
