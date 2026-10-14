@@ -49,3 +49,26 @@
 
 - 마인크래프트(Mojang) 소리는 쓰지 않는다(결정 21). RetireX Online이 쓰는 바닐라 소리(워프 등)도 가져오지 않았다.
 - 나중에 외부 CC0 소리(Kenney, freesound CC0 등)로 바꾸면 이 표에 출처 URL과 라이선스를 적는다.
+
+## 5. 카운트다운·출발음 신규 전달본 — 사용자 지정 리소스
+
+2026-10-14 사용자 지정 개발 RP `RetireX_Online_RP/sounds/rxoeffect/`의 stttt.ogg·start.ogg를 AAC M4A로 변환했다. `Assets/sfx/countdown/`에 원본·변환본·재생 간격·검증 결과를 함께 보관한다.
+
+| 원본 | 전달본 | 원본 SHA-256 |
+| --- | --- | --- |
+| stttt.ogg | countdown/stttt.m4a | `BFBDB3E98BC144F96B158DFE914BA4479D9B37A3CF012BDDC90EE17DA9BA61CA` |
+| start.ogg | countdown/start.m4a | `9F548F2BCF5F3EE40C29F3D0E07F65C0B94AFFC4836C44C7EB97922C7688AC7F` |
+
+포맷만 변환했으며 원본의 음량·페이드·재생 속도는 유지했다. 사용자 지정 소리 사용 요청과 2026-10-14 공유 준비 요청에 따라 로컬 커밋 대상으로 확정했다. 원격 게시 전이다. 2장의 엔진음 CC0 확인을 이 두 파일이나 추가 효과음 후보의 원출처 확인으로 대신하지 않는다. 실제 앱 연결·청취는 테크 인계의 후속 항목이다.
+
+## 6. 기록·랩·오류 소리 — 사용자 전 후보 승인
+
+2026-10-14 사용자 지정 RetireX_Online_RP/sounds/rxoeffect/의 cue_record.ogg·cue_middle_lap.ogg·cue_error.ogg를 Assets/sfx/ui-cues/에 원본과 AAC M4A로 준비했다. 사용자 추가 후보 전체 승인에 따른다. 변환 시 원본 음량·속도·채널 수를 유지했다.
+
+| 원본 | 원본 SHA-256 |
+| --- | --- |
+| cue_record.ogg | `144821f477a9b6c0dc0d140db99016827c9b910983c81ab4c89f5bd1a7529c8c` |
+| cue_middle_lap.ogg | `c3bec14df04236707fa15fecce4ebe89f45f9b95761b3ef00e61a9bdcb9c7420` |
+| cue_error.ogg | `0349ae4664b56643c6dd1be9424aefbd2932714874d615bba686f79e24fe85c5` |
+
+사용자 승인과 출처 사본·해시 기록을 보존한다. 기존 엔진음의 CC0 기록을 신규 음원에 확대 적용하지 않는다. 앱 이벤트 연결·실기기 청취는 후속이다.

@@ -1,0 +1,9 @@
+{
+  "canvas": {"width": 103, "height": 79},
+  "layerOrder": ["speedometer_background.png", "speedometer_gauge.png", "speedometer_frame.png"],
+  "boostFrame": "speedometer_frame_boost.png",
+  "gauge": {"center": [51.5, 52], "startDegrees": 172.8749836510982, "sweepDegrees": 194.2500326978036, "direction": "clockwise", "minimumKmh": 0, "maximumKmh": 20},
+  "numberRect": {"x": 23, "y": 31, "width": 55, "height": 25},
+  "boost": {"thresholdRatio": 0.9, "defaultMaxSpeedMps": 4, "defaultThresholdKmh": 12.96},
+  "scaling": "speedKmh에 표시 배율을 곱하지 않는다. 이미지 확대는 nearest-neighbor."
+}

@@ -1,0 +1,35 @@
+{
+  "status": "2026-10-14 사용자 전 후보 승인. 원본 음량·속도·페이드 유지. 앱 청취 전.",
+  "files": [
+    {
+      "name": "cue_record",
+      "codec": "aac",
+      "sampleRate": "44100",
+      "channels": 2,
+      "duration": "3.427007",
+      "sourceSha256": "144821f477a9b6c0dc0d140db99016827c9b910983c81ab4c89f5bd1a7529c8c",
+      "outputSha256": "bc3e4d3f81b64ae2422d6c85b04276cbd888896603dd87067410f12dae7d37ca",
+      "decodePassed": true
+    },
+    {
+      "name": "cue_middle_lap",
+      "codec": "aac",
+      "sampleRate": "44100",
+      "channels": 2,
+      "duration": "1.339002",
+      "sourceSha256": "c3bec14df04236707fa15fecce4ebe89f45f9b95761b3ef00e61a9bdcb9c7420",
+      "outputSha256": "842af732928a499636a8597ca782301cc80fc60589aca5d27a948cbb29254737",
+      "decodePassed": true
+    },
+    {
+      "name": "cue_error",
+      "codec": "aac",
+      "sampleRate": "44100",
+      "channels": 1,
+      "duration": "1.722993",
+      "sourceSha256": "0349ae4664b56643c6dd1be9424aefbd2932714874d615bba686f79e24fe85c5",
+      "outputSha256": "f931154460f2a78d11c6012fb5fbd46912ea6517f80b0c676ab105b7beebf095",
+      "decodePassed": true
+    }
+  ]
+}

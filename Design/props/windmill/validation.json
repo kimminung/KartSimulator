@@ -1,0 +1,117 @@
+{
+  "files": [
+    {
+      "name": "windmill.geo.json",
+      "source": "models/entity/windmill.geo.json",
+      "sha256": "a840dc6eedb2acd0e2d3fcd767db153bba12f067310587350ec75f1ddda484e2",
+      "byteIdentical": true
+    },
+    {
+      "name": "windmill.animation.json",
+      "source": "animations/windmill.animation.json",
+      "sha256": "fb2740ae3b4019cc35ceebb3a8479e42e1827d2c19ff0af6d8d6c23989c326a4",
+      "byteIdentical": true
+    },
+    {
+      "name": "windmill.json",
+      "source": "entity/windmill.json",
+      "sha256": "fb35d84f7086def12d2c8937efcfeba450c7e4c7fd736ced424dbbcc1de24846",
+      "byteIdentical": true
+    },
+    {
+      "name": "windmill.render_controllers.json",
+      "source": "render_controllers/windmill.render_controllers.json",
+      "sha256": "81979986b6acc782304f6d7a88ca69251658a40daeba2b0f87f662d0e051b2f9",
+      "byteIdentical": true
+    },
+    {
+      "name": "windmill.png",
+      "source": "textures/entity/windmill/windmill.png",
+      "sha256": "c8adeca4111bd0220c87505f53814984c4beaea91bb6916926c14e9db73abd47",
+      "byteIdentical": true
+    },
+    {
+      "name": "windmill_small.png",
+      "source": "textures/entity/windmill/windmill_small.png",
+      "sha256": "10edf9bc1216a53482119619b76f5c08342a1b37ae9340e472a87ab3638b91d5",
+      "byteIdentical": true
+    }
+  ],
+  "bones": [
+    {
+      "name": "root",
+      "pivot": [
+        0,
+        0,
+        0
+      ],
+      "cubes": 0
+    },
+    {
+      "name": "tower",
+      "parent": "root",
+      "pivot": [
+        0,
+        0,
+        0
+      ],
+      "cubes": 45
+    },
+    {
+      "name": "cap",
+      "parent": "tower",
+      "pivot": [
+        0,
+        146,
+        0
+      ],
+      "cubes": 18
+    },
+    {
+      "name": "shaft",
+      "parent": "cap",
+      "pivot": [
+        0,
+        158,
+        -18
+      ],
+      "rotation": [
+        -8,
+        0,
+        0
+      ],
+      "cubes": 4
+    },
+    {
+      "name": "sails",
+      "parent": "shaft",
+      "pivot": [
+        0,
+        158,
+        -44
+      ],
+      "cubes": 16
+    },
+    {
+      "name": "fantail",
+      "parent": "cap",
+      "pivot": [
+        0,
+        166,
+        40
+      ],
+      "cubes": 6
+    }
+  ],
+  "cubeCount": 89,
+  "animation": {
+    "loop": true,
+    "sailsDegreesPerSecond": 36,
+    "sailsPeriodSeconds": 10,
+    "fantailDegreesPerSecond": -50,
+    "fantailPeriodSeconds": 7.2,
+    "combinedPeriodSeconds": 180
+  },
+  "appConverted": false,
+  "appAnimationVerified": false
+}
