@@ -1,0 +1,13 @@
+{
+  "countdownStepSeconds": 3.1,
+  "events": [
+    {"timeSeconds": 0, "display": "3", "file": "stttt.m4a"},
+    {"timeSeconds": 3.1, "display": "2", "file": "stttt.m4a"},
+    {"timeSeconds": 6.2, "display": "1", "file": "stttt.m4a"},
+    {"timeSeconds": 9.3, "display": "GO!", "file": "start.m4a"}
+  ],
+  "playbackRate": 1,
+  "overlap": false,
+  "previewGain": 0.5,
+  "status": "사용자 최신 요청: 준비음이 끝난 뒤 다음 숫자와 준비음을 표시·재생."
+}

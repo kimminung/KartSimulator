@@ -1,0 +1,95 @@
+{
+  "preparedAt": "2026-10-14",
+  "approvedResources": {
+    "groups": 6,
+    "files": 114,
+    "hashesMatchOriginal": true,
+    "normalLaps": 98,
+    "finalLap": true
+  },
+  "windmill": {
+    "files": 6,
+    "hashesMatchOriginal": true
+  },
+  "hud": {
+    "layers": 4,
+    "hashesMatchSource": true,
+    "emptyCompositeDifferentBytes": 0
+  },
+  "referenceSourceUnchanged": true,
+  "audio": [
+    {
+      "path": "Assets/sfx/countdown/stttt.m4a",
+      "codec_name": "aac",
+      "sample_rate": "44100",
+      "channels": 2,
+      "durationSeconds": 2.997007,
+      "decoded": true
+    },
+    {
+      "path": "Assets/sfx/countdown/start.m4a",
+      "codec_name": "aac",
+      "sample_rate": "44100",
+      "channels": 2,
+      "durationSeconds": 3.74,
+      "decoded": true
+    },
+    {
+      "path": "Assets/sfx/ui-cues/cue_record.m4a",
+      "codec_name": "aac",
+      "sample_rate": "44100",
+      "channels": 2,
+      "durationSeconds": 3.427007,
+      "decoded": true
+    },
+    {
+      "path": "Assets/sfx/ui-cues/cue_middle_lap.m4a",
+      "codec_name": "aac",
+      "sample_rate": "44100",
+      "channels": 2,
+      "durationSeconds": 1.339002,
+      "decoded": true
+    },
+    {
+      "path": "Assets/sfx/ui-cues/cue_error.m4a",
+      "codec_name": "aac",
+      "sample_rate": "44100",
+      "channels": 1,
+      "durationSeconds": 1.722993,
+      "decoded": true
+    }
+  ],
+  "countdown": {
+    "signalTimes": [
+      0,
+      3.1,
+      6.2,
+      9.3
+    ],
+    "tickPlayCount": 3,
+    "overlap": false
+  },
+  "driver": {
+    "bytes": 286676,
+    "meshes": 28,
+    "nodes": 45,
+    "clips": [
+      "animation.idle",
+      "animation.walk",
+      "animation.run",
+      "animation.floor_sit",
+      "animation.sit_down",
+      "animation.kart_idle",
+      "animation.kart_steer"
+    ],
+    "errors": 0,
+    "warnings": 0
+  },
+  "syntaxCheckedScripts": 14,
+  "issueDrafts": 6,
+  "limits": [
+    "USDZ 변환·앱 통합·Xcode·실기기 확인 전",
+    "가스펠 외 4종 신규 운전자 피팅 전",
+    "GitHub Issue·PR 미등록, 게시용 초안 포함"
+  ]
+}

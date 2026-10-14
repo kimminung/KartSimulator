@@ -1,0 +1,265 @@
+{
+  "source": "C:/Users/minsi/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs/resource_pack",
+  "readOnly": true,
+  "files": [
+    {
+      "path": "models/entity/humanoid.custom.geo.json",
+      "sha256": "d3688f959a95f6b39c9bd8b15312a19361256ae161d2d055ba63d810e17a8ca8"
+    },
+    {
+      "path": "animations/humanoid.animation.json",
+      "sha256": "4059e76703386ec92b4a66e863507fd17417c7398bad071c2e0e6ffec8363a44"
+    }
+  ],
+  "basis": "root/waist/body/head/leftArm/rightArm/leftLeg/rightLeg 계층과 보행·착석의 역할을 참고. 원본 큐브·UV·스킨·Molang 애니메이션은 복사하지 않음.",
+  "newDesign": "닫힌 면과 경사진 모서리의 복셀 레이서. 크림색/남색 수트, 새 512×256 픽셀 채색, 원본 스티브 스킨 없음.",
+  "units": "16 model units = 1 metre; Y up; forward -Z",
+  "gospelPose": {
+    "rootPosition": [
+      0,
+      -0.35,
+      2
+    ],
+    "hipWorld": [
+      0,
+      11.45,
+      2
+    ],
+    "seatBottomY": 9.7,
+    "seatSurfaceY": 9.705,
+    "steeringGripTargets": [
+      [
+        5.1,
+        19.4,
+        -7.98
+      ],
+      [
+        -5.1,
+        19.4,
+        -7.98
+      ]
+    ],
+    "ankleRotationDegrees": -5,
+    "note": "기존 rideable의 발 기준 좌표와 신규 hip 좌표를 구분. 가스펠 로컬 피팅 검토본."
+  },
+  "bones": [
+    {
+      "name": "root",
+      "parent": null,
+      "pivot": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "hip",
+      "parent": "root",
+      "pivot": [
+        0,
+        11.8,
+        0
+      ]
+    },
+    {
+      "name": "body",
+      "parent": "hip",
+      "pivot": [
+        0,
+        13,
+        0
+      ]
+    },
+    {
+      "name": "neck",
+      "parent": "body",
+      "pivot": [
+        0,
+        20.8,
+        0
+      ]
+    },
+    {
+      "name": "head",
+      "parent": "neck",
+      "pivot": [
+        0,
+        22,
+        0
+      ]
+    },
+    {
+      "name": "arm_l",
+      "parent": "body",
+      "pivot": [
+        5.1,
+        19.6,
+        0
+      ]
+    },
+    {
+      "name": "forearm_l",
+      "parent": "arm_l",
+      "pivot": [
+        5.1,
+        14.8,
+        0
+      ]
+    },
+    {
+      "name": "hand_l",
+      "parent": "forearm_l",
+      "pivot": [
+        5.1,
+        10,
+        0
+      ]
+    },
+    {
+      "name": "thigh_l",
+      "parent": "hip",
+      "pivot": [
+        2.05,
+        11.8,
+        0
+      ]
+    },
+    {
+      "name": "shin_l",
+      "parent": "thigh_l",
+      "pivot": [
+        2.05,
+        6.5,
+        0
+      ]
+    },
+    {
+      "name": "foot_l",
+      "parent": "shin_l",
+      "pivot": [
+        2.05,
+        2,
+        0
+      ]
+    },
+    {
+      "name": "arm_r",
+      "parent": "body",
+      "pivot": [
+        -5.1,
+        19.6,
+        0
+      ]
+    },
+    {
+      "name": "forearm_r",
+      "parent": "arm_r",
+      "pivot": [
+        -5.1,
+        14.8,
+        0
+      ]
+    },
+    {
+      "name": "hand_r",
+      "parent": "forearm_r",
+      "pivot": [
+        -5.1,
+        10,
+        0
+      ]
+    },
+    {
+      "name": "thigh_r",
+      "parent": "hip",
+      "pivot": [
+        -2.05,
+        11.8,
+        0
+      ]
+    },
+    {
+      "name": "shin_r",
+      "parent": "thigh_r",
+      "pivot": [
+        -2.05,
+        6.5,
+        0
+      ]
+    },
+    {
+      "name": "foot_r",
+      "parent": "shin_r",
+      "pivot": [
+        -2.05,
+        2,
+        0
+      ]
+    }
+  ],
+  "cubes": 0,
+  "clips": [
+    {
+      "name": "idle",
+      "seconds": 2.4,
+      "loop": true
+    },
+    {
+      "name": "walk",
+      "seconds": 1.1,
+      "loop": true
+    },
+    {
+      "name": "run",
+      "seconds": 0.65,
+      "loop": true
+    },
+    {
+      "name": "floor_sit",
+      "seconds": 2,
+      "loop": true
+    },
+    {
+      "name": "sit_down",
+      "seconds": 0.85,
+      "loop": false
+    },
+    {
+      "name": "kart_idle",
+      "seconds": 2,
+      "loop": true
+    },
+    {
+      "name": "kart_steer",
+      "seconds": 3,
+      "loop": true
+    }
+  ],
+  "meshes": 28,
+  "faces": 778,
+  "texture": {
+    "width": 512,
+    "height": 256,
+    "layout": "면별 독립 UV, 1 texel gutter, 위치 기준 채색",
+    "variants": [
+      "cream",
+      "night"
+    ]
+  },
+  "guidance": {
+    "repository": "https://github.com/iMasterProX/mcbemodelingmasterAI",
+    "commit": "486c7f835ebd26a3c47cc46d96db1675f315c895",
+    "applied": [
+      "경사진 연결면으로 계단형 헬멧 제거",
+      "단일 폐쇄 메시로 겹치는 턱 면 제거",
+      "면별 독립 UV와 패딩",
+      "좌표 기준으로 바이저·수트 선을 연속 채색",
+      "실제 관절 피벗과 모든 포즈 렌더",
+      "가스펠 좌석·핸들 접촉 확인"
+    ]
+  },
+  "texturingSources": [
+    "https://blockbench.net/wiki/guides/minecraft-style-guide/",
+    "https://learn.microsoft.com/en-us/minecraft/creator/documents/entitymodelingandanimation?view=minecraft-bedrock-stable"
+  ]
+}

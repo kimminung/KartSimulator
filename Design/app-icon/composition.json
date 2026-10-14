@@ -1,0 +1,20 @@
+{
+  "size": 1024,
+  "supersampling": 2,
+  "cameraElevationDegrees": 25,
+  "projection": "perspective",
+  "cameraDistance": 68,
+  "cameraTarget": [0, 9, -14],
+  "framing": "full-kart-front-focus",
+  "safeRadius": 480,
+  "kartWidth": 900,
+  "kartHeight": 820,
+  "kartCenterY": 524,
+  "texture": "gospel_black.png",
+  "frontSplitZ": -8,
+  "background": {
+    "top": "#223A60",
+    "bottom": "#000918",
+    "halo": "#1DB8E6"
+  }
+}

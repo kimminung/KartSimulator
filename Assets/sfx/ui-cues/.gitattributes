@@ -1,0 +1,7 @@
+*.md text eol=lf
+*.json text eol=lf
+*.ps1 text eol=lf
+source/** -text
+*.m4a binary
+manifest.sha256 text eol=lf
+.gitattributes text eol=lf

@@ -1,0 +1,29 @@
+{
+  "files": [
+    {
+      "file": "stttt.m4a",
+      "duration": 2.997007,
+      "codec": "aac",
+      "rate": "44100",
+      "channels": 2,
+      "sourceSha256": "BFBDB3E98BC144F96B158DFE914BA4479D9B37A3CF012BDDC90EE17DA9BA61CA",
+      "outputSha256": "14874C5456C1C5B0555EB2EAE2DBC59B3DD4BDAB0CF5D2316AFF965A205525C9"
+    },
+    {
+      "file": "start.m4a",
+      "duration": 3.74,
+      "codec": "aac",
+      "rate": "44100",
+      "channels": 2,
+      "sourceSha256": "9F548F2BCF5F3EE40C29F3D0E07F65C0B94AFFC4836C44C7EB97922C7688AC7F",
+      "outputSha256": "67751820756D389AE046686BBFBF7A65AD72DE105825857F6B4CEA0B2439BDA1"
+    }
+  ],
+  "countdownStepSeconds": 3.1,
+  "goTimeSeconds": 9.3,
+  "overlap": false,
+  "gapSeconds": 0.10299300000000011,
+  "previewDuration": 13.040998,
+  "previewGain": 0.5,
+  "appDevicePlaybackVerified": false
+}

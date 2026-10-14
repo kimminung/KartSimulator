@@ -1,0 +1,30 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "rita:windmill",
+      "materials": {
+        "default": "entity_alphatest"
+      },
+      "textures": {
+        "default": "textures/entity/windmill/windmill",
+        "small": "textures/entity/windmill/windmill_small"
+      },
+      "geometry": {
+        "default": "geometry.windmill"
+      },
+      "animations": {
+        "turn": "animation.rita.windmill.turn"
+      },
+      "scripts": {
+        "scale": "2",
+        "animate": [
+          "turn"
+        ]
+      },
+      "render_controllers": [
+        "controller.render.rita.windmill"
+      ]
+    }
+  }
+}

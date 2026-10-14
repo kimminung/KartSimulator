@@ -1,0 +1,19 @@
+# GitHub 게시 준비
+
+2026-10-14 · 사용자 최종 디자인 승인. 이 폴더는 게시 전 초안이다.
+
+최신 origin/main은 8321767, 원격 변경·열린 Issue·열린 PR은 준비 시점에 없었다. 기존 관련 #26·#28·#29·#41·#46은 닫힌 상태여서 새 후속 Issue로 분리했다. 제목·라벨·본문 파일은 issues.json에 있다. 등록된 새 Issue 번호나 PR URL은 아직 없다.
+
+| 순서 | 준비물 | 역할 |
+| --- | --- | --- |
+| 1 | pr-title.txt / pr-body.md | design → main 디자인 전달 PR |
+| 2 | 01-app-icon.md | visionOS·iOS 정식 아이콘 적용 |
+| 3 | 02-speedometer.md | 속도계 레이어·연속 게이지 |
+| 4 | 03-countdown-audio.md | 3.1초 준비 신호·M4A 연결 |
+| 5 | 04-windmill.md | 풍차 변환·애니메이션·배치 |
+| 6 | 05-race-resources.md | 일반/최종 랩·안내 그림·UI 소리 |
+| 7 | 06-driver.md | USDZ·5종 피팅·입력 조향 |
+
+사용자의 커밋 전달 요청에 따라 산출물과 초안을 design 브랜치에 올린다. Issue·PR 등록은 별도 요청 시 진행한다. 등록할 때 원격 상태를 다시 확인하고 main 대상 PR, issues.json의 제목·라벨·각 bodyFile로 Issue를 만든 뒤 번호를 인계 문서에 반영한다. 기존 닫힌 이슈를 다시 열거나 자동 종료 키워드를 넣지 않는다. 모델을 생성 도구로 다시 만들지 말고 승인 산출물을 사용한다.
+
+산출물은 design 브랜치 커밋으로 전달한다. 커밋 내역은 Git 기록, 검증 결과는 이 폴더의 validation.json을 확인한다. 앱 통합·USDZ·실기기 실행은 이 디자인 납품의 후속이다.
