@@ -1,21 +1,33 @@
 {
   "sourceSha256": "50ebb5a032cdb651a35be342954c40df0414c9c92f80d43be7ba0bf1bce692cc",
   "texture": "gospel_black.png",
+  "sourceCubeCount": 239,
   "cubes": 239,
   "faces": 1434,
   "render": {
     "size": 1024,
     "supersampling": 2,
-    "cameraElevationDegrees": 33
+    "cameraElevationDegrees": 25,
+    "projection": "perspective",
+    "cameraDistance": 68,
+    "cameraTarget": [
+      0,
+      9,
+      -14
+    ],
+    "framing": "full-kart-front-focus"
   },
   "layerVisiblePixels": {
-    "middle": 885783,
-    "front": 739963
+    "middle": 477058,
+    "front": 1103838
   },
   "mask": {
     "outsidePixels": 0,
-    "maxSubjectRadius": 472.06,
-    "radialMargin": 39.94
+    "maxSubjectRadius": 479.81,
+    "radialMargin": 32.19,
+    "focusOutsidePixels": 0,
+    "focusMaxRadius": 479.81,
+    "focusRadialMargin": 32.19
   },
   "png": [
     {
@@ -51,7 +63,7 @@
       "space": "srgb"
     }
   ],
-  "compositionMeanAbsoluteError": 0.01478,
-  "cyanPixels": 14299,
+  "compositionMeanAbsoluteError": 0.01438,
+  "cyanPixels": 14772,
   "validation": "로컬 PNG·레이어·마스크 확인. Xcode·실기기 적용 전."
 }

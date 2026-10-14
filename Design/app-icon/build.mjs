@@ -42,6 +42,8 @@ function walk(nodes, chain = []) {
 walk(model.outliner);
 const cubes = model.elements.filter(e => e.type === 'cube' && e.visibility !== false && e.export !== false &&
   !(chains.get(e.uuid)||[]).some(g => g.visibility === false || /anchor|vfx|particle/i.test(g.name)));
+const sourceCubeCount=model.elements.filter(e=>e.type==='cube').length;
+if(cubes.length!==sourceCubeCount) throw new Error('카트 전체 큐브가 렌더 대상에 포함되어야 합니다.');
 const selected = model.textures.find(t => t.name === config.texture);
 if (!selected?.source?.startsWith('data:image/png;base64,')) throw new Error('모델 내장 텍스처가 없습니다.');
 const textureBytes = Buffer.from(selected.source.split(',')[1], 'base64');
@@ -82,14 +84,29 @@ for (const cube of cubes) {
     let uv = [[u0,v0],[u1,v0],[u1,v1],[u0,v1]];
     const steps = (face.rotation || 0) / 90;
     for(let i=0;i<steps;i++) uv.unshift(uv.pop());
-    const project = p => [-p[0],-p[1]*cos-p[2]*sin,-p[1]*sin+p[2]*cos];
+    const project = p => {
+      if(config.projection!=='perspective') return [-p[0],-p[1]*cos-p[2]*sin,-p[1]*sin+p[2]*cos];
+      const target=config.cameraTarget||[0,0,0];
+      const [x,y,z]=subtract(p,target);
+      const depth=config.cameraDistance-y*sin+z*cos;
+      if(depth<=1) throw new Error('카메라가 모델에 너무 가깝습니다.');
+      return [-x/depth,(-y*cos-z*sin)/depth,depth];
+    };
     polygons.push({points:points.map(project),uv,normal,layer});
   }
 }
 const allPoints = polygons.flatMap(f => f.points);
 const bounds = [0,1].map(i => [Math.min(...allPoints.map(p=>p[i])),Math.max(...allPoints.map(p=>p[i]))]);
-const scale = Math.min(config.kartWidth/(bounds[0][1]-bounds[0][0]),config.kartHeight/(bounds[1][1]-bounds[1][0]));
+let scale = Math.min(config.kartWidth/(bounds[0][1]-bounds[0][0]),config.kartHeight/(bounds[1][1]-bounds[1][0]));
 const midX = (bounds[0][0]+bounds[0][1])/2, midY = (bounds[1][0]+bounds[1][1])/2;
+if(config.safeRadius) {
+  const radius=s=>Math.max(...allPoints.map(([x,y])=>Math.hypot((x-midX)*s,(y-midY)*s+config.kartCenterY-N/2)));
+  if(radius(scale)>config.safeRadius) {
+    let low=0,high=scale;
+    for(let i=0;i<40;i++){const candidate=(low+high)/2;if(radius(candidate)<=config.safeRadius)low=candidate;else high=candidate;}
+    scale=low;
+  }
+}
 for (const p of polygons) p.screen = p.points.map(([x,y,z])=>[(N/2+(x-midX)*scale)*SS,(config.kartCenterY+(y-midY)*scale)*SS,z]);
 const lights = [normalize([-0.45,0.8,-0.5]),normalize([0.6,0.35,0.5])];
 function render(layerFilter) {
@@ -115,9 +132,11 @@ function render(layerFilter) {
         const bb=((c[1]-a[1])*(px-c[0])+(a[0]-c[0])*(py-c[1]))/denominator;
         const cc=1-aa-bb;
         if(aa < -1e-7 || bb < -1e-7 || cc < -1e-7) continue;
-        const d=aa*a[2]+bb*b[2]+cc*c[2],i=y*W+x;
+        const reciprocalDepth=config.projection==='perspective'?aa/a[2]+bb/b[2]+cc/c[2]:0;
+        const d=config.projection==='perspective'?1/reciprocalDepth:aa*a[2]+bb*b[2]+cc*c[2],i=y*W+x;
         if(d>=depth[i]) continue;
-        const u=aa*ta[0]+bb*tb[0]+cc*tc[0],v=aa*ta[1]+bb*tb[1]+cc*tc[1];
+        const weights=config.projection==='perspective'?[aa/a[2]/reciprocalDepth,bb/b[2]/reciprocalDepth,cc/c[2]/reciprocalDepth]:[aa,bb,cc];
+        const u=weights[0]*ta[0]+weights[1]*tb[0]+weights[2]*tc[0],v=weights[0]*ta[1]+weights[1]*tb[1]+weights[2]*tc[1];
         const tx=Math.max(0,Math.min(texInfo.width-1,Math.floor(u*texInfo.width/model.resolution.width)));
         const ty=Math.max(0,Math.min(texInfo.height-1,Math.floor(v*texInfo.height/model.resolution.height)));
         const t=(ty*texInfo.width+tx)*4;
@@ -170,7 +189,7 @@ const visionPreview=await sharp(composite).ensureAlpha().composite([{input:circl
 const iosPreview=await sharp(composite).ensureAlpha().composite([{input:rounded,blend:'dest-in'}]).png().toBuffer();
 fs.writeFileSync(path.join(DIR,'preview-visionos.png'),visionPreview);
 fs.writeFileSync(path.join(DIR,'preview-ios.png'),iosPreview);
-const labelSvg=Buffer.from(`<svg width="1400" height="1040" xmlns="http://www.w3.org/2000/svg"><rect width="1400" height="1040" fill="#eef3f6"/><g fill="#142737" font-family="Malgun Gothic, Segoe UI, sans-serif"><text x="70" y="70" font-size="28" font-weight="600">핀치 로버 · 가스펠 앱 아이콘</text><text x="70" y="110" font-size="18">원본 bbmodel 정면 렌더 · 검정 차체와 시안 라인</text><text x="145" y="165" font-size="22">visionOS</text><text x="825" y="165" font-size="22">iOS / iPadOS</text><text x="70" y="820" font-size="20">128 · 64 · 32 px</text><text x="755" y="820" font-size="20">배경 · 뒤쪽 차체 · 앞쪽 차체</text><text x="70" y="1000" font-size="16">2026-10-14 · 디자인 전달본 · 마스크는 미리보기에만 적용</text></g></svg>`);
+const labelSvg=Buffer.from(`<svg width="1400" height="1040" xmlns="http://www.w3.org/2000/svg"><rect width="1400" height="1040" fill="#eef3f6"/><g fill="#142737" font-family="Malgun Gothic, Segoe UI, sans-serif"><text x="70" y="70" font-size="28" font-weight="600">핀치 로버 · 가스펠 앱 아이콘</text><text x="70" y="110" font-size="18">전체 형태 유지 · 앞부분이 크게 보이는 낮은 정면 원근 구도</text><text x="145" y="165" font-size="22">visionOS</text><text x="825" y="165" font-size="22">iOS / iPadOS</text><text x="70" y="820" font-size="20">128 · 64 · 32 px</text><text x="755" y="820" font-size="20">배경 · 뒤쪽 차체 · 앞쪽 차체</text><text x="70" y="1000" font-size="16">2026-10-14 · 디자인 전달본 · 마스크는 미리보기에만 적용</text></g></svg>`);
 const panels=[];
 panels.push({input:await sharp(visionPreview).resize(520,520).png().toBuffer(),left:90,top:205});
 panels.push({input:await sharp(iosPreview).resize(520,520).png().toBuffer(),left:790,top:205});
@@ -178,19 +197,19 @@ for(const [i,n] of [128,64,32].entries()) panels.push({input:await sharp(visionP
 for(const [i,data] of [backPng,middlePng,frontPng].entries()) panels.push({input:await sharp(data).resize(140,140).png().toBuffer(),left:755+i*190,top:845});
 await sharp(labelSvg).composite(panels).png().toFile(path.join(DIR,'preview.png'));
 // 원형 마스크의 가장자리 및 이동 여유를 확인한다. 시스템 자체 시차 검증을 대신하지 않는다.
-let visiblePixels=0,maxRadius=0,frontPixels=0,middlePixels=0,outsideMask=0;
+let visiblePixels=0,maxRadius=0,frontPixels=0,middlePixels=0,outsideMask=0,focusOutsideMask=0,focusMaxRadius=0;
 for(let i=0;i<W*W;i++) if(full.pixels[i*4+3]) {
   const x=(i%W+0.5)/SS,y=(Math.floor(i/W)+0.5)/SS;
   const radius=Math.hypot(x-N/2,y-N/2);
   visiblePixels++;maxRadius=Math.max(maxRadius,radius);if(radius>N/2) outsideMask++;
-  if(full.ownership[i]===2) frontPixels++;else middlePixels++;
+  if(full.ownership[i]===2) {frontPixels++;focusMaxRadius=Math.max(focusMaxRadius,radius);if(radius>N/2)focusOutsideMask++;}else middlePixels++;
 }
 const rawComposite=await sharp(composite).removeAlpha().raw().toBuffer();
 const rawExpected=await sharp(backPng).composite([{input:scenePng}]).removeAlpha().raw().toBuffer();
 let compositionAbsoluteError=0;
 for(let i=0;i<rawComposite.length;i++) compositionAbsoluteError+=Math.abs(rawComposite[i]-rawExpected[i]);
 const compositionMeanError=compositionAbsoluteError/rawComposite.length;
-if(outsideMask || compositionMeanError>0.5) throw new Error('마스크 또는 레이어 합성 검증 실패');
+if(outsideMask || compositionMeanError>0.5) throw new Error(`마스크 또는 레이어 합성 검증 실패: ${JSON.stringify({outsideMask,compositionMeanError})}`);
 const assetChecks=[];
 for(const [name,bytes,alpha] of [['back',backPng,false],['middle',middlePng,true],['front',frontPng,true],['ios',composite,false]]) {
   const meta=await sharp(bytes).metadata();
@@ -202,8 +221,8 @@ const rgbaScene=await sharp(scenePng).ensureAlpha().raw().toBuffer();
 for(let i=0;i<rgbaScene.length;i+=4) if(rgbaScene[i+1]>rgbaScene[i]*1.6&&rgbaScene[i+2]>rgbaScene[i]*1.6&&rgbaScene[i+1]>130&&rgbaScene[i+3]>128) cyanPixels++;
 if(cyanPixels<1000) throw new Error('시안 라인 렌더 확인 실패');
 const report={sourceSha256:crypto.createHash('sha256').update(fs.readFileSync(sourcePath)).digest('hex'),
-  texture:config.texture,cubes:cubes.length,faces:polygons.length,render:{size:N,supersampling:SS,cameraElevationDegrees:config.cameraElevationDegrees},
-  layerVisiblePixels:{middle:middlePixels,front:frontPixels},mask:{outsidePixels:outsideMask,maxSubjectRadius:Number(maxRadius.toFixed(2)),radialMargin:Number((N/2-maxRadius).toFixed(2))},
+  texture:config.texture,sourceCubeCount,cubes:cubes.length,faces:polygons.length,render:{size:N,supersampling:SS,cameraElevationDegrees:config.cameraElevationDegrees,projection:config.projection||'orthographic',cameraDistance:config.cameraDistance,cameraTarget:config.cameraTarget,framing:config.framing||'full-kart'},
+  layerVisiblePixels:{middle:middlePixels,front:frontPixels},mask:{outsidePixels:outsideMask,maxSubjectRadius:Number(maxRadius.toFixed(2)),radialMargin:Number((N/2-maxRadius).toFixed(2)),focusOutsidePixels:focusOutsideMask,focusMaxRadius:Number(focusMaxRadius.toFixed(2)),focusRadialMargin:Number((N/2-focusMaxRadius).toFixed(2))},
   png:assetChecks,compositionMeanAbsoluteError:Number(compositionMeanError.toFixed(5)),cyanPixels,
   validation:'로컬 PNG·레이어·마스크 확인. Xcode·실기기 적용 전.'};
 writeJson(path.join(DIR,'validation.json'),report);
