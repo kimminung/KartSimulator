@@ -475,9 +475,13 @@ final class RaceSceneController {
                 self?.startCountdown()
             }
         }
-        let (resolvedDrive, left, right) = touch.resolve()
+        var (resolvedDrive, left, right) = touch.resolve()
+        if DemoLaunch.autopilot {
+            // 데모 촬영(결정 66): 통합 테스트와 같은 자동 조향으로 달린다(DEBUG 전용, 시뮬레이터 캡처용).
+            resolvedDrive = Autopilot.drive(state: rail, spline: trackSpline)
+        }
         let drive: DriveState = raceLocked ? .stopped : resolvedDrive
-        if raceLocked, !isPaused, !raceModel.isFinished, resolvedDrive != .stopped, !playedCountdownErrorCue {
+        if raceLocked, !isPaused, !raceModel.isFinished, resolvedDrive != .stopped, !playedCountdownErrorCue, !DemoLaunch.autopilot {
             playedCountdownErrorCue = true
             sfxPlayer?.play(.error)
         }
